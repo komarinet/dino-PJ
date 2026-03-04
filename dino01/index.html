@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>恐竜RPG プロトタイプ</title>
+    <style>
+        body {
+            text-align: center;
+            background-color: #2c3e50; /* 夜の森みたいな色よ */
+            color: white;
+            font-family: sans-serif;
+            margin: 0;
+            padding: 20px;
+        }
+        /* これがゲームの画面（カンバス）よ！ */
+        canvas {
+            background-color: #8fbc8f; /* 草原の色ね */
+            border: 4px solid #ecf0f1;
+            border-radius: 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            max-width: 100%;
+        }
+        p { font-size: 14px; color: #bdc3c7; }
+    </style>
+</head>
+<body>
+
+    <h1>恐竜RPG テスト版</h1>
+    <p>画面をタップするか、キーボードの矢印キーで恐竜を動かしてみて！</p>
+    
+    <canvas id="gameCanvas" width="300" height="300"></canvas>
+
+    <script>
+        // カンバスの準備よ
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        // 恐竜の最初のステータス（位置と大きさ）
+        let dino = { x: 130, y: 130, size: 40, emoji: '🦖' };
+
+        // 画面に恐竜を描くお仕事（関数）
+        function draw() {
+            // 一度画面をまっさらに消すの（残像が残らないようにね）
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 恐竜の絵文字を描くわよ！
+            ctx.font = dino.size + "px sans-serif";
+            ctx.fillText(dino.emoji, dino.x, dino.y + dino.size);
+        }
+
+        // スマホでタップした時の動きよ
+        canvas.addEventListener('touchstart', function(e) {
+            e.preventDefault(); // 画面がスクロールしちゃうのを防ぐおまじない
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            // タップした場所に恐竜を移動させる計算よ
+            dino.x = touch.clientX - rect.left - dino.size / 2;
+            dino.y = touch.clientY - rect.top - dino.size / 2;
+            draw();
+        }, { passive: false });
+
+        // パソコンの矢印キーを押した時の動きよ
+        window.addEventListener('keydown', function(e) {
+            if(e.key === 'ArrowUp') dino.y -= 15;
+            if(e.key === 'ArrowDown') dino.y += 15;
+            if(e.key === 'ArrowLeft') dino.x -= 15;
+            if(e.key === 'ArrowRight') dino.x += 15;
+            draw();
+        });
+
+        // 最初に1回だけ恐竜を描画してあげるの
+        draw();
+    </script>
+
+</body>
+</html>
