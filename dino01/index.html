@@ -124,7 +124,7 @@ let player = { x: 1, y: 1, hp: 20, maxHp: 20, food: 100, maxFood: 100 };
 // --- 追加：画像とアニメーション用変数 ---
 const playerImg = new Image();
 playerImg.src = 'img/tyrano01.png'; // 用意するスプライト画像のパス
-const SPRITE_SIZE = 32; // 1コマのピクセルサイズ（画像に合わせて調整してね）
+const SPRITE_SIZE = 64; // 1コマのピクセルサイズ（画像に合わせて調整してね）
 
 let playerDir = 4; // 現在の向き（0:上, 1:右上, 2:右, 3:右下, 4:下, 5:左下, 6:左, 7:左上）
 let animFrame = 0; // 現在のアニメーションコマ（0 または 1）
