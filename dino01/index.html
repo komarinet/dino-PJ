@@ -5,208 +5,84 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>DINO-ROGUE</title>
     <style>
-        /* --- 全体のカラーテーマとフォント --- */
         :root {
-            --bg-color: #121212;
-            --panel-bg: #1e1e1e;
-            --text-color: #e0e0e0;
-            --accent-color: #ff8c00;
-            --border-color: #333;
+            --bg-color: #121212; --panel-bg: #1e1e1e;
+            --text-color: #e0e0e0; --accent-color: #ff8c00; --border-color: #444;
         }
-
         body {
-            margin: 0;
-            padding: 0;
-            background-color: var(--bg-color);
-            color: var(--text-color);
-            /* 子供向けに読みやすいフォントを指定 */
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color);
             font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', 'Meiryo', sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            height: 100vh;
-            height: 100dvh; /* スマホのブラウザバー対策 */
-            overflow: hidden;
-            touch-action: none; /* スワイプによる予期せぬスクロールを防止 */
+            display: flex; justify-content: center; height: 100vh; height: 100dvh;
+            overflow: hidden; touch-action: none;
         }
-
-        /* ゲーム全体のラッパー（スマホ画面にフィットさせる） */
         #game-wrapper {
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-            max-width: 500px; /* PCなどで大きくなりすぎないように制限 */
-            height: 100%;
-            background-color: var(--bg-color);
+            display: flex; flex-direction: column; width: 100%; max-width: 600px;
+            height: 100%; background-color: var(--bg-color);
         }
-
-        /* --- 1. ステータスバー --- */
         #status-bar {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 15px;
-            background-color: var(--panel-bg);
-            border-bottom: 2px solid var(--border-color);
-            font-size: 16px;
-            font-weight: bold;
-            flex-shrink: 0;
-            display: none; /* タイトル画面では隠す */
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 15px; background-color: var(--panel-bg);
+            border-bottom: 2px solid var(--border-color); font-size: 16px;
+            font-weight: bold; flex-shrink: 0; display: none;
         }
         .status-item span.value { color: #ffaaaa; }
         .status-item.food span.value { color: #aaffaa; }
         .status-item.floor span.value { color: #aaaaff; }
-
-        /* ルビの調整 */
-        ruby { ruby-align: center; }
-        rt { font-size: 0.6em; color: #aaa; }
-
-        /* --- 2. ゲーム画面（キャンバス） --- */
+        ruby { ruby-align: center; } rt { font-size: 0.6em; color: #aaa; }
         #canvas-container {
-            position: relative;
-            width: 100%;
-            /* スマホの横幅いっぱいにし、正方形を保つ */
-            aspect-ratio: 1 / 1;
-            background-color: #000;
-            flex-shrink: 0;
+            position: relative; width: 100%; aspect-ratio: 4 / 3;
+            background-color: #000; flex-shrink: 0;
         }
-        canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
-            image-rendering: pixelated; /* ドット絵をくっきりさせる準備 */
-        }
-
-        /* オープニング画面（キャンバスの上に被せる） */
+        canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; }
         #overlay {
-            position: absolute;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-            box-sizing: border-box;
-            text-align: center;
-            z-index: 10;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; padding: 20px;
+            box-sizing: border-box; text-align: center; z-index: 10;
         }
-        #overlay h1 {
-            color: var(--accent-color);
-            font-size: 28px;
-            margin: 0 0 15px 0;
-            text-shadow: 2px 2px 0px #8b0000;
-        }
-        #overlay p {
-            line-height: 1.6;
-            font-size: 14px;
-            margin: 5px 0;
-        }
+        #overlay h1 { color: var(--accent-color); font-size: 28px; margin: 0 0 15px 0; text-shadow: 2px 2px 0px #8b0000; }
+        #overlay p { line-height: 1.6; font-size: 14px; margin: 5px 0; }
         #start-btn {
-            margin-top: 20px;
-            padding: 12px 30px;
-            font-size: 20px;
-            background-color: var(--accent-color);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            font-weight: bold;
+            margin-top: 20px; padding: 12px 30px; font-size: 20px; background-color: var(--accent-color);
+            color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;
             box-shadow: 0 4px 0 #b36200;
         }
-        #start-btn:active {
-            transform: translateY(4px);
-            box-shadow: none;
+        #start-btn:active { transform: translateY(4px); box-shadow: none; }
+        #bottom-area {
+            display: none; flex: 1; flex-direction: row; background-color: var(--panel-bg);
+            border-top: 2px solid var(--border-color); overflow: hidden;
         }
-
-        /* --- 3. コントローラー（十字キー） --- */
         #controls-container {
-            display: none; /* タイトル画面では隠す */
-            padding: 10px 0;
-            background-color: var(--panel-bg);
-            flex-shrink: 0;
-            border-bottom: 2px solid var(--border-color);
+            width: 180px; padding: 10px 5px; display: flex; justify-content: center;
+            align-items: center; border-right: 2px solid var(--border-color); background-color: #1a1a1a;
         }
-        #controls {
-            display: grid;
-            grid-template-columns: repeat(3, 60px);
-            grid-template-rows: repeat(3, 60px);
-            gap: 5px;
-            justify-content: center;
-            margin: 0 auto;
-        }
+        #controls { display: grid; grid-template-columns: repeat(3, 50px); grid-template-rows: repeat(3, 50px); gap: 4px; }
         .btn {
-            background-color: #444;
-            border: 2px solid #555;
-            border-radius: 12px;
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            user-select: none;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            box-shadow: 0 4px 0 #222;
+            background-color: #444; border: 2px solid #555; border-radius: 8px; color: white;
+            font-size: 20px; cursor: pointer; user-select: none; display: flex; justify-content: center;
+            align-items: center; box-shadow: 0 3px 0 #222; touch-action: manipulation;
         }
-        .btn:active {
-            transform: translateY(4px);
-            box-shadow: none;
-            background-color: #666;
-        }
-        .btn-up { grid-column: 2; grid-row: 1; }
-        .btn-left { grid-column: 1; grid-row: 2; }
-        .btn-wait { grid-column: 2; grid-row: 2; font-size: 14px; font-weight: bold;} /* 待機ボタン */
-        .btn-right { grid-column: 3; grid-row: 2; }
-        .btn-down { grid-column: 2; grid-row: 3; }
-
-        /* --- 4. メッセージログ --- */
+        .btn:active { transform: translateY(3px); box-shadow: none; background-color: #666; }
+        .btn-wait { font-size: 14px; font-weight: bold; background-color: #554433; }
         #message-log {
-            display: none; /* タイトル画面では隠す */
-            flex: 1; /* 残りの高さをすべて埋める */
-            background-color: #0a0a0a;
-            padding: 10px;
-            overflow-y: auto;
-            font-size: 14px;
-            line-height: 1.5;
+            flex: 1; padding: 10px; background-color: #0a0a0a; overflow-y: auto;
+            font-size: 13px; line-height: 1.5; display: flex; flex-direction: column;
         }
-        .log-entry {
-            margin-bottom: 4px;
-            animation: fadeIn 0.3s;
-            border-bottom: 1px dashed #333;
-            padding-bottom: 2px;
-        }
-        .log-entry.system { color: #88ccff; }
-        .log-entry.danger { color: #ff6666; font-weight: bold;}
-        .log-entry.normal { color: #dddddd; }
-
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateX(-5px); }
-            to { opacity: 1; transform: translateX(0); }
-        }
-
+        .log-entry { margin-bottom: 6px; animation: fadeIn 0.3s; border-bottom: 1px dashed #333; padding-bottom: 4px; }
+        .log-entry.system { color: #88ccff; } .log-entry.danger { color: #ff6666; font-weight: bold;}
+        .log-entry.heal { color: #88ff88; } .log-entry.normal { color: #dddddd; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateX(5px); } to { opacity: 1; transform: translateX(0); } }
     </style>
 </head>
 <body>
-
 <div id="game-wrapper">
-    <!-- 1. ステータスバー -->
     <div id="status-bar">
-        <div class="status-item hp">
-            <ruby>体力<rt>たいりょく</rt></ruby> <span id="hp-val" class="value">20/20</span>
-        </div>
-        <div class="status-item food">
-            おなか <span id="food-val" class="value">100/100</span>
-        </div>
-        <div class="status-item floor">
-            ちか<span id="floor-val" class="value">1</span>かい
-        </div>
+        <div class="status-item hp"><ruby>体力<rt>たいりょく</rt></ruby> <span id="hp-val" class="value">20/20</span></div>
+        <div class="status-item food">おなか <span id="food-val" class="value">100/100</span></div>
+        <div class="status-item floor">ちか<span id="floor-val" class="value">1</span>かい</div>
     </div>
-
-    <!-- 2. ゲーム画面 -->
     <div id="canvas-container">
-        <canvas id="gameCanvas" width="400" height="400"></canvas>
-        
-        <!-- オープニング（オーバーレイ） -->
+        <canvas id="gameCanvas" width="400" height="300"></canvas>
         <div id="overlay">
             <h1>DINO-ROGUE</h1>
             <p><ruby>空<rt>そら</rt></ruby>から いんせき が ふってきた！<br>きょうりゅう たちは だいピンチ！</p>
@@ -215,69 +91,49 @@
             <button id="start-btn">ゲームスタート</button>
         </div>
     </div>
-
-    <!-- 3. コントローラー -->
-    <div id="controls-container">
-        <div id="controls">
-            <div class="btn btn-up" onmousedown="handleMove(0, -1)" ontouchstart="handleMove(0, -1); event.preventDefault();">▲</div>
-            <div class="btn btn-left" onmousedown="handleMove(-1, 0)" ontouchstart="handleMove(-1, 0); event.preventDefault();">◀</div>
-            <div class="btn btn-wait" onmousedown="handleMove(0, 0)" ontouchstart="handleMove(0, 0); event.preventDefault();"><ruby>待機<rt>たいき</rt></ruby></div>
-            <div class="btn btn-right" onmousedown="handleMove(1, 0)" ontouchstart="handleMove(1, 0); event.preventDefault();">▶</div>
-            <div class="btn btn-down" onmousedown="handleMove(0, 1)" ontouchstart="handleMove(0, 1); event.preventDefault();">▼</div>
+    <div id="bottom-area">
+        <div id="controls-container">
+            <div id="controls">
+                <div class="btn" onmousedown="handleMove(-1, -1)" ontouchstart="handleMove(-1, -1); event.preventDefault();">↖</div>
+                <div class="btn" onmousedown="handleMove(0, -1)" ontouchstart="handleMove(0, -1); event.preventDefault();">⬆</div>
+                <div class="btn" onmousedown="handleMove(1, -1)" ontouchstart="handleMove(1, -1); event.preventDefault();">↗</div>
+                <div class="btn" onmousedown="handleMove(-1, 0)" ontouchstart="handleMove(-1, 0); event.preventDefault();">⬅</div>
+                <div class="btn btn-wait" onmousedown="handleMove(0, 0)" ontouchstart="handleMove(0, 0); event.preventDefault();"><ruby>待<rt>まち</rt></ruby></div>
+                <div class="btn" onmousedown="handleMove(1, 0)" ontouchstart="handleMove(1, 0); event.preventDefault();">➡</div>
+                <div class="btn" onmousedown="handleMove(-1, 1)" ontouchstart="handleMove(-1, 1); event.preventDefault();">↙</div>
+                <div class="btn" onmousedown="handleMove(0, 1)" ontouchstart="handleMove(0, 1); event.preventDefault();">⬇</div>
+                <div class="btn" onmousedown="handleMove(1, 1)" ontouchstart="handleMove(1, 1); event.preventDefault();">↘</div>
+            </div>
         </div>
+        <div id="message-log"></div>
     </div>
-
-    <!-- 4. メッセージログ -->
-    <div id="message-log"></div>
 </div>
 
 <script>
-/**
- * DINO-ROGUE エンジン v2
- * UIとゲーム状態の連携を強化。
- */
+const canvas = document.getElementById('gameCanvas'); const ctx = canvas.getContext('2d');
+const elOverlay = document.getElementById('overlay'), elStatusBar = document.getElementById('status-bar');
+const elBottomArea = document.getElementById('bottom-area'), elMessageLog = document.getElementById('message-log');
+const TILE_SIZE = 40, MAP_WIDTH = 25, MAP_HEIGHT = 25, VIEW_WIDTH = 10;
+const VIEW_HEIGHT = Math.floor((canvas.height / canvas.width) * 10) + 1;
+const TILE_WALL = 0, TILE_FLOOR = 1, TILE_STAIRS = 2;
 
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+let gameState = 'title', currentFloor = 1, turnCount = 0, map = [];
+// symbolプロパティを削除し、画像の処理に移行
+let player = { x: 1, y: 1, hp: 20, maxHp: 20, food: 100, maxFood: 100 };
 
-// UI要素の取得
-const elOverlay = document.getElementById('overlay');
-const elStatusBar = document.getElementById('status-bar');
-const elControls = document.getElementById('controls-container');
-const elMessageLog = document.getElementById('message-log');
+// --- 追加：画像とアニメーション用変数 ---
+const playerImg = new Image();
+playerImg.src = 'img/tyrano01.png'; // 用意するスプライト画像のパス
+const SPRITE_SIZE = 32; // 1コマのピクセルサイズ（画像に合わせて調整してね）
 
-// --- ゲーム定数 ---
-const TILE_SIZE = 40;
-const MAP_WIDTH = 20; 
-const MAP_HEIGHT = 20;
-const VIEW_WIDTH = 10; 
-const VIEW_HEIGHT = 10;
+let playerDir = 4; // 現在の向き（0:上, 1:右上, 2:右, 3:右下, 4:下, 5:左下, 6:左, 7:左上）
+let animFrame = 0; // 現在のアニメーションコマ（0 または 1）
+let lastAnimTime = 0; // アニメーションのタイマー管理用
+// ------------------------------------
 
-// タイル種類
-const TILE_WALL = 0;
-const TILE_FLOOR = 1;
-const TILE_STAIRS = 2;
-
-// --- ゲーム状態 ---
-let gameState = 'title'; // title, play, gameover
-let currentFloor = 1;
-
-let map = [];
-let player = {
-    x: 1, y: 1,
-    hp: 20, maxHp: 20,
-    food: 100, maxFood: 100,
-    symbol: '🦖' 
-};
-
-// --- ユーティリティ ---
 function logMessage(msgHtml, type = 'normal') {
-    const entry = document.createElement('div');
-    entry.className = `log-entry ${type}`;
-    entry.innerHTML = msgHtml;
-    elMessageLog.appendChild(entry);
-    
-    // 最新のメッセージまでスクロール
+    const entry = document.createElement('div'); entry.className = `log-entry ${type}`;
+    entry.innerHTML = msgHtml; elMessageLog.appendChild(entry);
     elMessageLog.scrollTop = elMessageLog.scrollHeight;
 }
 
@@ -285,207 +141,165 @@ function updateStatus() {
     document.getElementById('hp-val').innerText = `${player.hp}/${player.maxHp}`;
     document.getElementById('food-val').innerText = `${player.food}/${player.maxFood}`;
     document.getElementById('floor-val').innerText = currentFloor;
-
-    // ピンチ状態のテキスト色変更
     document.getElementById('food-val').style.color = (player.food <= 20) ? '#ff6666' : '#aaffaa';
     document.getElementById('hp-val').style.color = (player.hp <= 5) ? '#ff6666' : '#ffaaaa';
 }
 
-// --- マップ生成 ---
 function generateMap() {
     map = [];
     for (let y = 0; y < MAP_HEIGHT; y++) {
         map[y] = [];
-        for (let x = 0; x < MAP_WIDTH; x++) {
-            if (x === 0 || x === MAP_WIDTH - 1 || y === 0 || y === MAP_HEIGHT - 1) {
-                map[y][x] = TILE_WALL;
-            } else {
-                map[y][x] = TILE_FLOOR;
-            }
-        }
+        for (let x = 0; x < MAP_WIDTH; x++) map[y][x] = (x===0||x===MAP_WIDTH-1||y===0||y===MAP_HEIGHT-1) ? TILE_WALL : TILE_FLOOR;
     }
-    
-    // ランダムに岩（壁）を配置
-    for(let i=0; i<40; i++) {
-        let rx = Math.floor(Math.random() * (MAP_WIDTH - 2)) + 1;
-        let ry = Math.floor(Math.random() * (MAP_HEIGHT - 2)) + 1;
-        map[ry][rx] = TILE_WALL;
-    }
-
-    // プレイヤー初期位置
-    player.x = 1; player.y = 1;
-    map[player.y][player.x] = TILE_FLOOR; // 確実に床にする
-
-    // 階段配置
-    let stairX = MAP_WIDTH - 2;
-    let stairY = MAP_HEIGHT - 2;
-    map[stairY][stairX] = TILE_STAIRS;
+    for(let i=0; i<80; i++) map[Math.floor(Math.random() * (MAP_HEIGHT-2))+1][Math.floor(Math.random() * (MAP_WIDTH-2))+1] = TILE_WALL;
+    player.x = 1; player.y = 1; map[player.y][player.x] = TILE_FLOOR;
+    map[1][2] = TILE_FLOOR; map[2][1] = TILE_FLOOR; map[2][2] = TILE_FLOOR;
+    map[MAP_HEIGHT-2][MAP_WIDTH-2] = TILE_STAIRS;
 }
 
-// --- 描画処理 ---
 function draw() {
-    ctx.fillStyle = '#111';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    ctx.fillStyle = '#111'; ctx.fillRect(0, 0, canvas.width, canvas.height);
     if (gameState !== 'play') return;
-
-    // カメラ位置計算
-    let camX = player.x - Math.floor(VIEW_WIDTH / 2);
-    let camY = player.y - Math.floor(VIEW_HEIGHT / 2);
-    camX = Math.max(0, Math.min(camX, MAP_WIDTH - VIEW_WIDTH));
-    camY = Math.max(0, Math.min(camY, MAP_HEIGHT - VIEW_HEIGHT));
-
-    // マップ描画
+    
+    let camX = Math.max(0, Math.min(player.x - Math.floor(VIEW_WIDTH / 2), MAP_WIDTH - VIEW_WIDTH));
+    let camY = Math.max(0, Math.min(player.y - Math.floor(VIEW_HEIGHT / 2), MAP_HEIGHT - VIEW_HEIGHT));
+    
     for (let y = 0; y < VIEW_HEIGHT; y++) {
         for (let x = 0; x < VIEW_WIDTH; x++) {
-            let mapX = camX + x;
-            let mapY = camY + y;
-            let drawX = x * TILE_SIZE;
-            let drawY = y * TILE_SIZE;
-
+            let mapX = camX + x, mapY = camY + y;
+            if(mapY < 0 || mapY >= MAP_HEIGHT || mapX < 0 || mapX >= MAP_WIDTH) continue;
+            
+            let drawX = x * (canvas.width / VIEW_WIDTH), tileSizeDraw = canvas.width / VIEW_WIDTH, drawY = y * tileSizeDraw;
+            
             if (map[mapY][mapX] === TILE_WALL) {
-                ctx.fillStyle = '#3a3a4a';
-                ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
-                ctx.strokeStyle = '#222';
-                ctx.strokeRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = '#3a3a4a'; ctx.fillRect(drawX, drawY, tileSizeDraw, tileSizeDraw);
+                ctx.strokeStyle = '#222'; ctx.strokeRect(drawX, drawY, tileSizeDraw, tileSizeDraw);
             } else if (map[mapY][mapX] === TILE_FLOOR) {
-                ctx.fillStyle = '#5c4a3d';
-                ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
+                ctx.fillStyle = '#5c4a3d'; ctx.fillRect(drawX, drawY, tileSizeDraw, tileSizeDraw);
             } else if (map[mapY][mapX] === TILE_STAIRS) {
-                ctx.fillStyle = '#222';
-                ctx.fillRect(drawX, drawY, TILE_SIZE, TILE_SIZE);
-                ctx.font = '24px sans-serif';
-                ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('🚪', drawX + TILE_SIZE/2, drawY + TILE_SIZE/2);
+                ctx.fillStyle = '#222'; ctx.fillRect(drawX, drawY, tileSizeDraw, tileSizeDraw);
+                ctx.font = `${tileSizeDraw * 0.6}px sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                ctx.fillText('🚪', drawX + tileSizeDraw/2, drawY + tileSizeDraw/2);
             }
         }
     }
+    
+    // --- 変更：プレイヤーの描画を画像（スプライト）に差し替え ---
+    let tileSizeDraw = canvas.width / VIEW_WIDTH;
+    let drawPlayerX = (player.x - camX) * tileSizeDraw;
+    let drawPlayerY = (player.y - camY) * tileSizeDraw;
 
-    // プレイヤー描画
-    ctx.font = '28px sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    let px = (player.x - camX) * TILE_SIZE + TILE_SIZE / 2;
-    let py = (player.y - camY) * TILE_SIZE + TILE_SIZE / 2;
-    ctx.fillText(player.symbol, px, py);
+    // 画像のどの部分を切り取るか計算
+    let sourceX = animFrame * SPRITE_SIZE; // 0列目か1列目か
+    let sourceY = playerDir * SPRITE_SIZE; // 向きに応じた行
+
+    ctx.drawImage(
+        playerImg,
+        sourceX, sourceY, SPRITE_SIZE, SPRITE_SIZE, // 元画像の切り取り位置とサイズ
+        drawPlayerX, drawPlayerY, tileSizeDraw, tileSizeDraw // キャンバスへの描画位置とサイズ
+    );
+    // --------------------------------------------------------
 }
 
-// --- ゲーム制御 ---
 function startGame() {
-    // UIの表示切り替え
     elOverlay.style.display = 'none';
-    elStatusBar.style.display = 'flex';
-    elControls.style.display = 'block';
-    elMessageLog.style.display = 'block';
-    
-    gameState = 'play';
-    currentFloor = 1;
-    player.hp = player.maxHp;
+    elStatusBar.style.display = 'flex'; elBottomArea.style.display = 'flex';
+    gameState = 'play'; currentFloor = 1; turnCount = 0; player.hp = player.maxHp;
     player.food = player.maxFood;
-    
-    elMessageLog.innerHTML = ''; // ログクリア
-    logMessage('どうくつ に はいった！', 'system');
-    
-    initFloor();
+    elMessageLog.innerHTML = ''; logMessage('どうくつ に はいった！', 'system'); initFloor();
 }
 
-function initFloor() {
-    generateMap();
+function initFloor() { 
+    generateMap(); 
     logMessage(`ちか ${currentFloor} かい に ついた。`, 'system');
-    updateStatus();
-    draw();
+    updateStatus(); 
+    draw(); 
 }
 
 function processTurn() {
-    // おなかが減る
-    player.food -= 1;
-    
-    if (player.food <= 0) {
-        player.food = 0;
-        player.hp -= 1;
-        logMessage('おなかが ペコペコだ！ <ruby>体力<rt>たいりょく</rt></ruby> が へった！', 'danger');
-    } else if (player.food === 20) {
-        logMessage('おなかが へってきた…。', 'danger');
+    turnCount++;
+    if (turnCount % 3 === 0) {
+        if (player.food > 0) player.food -= 1;
+        if (player.food === 20) logMessage('おなかが へってきた…。', 'danger');
     }
-
+    if (player.food > 0) { 
+        if (player.hp < player.maxHp) player.hp += 1;
+    } else { 
+        player.hp -= 1; logMessage('おなかが ペコペコだ！ <ruby>体力<rt>たいりょく</rt></ruby> が へった！', 'danger');
+    }
+    
     if (player.hp <= 0) {
         logMessage('たおれて しまった…。', 'danger');
         gameState = 'gameover';
         setTimeout(() => {
-            elOverlay.style.display = 'flex';
-            elOverlay.innerHTML = `
-                <h1>ゲームオーバー</h1>
-                <p>ティラノ は ちからつきた…</p>
-                <p>ちか ${currentFloor} かい で だつらく。</p>
-                <button id="start-btn" onclick="location.reload()">もういちど</button>
-            `;
-            // ゲームオーバー時は操作パネルを隠す
-            elControls.style.display = 'none';
+            elOverlay.style.display = 'flex'; elBottomArea.style.display = 'none';
+            elOverlay.innerHTML = `<h1>ゲームオーバー</h1><p>ティラノ は ちからつきた…</p><p>ちか ${currentFloor} かい で だつらく。</p><button id="start-btn" onclick="location.reload()">もういちど</button>`;
         }, 500);
     }
-
-    updateStatus();
+    updateStatus(); 
     draw();
 }
 
 function handleMove(dx, dy) {
     if (gameState !== 'play') return;
 
-    // 待機（dx=0, dy=0）の場合は移動処理をスキップしてターンのみ進める
-    if (dx === 0 && dy === 0) {
-        logMessage('そのば で まっている。');
-        processTurn();
-        return;
-    }
+    // --- 追加：向きの更新 ---
+    if (dx === 0 && dy === -1) playerDir = 0; // 上
+    else if (dx === 1 && dy === -1) playerDir = 1; // 右上
+    else if (dx === 1 && dy === 0) playerDir = 2; // 右
+    else if (dx === 1 && dy === 1) playerDir = 3; // 右下
+    else if (dx === 0 && dy === 1) playerDir = 4; // 下
+    else if (dx === -1 && dy === 1) playerDir = 5; // 左下
+    else if (dx === -1 && dy === 0) playerDir = 6; // 左
+    else if (dx === -1 && dy === -1) playerDir = 7; // 左上
+    // ------------------------
 
-    let nx = player.x + dx;
-    let ny = player.y + dy;
-
-    // マップ外判定
-    if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT) return;
-
-    // 壁判定
-    if (map[ny][nx] === TILE_WALL) {
-        logMessage('かべ に ぶつかった。');
-        return; // 壁にぶつかった時はターンを経過させない（遊びやすさのため）
-    }
-
-    // 移動成功
-    player.x = nx;
-    player.y = ny;
+    if (dx === 0 && dy === 0) { logMessage('そのば で まっている。'); processTurn(); return; }
     
-    // 階段判定
-    if (map[ny][nx] === TILE_STAIRS) {
-        logMessage('かいだん を みつけた！ つぎへ すすむ！', 'system');
-        currentFloor++;
-        initFloor();
-        return;
+    let nx = player.x + dx, ny = player.y + dy;
+    if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT) return;
+    if (map[ny][nx] === TILE_WALL) return;
+    if (dx !== 0 && dy !== 0) { 
+        if (map[player.y][nx] === TILE_WALL && map[ny][player.x] === TILE_WALL) return;
     }
-
+    
+    player.x = nx; player.y = ny;
+    if (map[ny][nx] === TILE_STAIRS) { 
+        logMessage('かいだん を みつけた！ つぎへ すすむ！', 'system'); 
+        currentFloor++; initFloor(); return;
+    }
     processTurn();
 }
 
-// --- イベントリスナー ---
 document.getElementById('start-btn').addEventListener('click', startGame);
-
 window.addEventListener('keydown', (e) => {
-    // デフォルトのスクロールを防ぐ（矢印キーのみ）
-    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].indexOf(e.key) > -1) {
-        e.preventDefault();
-    }
+    if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].indexOf(e.key) > -1) e.preventDefault();
     switch(e.key) {
-        case 'ArrowUp': handleMove(0, -1); break;
-        case 'ArrowDown': handleMove(0, 1); break;
-        case 'ArrowLeft': handleMove(-1, 0); break;
-        case 'ArrowRight': handleMove(1, 0); break;
-        case ' ': handleMove(0, 0); break; // スペースキーで待機
+        case 'ArrowUp': case '8': handleMove(0, -1); break;
+        case 'ArrowDown': case '2': handleMove(0, 1); break;
+        case 'ArrowLeft': case '4': handleMove(-1, 0); break;
+        case 'ArrowRight': case '6': handleMove(1, 0); break;
+        case '7': handleMove(-1, -1); break; case '9': handleMove(1, -1); break;      
+        case '1': handleMove(-1, 1); break; case '3': handleMove(1, 1); break;
+        case ' ': case '5': handleMove(0, 0); break;
     }
 });
 
-// 初期描画（タイトル画面）
-draw();
+// --- 追加：アニメーションループ処理 ---
+function animationLoop(timestamp) {
+    // 約500ミリ秒（0.5秒）ごとにコマを切り替える
+    if (timestamp - lastAnimTime > 500) {
+        animFrame = (animFrame === 0) ? 1 : 0; // 0と1を交互に切り替え
+        lastAnimTime = timestamp;
+        draw(); // コマが切り替わったら再描画
+    }
+    requestAnimationFrame(animationLoop);
+}
 
+// ループ開始と初回描画
+requestAnimationFrame(animationLoop);
+draw();
+// ------------------------------------
 </script>
 </body>
 </html>
