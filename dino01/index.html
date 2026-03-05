@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DINO-ROGUE DX</title>
+    <style>
+        :root {
+            --bg-color: #000; --panel-bg: #1a1a1a;
+            --text-color: #e0e0e0; --accent-color: #ff8c00; --danger-color: #ff4444; --border-color: #444;
+        }
+        body {
+            margin: 0; padding: 0; background-color: var(--bg-color); color: var(--text-color);
+            font-family: 'Hiragino Maru Gothic ProN', sans-serif;
+            display: flex; justify-content: center; height: 100dvh; overflow: hidden; touch-action: none;
+        }
+        #game-wrapper {
+            display: flex; flex-direction: column; width: 100%; max-width: 600px; height: 100%;
+        }
+        /* ステータスバー（バー表示に対応） */
+        #status-bar {
+            display: grid; grid-template-columns: 1fr 1fr;
+            padding: 8px; background-color: var(--panel-bg);
+            border-bottom: 2px solid var(--border-color); font-size: 12px;
+            font-weight: bold; flex-shrink: 0; display: none; gap: 4px;
+        }
+        .status-row { display: flex; align-items: center; gap: 5px; grid-column: span 1; }
+        .bar-container { flex: 1; height: 10px; background: #333; border-radius: 5px; overflow: hidden; border: 1px solid #555; }
+        .bar-fill { height: 100%; width: 100%; transition: width 0.3s; }
+        #hp-fill { background: linear-gradient(to right, #ff4444, #ff8888); }
+        #food-fill { background: linear-gradient(to right, #44ff44, #88ff88); }
+        
+        .status-grid-small { display: grid; grid-template-columns: repeat(4, 1fr); grid-column: span 2; gap: 5px; margin-top: 4px; font-size: 11px; }
+        .status-item.equip { grid-column: span 4; color: #aaaaff; border-top: 1px solid #333; padding-top: 4px; }
+        ruby { ruby-align: center; } rt { font-size: 0.6em; color: #aaa; }
+
+        /* ゲーム画面 */
+        #canvas-container { position: relative; width: 100%; flex: 1; background-color: #000; display: flex; align-items: center; overflow: hidden; }
+        canvas { display: block; width: 100%; height: auto; max-height: 100%; image-rendering: pixelated; }
+
+        /* オーバーレイ */
+        #overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0, 0, 0, 0.9); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; padding: 20px; box-sizing: border-box; z-index: 10;
+        }
+        #story-area { display: none; flex-direction: column; align-items: center; width: 100%; }
+        #story-img { max-width: 85%; max-height: 45%; border: 2px solid var(--border-color); margin-bottom: 15px; }
+        #story-text { font-size: 14px; color: #fff; line-height: 1.7; text-align: left; width: 100%; min-height: 80px; }
+
+        .game-btn { margin-top: 20px; padding: 12px 35px; font-size: 18px; background-color: var(--accent-color); color: white; border-radius: 30px; border: none; font-weight: bold; cursor: pointer; }
+
+        /* ボトムエリア */
+        #bottom-area { display: none; height: 190px; flex-direction: row; background-color: var(--panel-bg); border-top: 2px solid var(--border-color); flex-shrink: 0; }
+        #controls-container { width: 160px; padding: 10px; display: flex; justify-content: center; align-items: center; border-right: 2px solid var(--border-color); }
+        #controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 100%; }
+        .btn { background-color: #333; border: 1px solid #444; border-radius: 8px; color: white; font-size: 20px; aspect-ratio: 1/1; display: flex; justify-content: center; align-items: center; }
+        .btn-wait { font-size: 12px; background-color: #4a3b2f; }
+
+        #message-log { flex: 1; padding: 10px; background-color: #0d0d0d; overflow-y: auto; font-size: 11px; line-height: 1.5; }
+        .log-entry { border-bottom: 1px solid #222; margin-bottom: 4px; }
+    </style>
+</head>
+<body>
+<div id="game-wrapper">
+    <div id="status-bar">
+        <div class="status-row">
+            <ruby>体力<rt>たいりょく</rt></ruby>
+            <div class="bar-container"><div id="hp-fill" class="bar-fill"></div></div>
+        </div>
+        <div class="status-row">
+            おなか
+            <div class="bar-container"><div id="food-fill" class="bar-fill"></div></div>
+        </div>
+        <div class="status-grid-small">
+            <div class="status-item">Lv <span id="lv-val">1</span></div>
+            <div class="status-item">こうげき <span id="atk-val">5</span></div>
+            <div class="status-item">ぼうぎょ <span id="def-val">2</span></div>
+            <div class="status-item">はやさ <span id="spd-val">5</span></div>
+            <div id="equip-info" class="status-item equip">そうび: なし</div>
+        </div>
+    </div>
+    <div id="canvas-container">
+        <canvas id="gameCanvas" width="400" height="300"></canvas>
+        <div id="overlay">
+            <div id="title-area">
+                <h1>DINO-ROGUE DX</h1>
+                <p>きょうりゅう の だいぼうけん！</p>
+                <button id="start-btn" class="game-btn">はじめる</button>
+            </div>
+            <div id="story-area">
+                <img id="story-img" src="">
+                <div id="story-text"></div>
+                <button id="next-story-btn" class="game-btn">つぎへ</button>
+            </div>
+        </div>
+    </div>
+    <div id="bottom-area">
+        <div id="controls-container">
+            <div id="controls">
+                <div class="btn" onmousedown="handleMove(-1, -1)" ontouchstart="handleMove(-1,-1);event.preventDefault();">↖</div>
+                <div class="btn" onmousedown="handleMove(0, -1)" ontouchstart="handleMove(0,-1);event.preventDefault();">⬆</div>
+                <div class="btn" onmousedown="handleMove(1, -1)" ontouchstart="handleMove(1,-1);event.preventDefault();">↗</div>
+                <div class="btn" onmousedown="handleMove(-1, 0)" ontouchstart="handleMove(-1,0);event.preventDefault();">⬅</div>
+                <div class="btn btn-wait" onmousedown="handleMove(0, 0)" ontouchstart="handleMove(0,0);event.preventDefault();">やすむ</div>
+                <div class="btn" onmousedown="handleMove(1, 0)" ontouchstart="handleMove(1,0);event.preventDefault();">➡</div>
+                <div class="btn" onmousedown="handleMove(-1, 1)" ontouchstart="handleMove(-1,1);event.preventDefault();">↙</div>
+                <div class="btn" onmousedown="handleMove(0, 1)" ontouchstart="handleMove(0,1);event.preventDefault();">⬇</div>
+                <div class="btn" onmousedown="handleMove(1, 1)" ontouchstart="handleMove(1,1);event.preventDefault();">↘</div>
+            </div>
+        </div>
+        <div id="message-log"></div>
+    </div>
+</div>
+
+<script>
+const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+const elOverlay = document.getElementById('overlay'), elStatusBar = document.getElementById('status-bar');
+const elBottomArea = document.getElementById('bottom-area'), elMessageLog = document.getElementById('message-log');
+const elStoryArea = document.getElementById('story-area'), elStoryImg = document.getElementById('story-img'), elStoryText = document.getElementById('story-text');
+const elNextStoryBtn = document.getElementById('next-story-btn');
+
+const MAP_WIDTH = 30, MAP_HEIGHT = 20, VIEW_WIDTH = 10, VIEW_HEIGHT = 8, MAX_FLOOR = 5;
+const TILE_WALL = 0, TILE_FLOOR = 1, TILE_STAIRS = 2, TILE_MEAT = 3;
+
+let gameState = 'title', currentFloor = 1, turnCount = 0, map = [], enemies = [];
+let player = { x: 0, y: 0, lv: 1, exp: 0, nextExp: 10, hp: 20, maxHp: 20, food: 100, maxFood: 100, atk: 5, def: 2, spd: 5, fossil: null };
+
+const playerImg = new Image(); playerImg.src = 'img/tyrano01.png';
+const SPRITE_SIZE = 64; let playerDir = 4, animFrame = 0, lastAnimTime = 0;
+
+// ストーリーテキスト（指定の改行とふりがなを適用）
+const introScenes = [
+    { img: 'img/intro01.png', text: 'ここは <ruby>恐竜<rt>きょうりゅう</rt></ruby>の <ruby>世界<rt>せかい</rt></ruby>。<br>ティラノは みんなと <ruby>楽<rt>たの</rt></ruby>しく くらしていました。' },
+    { img: 'img/intro02.png', text: '<ruby>空<rt>そら</rt></ruby>から <ruby>大<rt>おお</rt></ruby>きな いんせきが！<br>森が もえて、エサが どんどん なくなりました。' },
+    { img: 'img/intro03.text', text: 'ティラノ 「もうボク、<ruby>死<rt>し</rt></ruby>んじゃうのかな」<br><br>ひとりぼっちの ティラノは さみしそうに<br>だれもいない 原っぱを あるきました。' },
+    { img: 'img/intro04.png', text: 'そのとき、ティラノの まえに ひかる あなが！<br>「この <ruby>中<rt>なか</rt></ruby>には きっと 食べものがあるぞ！」<br>ティラノは <ruby>中<rt>なか</rt></ruby>へ <ruby>入<rt>はい</rt></ruby>りました。' }
+];
+
+const outroScenes = [
+    { img: 'img/outro01.png', text: 'あなの <ruby>外<rt>そと</rt></ruby>へ <ruby>出<rt>で</rt></ruby>たぞ！<br>まぶしい ひかりの さきに <ruby>見<rt>み</rt></ruby>えたのは……' },
+    { img: 'img/outro02.png', text: 'みどりが いっぱいの せかい！<br>べつの <ruby>大<rt>だい</rt></ruby>きな <ruby>大地<rt>だいち</rt></ruby>に ついたのです。<br>「たすかったぞ！」' },
+    { img: 'img/outro03.png', text: 'ティラノは また <ruby>楽<rt>たの</rt></ruby>しく くらせるように なりました。<br>待てー！ トリケラトプス！<br><br>おしまい！' }
+];
+let currentStoryIndex = 0, storyType = 'intro';
+// --- システム：ログのひょうじ と ステータスの こうしん ---
+function logMessage(msgHtml, type = 'normal') {
+    const entry = document.createElement('div'); entry.className = `log-entry ${type}`;
+    entry.innerHTML = msgHtml; elMessageLog.appendChild(entry);
+    elMessageLog.scrollTop = elMessageLog.scrollHeight;
+}
+
+function updateStatus() {
+    const f = player.fossil;
+    // そうび で つよくなる ぶん
+    const pAtk = f ? f.atk : 0;
+    const pDef = f ? f.def : 0;
+    const pSpd = f ? f.spd : 0;
+
+    // バー の ながさを かえる（ここが大事！）
+    const hpPercent = Math.max(0, (player.hp / player.maxHp) * 100);
+    const foodPercent = Math.max(0, (player.food / player.maxFood) * 100);
+    document.getElementById('hp-fill').style.width = hpPercent + "%";
+    document.getElementById('food-fill').style.width = foodPercent + "%";
+
+    // すうじ の ひょうじ
+    document.getElementById('lv-val').innerText = player.lv;
+    document.getElementById('atk-val').innerText = `${player.atk} (+${pAtk})`;
+    document.getElementById('def-val').innerText = `${player.def} (+${pDef})`;
+    document.getElementById('spd-val').innerText = `${player.spd} (+${pSpd})`;
+    
+    const equipInfo = document.getElementById('equip-info');
+    if (f) {
+        equipInfo.innerText = `そうび: ${f.name} (合計:${f.atk + f.def + f.spd})`;
+    } else {
+        equipInfo.innerText = "そうび: なし";
+    }
+}
+
+// --- レベル アップ！ ---
+function gainExp(amount) {
+    player.exp += amount;
+    while (player.exp >= player.nextExp) {
+        player.exp -= player.nextExp;
+        player.lv++;
+        player.nextExp = Math.floor(player.nextExp * 1.6);
+        
+        // つよくなる：HP、こうげき、ぼうぎょ、はやさ
+        const hpUp = 6, atkUp = 2, defUp = 1, spdUp = 1;
+        player.maxHp += hpUp;
+        player.hp = player.maxHp;
+        player.atk += atkUp;
+        player.def += defUp;
+        player.spd += spdUp;
+        
+        logMessage(`レベル アップ！ レベル${player.lv} に なった！`, 'lvup');
+        logMessage(`最大HP+${hpUp} 、こうげき +${atkUp} 、ぼうぎょ +${defUp} 、はやさ +${spdUp}`, 'lvup');
+    }
+}
+
+// --- かせき そうび：自動（じどう）で つよい ほう に かえる ---
+function tryEquipFossil(newF) {
+    const newVal = newF.atk + newF.def + newF.spd;
+    const currentF = player.fossil;
+    const currentVal = currentF ? (currentF.atk + currentF.def + currentF.spd) : -1;
+
+    if (newVal > currentVal) {
+        player.fossil = newF;
+        logMessage(`【そうび】 ${newF.name} を つけるぞ！`, 'system');
+    } else {
+        logMessage(`${newF.name} を みつけたが、いまと おなじか、よわいので すてた。`);
+    }
+}
+
+// --- ダンジョン を つくる（へや と つうろ） ---
+function generateMap() {
+    map = Array.from({length: MAP_HEIGHT}, () => Array(MAP_WIDTH).fill(TILE_WALL));
+    let rooms = [];
+    const splitX = Math.floor(MAP_WIDTH / 2), splitY = Math.floor(MAP_HEIGHT / 2);
+    const zones = [
+        {x1: 2, y1: 2, x2: splitX-2, y2: splitY-2},
+        {x1: splitX+2, y1: 2, x2: MAP_WIDTH-3, y2: splitY-2},
+        {x1: 2, y1: splitY+2, x2: splitX-2, y2: MAP_HEIGHT-3},
+        {x1: splitX+2, y1: splitY+2, x2: MAP_WIDTH-3, y2: MAP_HEIGHT-3}
+    ];
+
+    zones.forEach(z => {
+        let w = Math.floor(Math.random() * (z.x2 - z.x1 - 2)) + 4;
+        let h = Math.floor(Math.random() * (z.y2 - z.y1 - 2)) + 4;
+        let rx = Math.floor(Math.random() * (z.x2 - z.x1 - w)) + z.x1;
+        let ry = Math.floor(Math.random() * (z.y2 - z.y1 - h)) + z.y1;
+        for(let y=ry; y<ry+h; y++) for(let x=rx; x<rx+w; x++) map[y][x] = TILE_FLOOR;
+        rooms.push({x: Math.floor(rx + w/2), y: Math.floor(ry + h/2)});
+    });
+
+    for(let i=0; i<rooms.length-1; i++) {
+        let s = rooms[i], e = rooms[i+1];
+        let cx = s.x, cy = s.y;
+        while(cx !== e.x) { map[cy][cx] = TILE_FLOOR; cx += Math.sign(e.x - cx); }
+        while(cy !== e.y) { map[cy][cx] = TILE_FLOOR; cy += Math.sign(e.y - cy); }
+    }
+
+    player.x = rooms[0].x; player.y = rooms[0].y;
+    map[rooms[3].y][rooms[3].x] = TILE_STAIRS;
+
+    for(let i=0; i<3; i++) {
+        let rx, ry; do { rx = Math.floor(Math.random()*MAP_WIDTH); ry = Math.floor(Math.random()*MAP_HEIGHT); } while(map[ry][rx] !== TILE_FLOOR);
+        map[ry][rx] = TILE_MEAT;
+    }
+
+    // --- 敵の出現テーブル（階層別） ---
+    enemies = [];
+    const allTypes = [
+        {name: 'コンプソグナトゥス', icon: '🦎', hp: 8, atk: 4, def: 2, spd: 4, exp: 5, minF: 1, maxF: 2},
+        {name: 'プテラノドン', icon: '🦇', hp: 6, atk: 8, def: 1, spd: 10, exp: 8, minF: 1, maxF: 3},
+        {name: 'トリケラトプス', icon: '🦏', hp: 25, atk: 8, def: 12, spd: 3, exp: 25, minF: 3, maxF: 5},
+        {name: 'アロサウルス', icon: '🦖', hp: 45, atk: 18, def: 8, spd: 8, exp: 55, minF: 4, maxF: 5},
+        {name: 'ギガノトサウルス', icon: '🐉', hp: 95, atk: 35, def: 18, spd: 18, exp: 200, minF: 5, maxF: 5}
+    ];
+
+    const available = allTypes.filter(t => t.minF <= currentFloor && t.maxF >= currentFloor);
+    let eCount = 3 + Math.floor(currentFloor * 1.2);
+    for(let i=0; i<eCount; i++) {
+        let ex, ey; do { ex = Math.floor(Math.random()*MAP_WIDTH); ey = Math.floor(Math.random()*MAP_HEIGHT); } 
+        while(map[ey][ex] !== TILE_FLOOR || (ex === player.x && ey === player.y));
+        let type = available[Math.floor(Math.random() * available.length)];
+        enemies.push({...type, x: ex, y: ey, maxHp: type.hp});
+    }
+}
+// --- 描画：きょうりゅう や ステージ を かく ---
+function draw() {
+    if (gameState !== 'play') return;
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    let camX = Math.max(0, Math.min(player.x - Math.floor(VIEW_WIDTH / 2), MAP_WIDTH - VIEW_WIDTH));
+    let camY = Math.max(0, Math.min(player.y - Math.floor(VIEW_HEIGHT / 2), MAP_HEIGHT - VIEW_HEIGHT));
+    let ts = canvas.width / VIEW_WIDTH;
+
+    // まわりの かべ や ゆか を かく
+    for (let y = 0; y < VIEW_HEIGHT; y++) {
+        for (let x = 0; x < VIEW_WIDTH; x++) {
+            let mx = camX + x, my = camY + y;
+            if (my < 0 || my >= MAP_HEIGHT || mx < 0 || mx >= MAP_WIDTH) continue;
+            let dx = x * ts, dy = y * ts;
+            if (map[my][mx] === TILE_WALL) {
+                ctx.fillStyle = '#2c2c3a'; ctx.fillRect(dx, dy, ts, ts);
+            } else {
+                ctx.fillStyle = '#3d2b1f'; ctx.fillRect(dx, dy, ts, ts);
+                ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `${ts * 0.6}px sans-serif`;
+                if (map[my][mx] === TILE_STAIRS) ctx.fillText('🚪', dx + ts / 2, dy + ts / 2);
+                else if (map[my][mx] === TILE_MEAT) ctx.fillText('🍖', dx + ts / 2, dy + ts / 2);
+            }
+        }
+    }
+
+    // てきの きょうりゅう を かく
+    enemies.forEach(e => {
+        let ex = (e.x - camX) * ts, ey = (e.y - camY) * ts;
+        if (e.x >= camX && e.x < camX + VIEW_WIDTH && e.y >= camY && e.y < camY + VIEW_HEIGHT) {
+            ctx.fillText(e.icon, ex + ts / 2, ey + ts / 2);
+            // てき の HPバー
+            ctx.fillStyle = '#500'; ctx.fillRect(ex + 4, ey + 2, ts - 8, 2);
+            ctx.fillStyle = '#0f0'; ctx.fillRect(ex + 4, ey + 2, (ts - 8) * (e.hp / e.maxHp), 2);
+        }
+    });
+
+    // 主人公（ティラノ）を かく
+    let px = (player.x - camX) * ts, py = (player.y - camY) * ts;
+    if (playerImg.complete && playerImg.naturalWidth !== 0) {
+        ctx.drawImage(playerImg, animFrame * SPRITE_SIZE, playerDir * SPRITE_SIZE, SPRITE_SIZE, SPRITE_SIZE, px, py, ts, ts);
+    } else {
+        ctx.fillStyle = 'red'; ctx.fillRect(px, py, ts, ts); 
+    }
+}
+
+// --- ターン：おなかが へったり、てきが うごいたり する ---
+function processTurn() {
+    turnCount++;
+    if (turnCount % 3 === 0 && player.food > 0) player.food--;
+    if (player.food <= 0) { 
+        player.hp -= 0.5; 
+        logMessage('おなかが すいて <ruby>体力<rt>たいりょく</rt></ruby>が へっていく！', 'danger'); 
+    }
+    else if (player.hp < player.maxHp) player.hp += 0.1;
+
+    enemies.forEach(e => {
+        let dx = player.x - e.x, dy = player.y - e.y;
+        let dist = Math.max(Math.abs(dx), Math.abs(dy));
+
+        if (dist === 1) {
+            // はやさ で こうげき を よける 判定
+            const totalSpd = player.spd + (player.fossil ? player.fossil.spd : 0);
+            if (Math.random() * 100 < (totalSpd - e.spd)) {
+                logMessage(`${e.icon} の こうげき を よけた！`, 'system');
+            } else {
+                const totalDef = player.def + (player.fossil ? player.fossil.def : 0);
+                let dmg = Math.max(1, e.atk - totalDef);
+                player.hp -= dmg;
+                logMessage(`${e.icon} の こうげき！ ${dmg} ダメージ！`, 'danger');
+            }
+        } else if (dist < 7) {
+            let mx = Math.sign(dx), my = Math.sign(dy);
+            if (map[e.y + my][e.x + mx] === TILE_FLOOR && !enemies.some(oe => oe.x === e.x + mx && oe.y === e.y + my)) {
+                e.x += mx; e.y += my;
+            }
+        }
+    });
+
+    if (player.hp <= 0) showEnding(false);
+    updateStatus(); draw();
+}
+
+// --- うごく・こうげき する ---
+function handleMove(dx, dy) {
+    if (gameState !== 'play') return;
+
+    if (dx !== 0 || dy !== 0) {
+        if (dx === 0 && dy === -1) playerDir = 0;
+        else if (dx === 1 && dy === -1) playerDir = 1;
+        else if (dx === 1 && dy === 0) playerDir = 2;
+        else if (dx === 1 && dy === 1) playerDir = 3;
+        else if (dx === 0 && dy === 1) playerDir = 4;
+        else if (dx === -1 && dy === 1) playerDir = 5;
+        else if (dx === -1 && dy === 0) playerDir = 6;
+        else if (dx === -1 && dy === -1) playerDir = 7;
+    }
+
+    // 「やすむ」ボタンのとき
+    if (dx === 0 && dy === 0) { 
+        logMessage('ティラノは やすんで いきを ととのえた。'); 
+        processTurn(); 
+        return; 
+    }
+
+    let nx = player.x + dx, ny = player.y + dy;
+    let target = enemies.find(e => e.x === nx && e.y === ny);
+
+    if (target) {
+        // かいしん の いちげき 判定
+        const totalSpd = player.spd + (player.fossil ? player.fossil.spd : 0);
+        let isCrit = Math.random() * 100 < totalSpd;
+        const totalAtk = player.atk + (player.fossil ? player.fossil.atk : 0);
+        let dmg = Math.floor(Math.max(1, totalAtk - target.def) * (isCrit ? 1.5 : 1));
+        
+        target.hp -= dmg;
+        logMessage(`ティラノの こうげき！ ${target.icon} に ${dmg}${isCrit ? "！(かいしん)" : ""} ダメージ！`);
+        
+        if (target.hp <= 0) {
+            logMessage(`${target.icon} を たおした！ ${target.exp} ポイント ゲット！`);
+            gainExp(target.exp);
+            
+            let rand = Math.random();
+            if (rand < 0.15) { // かせき を ひろう
+                const grade = Math.floor(Math.random() * 5) + 1;
+                const fAtk = Math.floor(target.atk * 0.4 * grade);
+                const fDef = Math.floor(target.def * 0.4 * grade);
+                const fSpd = Math.floor(target.spd * 0.4 * grade);
+                tryEquipFossil({ name: `${target.name}の かせき +${grade}`, atk: fAtk, def: fDef, spd: fSpd });
+            } else if (rand < 0.5) { // おにく
+                map[ny][nx] = TILE_MEAT;
+                logMessage('おにく が おちている！', 'heal');
+            }
+            enemies = enemies.filter(e => e !== target);
+        }
+        processTurn(); return;
+    }
+
+    if (nx < 0 || nx >= MAP_WIDTH || ny < 0 || ny >= MAP_HEIGHT || map[ny][nx] === TILE_WALL) return;
+    if (dx !== 0 && dy !== 0 && map[player.y][nx] === TILE_WALL && map[ny][player.x] === TILE_WALL) return;
+
+    player.x = nx; player.y = ny;
+    if (map[ny][nx] === TILE_MEAT) {
+        player.food = Math.min(100, player.food + 25);
+        map[ny][nx] = TILE_FLOOR;
+        logMessage('おにく を たべて げんきに なった！', 'heal');
+    }
+    if (map[ny][nx] === TILE_STAIRS) {
+        if (currentFloor >= MAX_FLOOR) showEnding(true);
+        else { 
+            currentFloor++; 
+            logMessage(`<ruby>下<rt>した</rt></ruby>の ${currentFloor} かいへ いこう！`, 'system'); 
+            initFloor(); 
+        }
+        return;
+    }
+    processTurn();
+}
+
+// --- おはなし の 画面 を だす ---
+function showStoryScene(type, index) {
+    gameState = type; storyType = type; currentStoryIndex = index;
+    elTitleArea.style.display = 'none'; elStatusBar.style.display = 'none'; elBottomArea.style.display = 'none';
+    elOverlay.style.display = 'flex'; elStoryArea.style.display = 'flex';
+    const scenes = (type === 'intro') ? introScenes : outroScenes;
+    elStoryImg.src = scenes[index].img;
+    elStoryText.innerHTML = scenes[index].text; // ルビを表示するためにinnerHTML
+    elNextStoryBtn.innerText = (index === scenes.length - 1) ? (type === 'intro' ? "はじめる" : "タイトルへ") : "つぎへ";
+}
+
+function nextStory() {
+    currentStoryIndex++;
+    const scenes = (storyType === 'intro') ? introScenes : outroScenes;
+    if (currentStoryIndex < scenes.length) {
+        showStoryScene(storyType, currentStoryIndex);
+    } else {
+        if (storyType === 'intro') startGame本編();
+        else location.reload();
+    }
+}
+
+function startGame本編() {
+    elOverlay.style.display = 'none'; elStatusBar.style.display = 'grid'; elBottomArea.style.display = 'flex';
+    gameState = 'play'; currentFloor = 1; turnCount = 0;
+    player.hp = 20; player.maxHp = 20; player.food = 100; player.lv = 1;
+    player.atk = 5; player.def = 2; player.spd = 5; player.exp = 0; player.nextExp = 10; player.fossil = null;
+    elMessageLog.innerHTML = '';
+    logMessage('ふしぎな あなの <ruby>中<rt>なか</rt></ruby>へ はいった！', 'system');
+    initFloor();
+}
+
+function initFloor() { generateMap(); updateStatus(); draw(); }
+
+function showEnding(isWin) {
+    if (isWin) {
+        showStoryScene('outro', 0);
+    } else {
+        gameState = 'over';
+        elOverlay.style.display = 'flex';
+        elOverlay.innerHTML = `<h1>もう だめだ……</h1><p>ティラノは たおれてしまった。</p><button class="game-btn" onclick="location.reload()">もういちど</button>`;
+    }
+}
+
+// --- アニメーション ---
+function animationLoop(timestamp) {
+    if (timestamp - lastAnimTime > 500) {
+        animFrame = (animFrame === 0) ? 1 : 0;
+        lastAnimTime = timestamp;
+        draw();
+    }
+    requestAnimationFrame(animationLoop);
+}
+
+// --- イベント 登録 ---
+elNextStoryBtn.addEventListener('click', nextStory);
+document.getElementById('start-btn').addEventListener('click', () => showStoryScene('intro', 0));
+requestAnimationFrame(animationLoop);
+</script>
+</body>
+</html>
