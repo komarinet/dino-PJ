@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DINO-CHASE</title>
+    <style>
+        :root {
+            --bg-color: #060; /* 深い緑 */
+            --text-color: #fff;
+            --accent-color: #ff8c00;
+            --aim-color: #00ffff;
+        }
+        body {
+            margin: 0; padding: 0; background-color: #000; color: var(--text-color);
+            font-family: 'Hiragino Maru Gothic ProN', sans-serif;
+            display: flex; flex-direction: column; height: 100dvh; overflow: hidden; touch-action: none;
+        }
+        #gameCanvas {
+            width: 100%; height: auto; max-height: 100dvh; image-rendering: pixelated; margin: auto;
+            background: linear-gradient(#000 40%, #1a3300 40%, #060 100%);
+        }
+        #ui-layer {
+            position: absolute; top: 10px; left: 10px; width: calc(100% - 20px);
+            display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;
+            text-shadow: 2px 2px 0 #000; z-index: 10; pointer-events: none;
+        }
+        ruby { ruby-align: center; } rt { font-size: 0.6em; color: #ccc; }
+    </style>
+</head>
+<body>
+
+    <div id="ui-layer">
+        <div><ruby>得点<rt>とくてん</rt></ruby>: <span id="score-val">0</span></div>
+        <div><ruby>体力<rt>たいりょく</rt></ruby>: <span id="hp-val">10</span></div>
+    </div>
+
+    <canvas id="gameCanvas" width="400" height="300"></canvas>
+
+<script>
+const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+const elScore = document.getElementById('score-val'), elHp = document.getElementById('hp-val');
+
+const W = canvas.width, H = canvas.height;
+const VP = { x: W / 2, y: H * 0.4 }; // 消失点
+const SCALING_FACTOR = 20; 
+const GAME_SPEED = 0.06;
+
+let gameState = 'play', score = 0, hp = 10;
+let enemies = [], groundLines = [], aim = { x: W/2, y: H/2 };
+let touchX = W/2, touchY = H/2;
+
+class Enemy {
+    constructor() {
+        this.z = 10; // 奥行き
+        this.offset = (Math.random() - 0.5) * W * 2; // 左右位置
+        this.type = Math.random() < 0.2 ? {icon:'🦖', size:25, hp:3} : {icon:'🦎', size:15, hp:1};
+        this.alive = true;
+    }
+    update() {
+        this.z -= GAME_SPEED;
+        const scale = SCALING_FACTOR / (this.z + 1);
+        this.x = VP.x + this.offset * scale;
+        this.y = VP.y + (H - VP.y) * (1 - this.z / 10);
+        this.drawSize = this.type.size * scale;
+
+        // 照準が重なっているか
+        const dist = Math.hypot(this.x - aim.x, this.y - aim.y);
+        if (this.alive && dist < this.drawSize / 2) {
+            this.alive = false;
+            score += 100; elScore.textContent = score;
+        }
+        // 画面端まで来たらダメージ
+        if (this.z < 0.2) {
+            if (this.alive) { hp--; elHp.textContent = hp; }
+            this.alive = false;
+        }
+    }
+    draw() {
+        ctx.save();
+        ctx.translate(this.x, this.y);
+        ctx.scale(1, 1);
+        ctx.font = `${this.drawSize}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        // 奥にいるときは暗く
+        ctx.globalAlpha = Math.min(1, 1.5 - this.z / 10);
+        ctx.fillText(this.type.icon, 0, 0);
+        ctx.restore();
+    }
+}
+
+class RoadLine {
+    constructor(z) { this.z = z; }
+    update() {
+        this.z -= GAME_SPEED;
+        if (this.z < 0) this.z = 10;
+    }
+    draw() {
+        const y = VP.y + (H - VP.y) * (1 - this.z / 10);
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * (1 - this.z / 10)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+    }
+}
+
+function init() {
+    enemies = []; groundLines = [];
+    for (let i = 0; i < 10; i++) groundLines.push(new RoadLine(i));
+    score = 0; hp = 10; gameState = 'play';
+}
+
+function loop() {
+    if (gameState !== 'play') return requestAnimationFrame(loop);
+    ctx.clearRect(0, 0, W, H);
+
+    // 背景（道路の消失点演出）
+    ctx.fillStyle = '#1a3300'; ctx.fillRect(0, VP.y, W, H - VP.y);
+    ctx.strokeStyle = '#2e7d32';
+    for(let i=-5; i<=5; i++){
+        ctx.beginPath(); ctx.moveTo(VP.x, VP.y);
+        ctx.lineTo(VP.x + i * W * 0.5, H); ctx.stroke();
+    }
+    groundLines.forEach(l => { l.update(); l.draw(); });
+
+    // 敵の生成
+    if (Math.random() < 0.05) enemies.push(new Enemy());
+    enemies.forEach(e => { e.update(); e.draw(); });
+    enemies = enemies.filter(e => e.alive);
+
+    // 照準（常時発射ビーム）
+    aim.x += (touchX - aim.x) * 0.2;
+    aim.y += (touchY - aim.y) * 0.2;
+    
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+    ctx.lineWidth = 4;
+    ctx.beginPath(); ctx.moveTo(W/2, H); ctx.lineTo(aim.x, aim.y); ctx.stroke();
+    
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+    ctx.strokeRect(aim.x - 10, aim.y - 10, 20, 20);
+
+    // 自機（ジープ）
+    ctx.font = '50px serif'; ctx.textAlign = 'center';
+    ctx.fillText('🚙', W/2 + (aim.x - W/2) * 0.1, H - 20);
+
+    if (hp <= 0) {
+        gameState = 'over';
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+        ctx.fillText('ゲームオーバー', W/2, H/2);
+    }
+    requestAnimationFrame(loop);
+}
+
+function handleInput(e) {
+    e.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    touchX = (clientX - rect.left) * (W / rect.width);
+    touchY = (clientY - rect.top) * (H / rect.height);
+}
+canvas.addEventListener('mousemove', handleInput);
+canvas.addEventListener('touchmove', handleInput, {passive: false});
+canvas.addEventListener('touchstart', handleInput, {passive: false});
+
+init(); loop();
+</script>
+</body>
+</html>
