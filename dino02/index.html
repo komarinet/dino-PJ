@@ -3,166 +3,165 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE</title>
+    <title>DINO-CHASE DX</title>
     <style>
-        :root {
-            --bg-color: #060; /* 深い緑 */
-            --text-color: #fff;
-            --accent-color: #ff8c00;
-            --aim-color: #00ffff;
-        }
-        body {
-            margin: 0; padding: 0; background-color: #000; color: var(--text-color);
-            font-family: 'Hiragino Maru Gothic ProN', sans-serif;
-            display: flex; flex-direction: column; height: 100dvh; overflow: hidden; touch-action: none;
-        }
-        #gameCanvas {
-            width: 100%; height: auto; max-height: 100dvh; image-rendering: pixelated; margin: auto;
-            background: linear-gradient(#000 40%, #1a3300 40%, #060 100%);
-        }
-        #ui-layer {
-            position: absolute; top: 10px; left: 10px; width: calc(100% - 20px);
-            display: flex; justify-content: space-between; font-weight: bold; font-size: 14px;
-            text-shadow: 2px 2px 0 #000; z-index: 10; pointer-events: none;
-        }
-        ruby { ruby-align: center; } rt { font-size: 0.6em; color: #ccc; }
+        body { margin: 0; padding: 0; background-color: #000; color: #fff; font-family: sans-serif; overflow: hidden; touch-action: none; }
+        canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
+        #ui { position: absolute; top: 10px; left: 10px; font-weight: bold; text-shadow: 2px 2px #000; pointer-events: none; z-index: 20; }
+        ruby rt { font-size: 0.6em; color: #ccc; }
     </style>
 </head>
 <body>
-
-    <div id="ui-layer">
-        <div><ruby>得点<rt>とくてん</rt></ruby>: <span id="score-val">0</span></div>
-        <div><ruby>体力<rt>たいりょく</rt></ruby>: <span id="hp-val">10</span></div>
+    <div id="ui">
+        <div><ruby>得点<rt>とくてん</rt></ruby>: <span id="score">0</span></div>
+        <div><ruby>体力<rt>たいりょく</rt></ruby>: <span id="hp">10</span></div>
     </div>
-
-    <canvas id="gameCanvas" width="400" height="300"></canvas>
+    <canvas id="gameCanvas"></canvas>
 
 <script>
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
-const elScore = document.getElementById('score-val'), elHp = document.getElementById('hp-val');
+let W, H, VP;
+const ROAD_Z_MAX = 10;
+const SCROLL_SPEED = 0.08;
 
-const W = canvas.width, H = canvas.height;
-const VP = { x: W / 2, y: H * 0.4 }; // 消失点
-const SCALING_FACTOR = 20; 
-const GAME_SPEED = 0.06;
+let score = 0, hp = 10, roadZ = 0, animFrame = 0;
+let enemies = [], aim = { x: 0, y: 0 }, touch = { x: 0, y: 0 };
 
-let gameState = 'play', score = 0, hp = 10;
-let enemies = [], groundLines = [], aim = { x: W/2, y: H/2 };
-let touchX = W/2, touchY = H/2;
+// --- 画像アセットの読み込み ---
+const roadImg = new Image();
+roadImg.src = 'img/road01.png'; // ユーザー様提供の画像
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    VP = { x: W / 2, y: H * 0.45 }; // 消失点
+}
+
+// --- 疑似3D道路の描画ロジック ---
+function drawRoad() {
+    if (!roadImg.complete) return;
+
+    const roadH = H - VP.y; // 道路を描画するエリアの高さ
+    const imgW = roadImg.width;
+    const imgH = roadImg.height;
+
+    // 1ピクセルずつ横方向にスキャンして描画（スキャライン）
+    for (let i = 0; i < roadH; i++) {
+        // 奥からの進捗率（0:奥, 1:手前）
+        const progress = i / roadH;
+        
+        // 奥行き（Z値）の計算。奥ほど密に、手前ほど広く
+        const z = 1 / (progress + 0.1); 
+        
+        // ソース画像のY座標（ループするように計算）
+        // roadZを足すことで前に進んでいるように見せる
+        let sy = ((z * 2 + roadZ) % 1) * imgH;
+        
+        // 描画する横幅。奥ほど狭く（W*0.1）、手前ほど広く（W*2.0）
+        const drawW = W * (0.1 + progress * 2.5);
+        const drawX = VP.x - drawW / 2;
+        const drawY = VP.y + i;
+
+        // 1ピクセル（実際は隙間対策で少し太め）の厚さで画像を描画
+        ctx.drawImage(
+            roadImg, 
+            0, sy, imgW, 1,    // ソース：画像の1ライン分
+            drawX, drawY, drawW, 1.5 // 先：画面の計算した位置へ拡大
+        );
+    }
+}
 
 class Enemy {
     constructor() {
-        this.z = 10; // 奥行き
-        this.offset = (Math.random() - 0.5) * W * 2; // 左右位置
-        this.type = Math.random() < 0.2 ? {icon:'🦖', size:25, hp:3} : {icon:'🦎', size:15, hp:1};
+        this.z = 10;
+        this.offset = (Math.random() - 0.5) * 2;
+        this.icon = Math.random() < 0.2 ? '🦖' : '🦎';
         this.alive = true;
     }
     update() {
-        this.z -= GAME_SPEED;
-        const scale = SCALING_FACTOR / (this.z + 1);
-        this.x = VP.x + this.offset * scale;
-        this.y = VP.y + (H - VP.y) * (1 - this.z / 10);
-        this.drawSize = this.type.size * scale;
+        this.z -= SCROLL_SPEED * 1.5;
+        const progress = (10 - this.z) / 10;
+        const scale = 1 / (this.z * 0.2 + 0.5);
+        
+        this.x = VP.x + this.offset * W * progress * 1.5;
+        this.y = VP.y + (H - VP.y) * progress;
+        this.size = 30 * scale;
 
-        // 照準が重なっているか
         const dist = Math.hypot(this.x - aim.x, this.y - aim.y);
-        if (this.alive && dist < this.drawSize / 2) {
-            this.alive = false;
-            score += 100; elScore.textContent = score;
+        if (this.alive && dist < this.size * 0.7) {
+            this.alive = false; score += 100; document.getElementById('score').innerText = score;
         }
-        // 画面端まで来たらダメージ
         if (this.z < 0.2) {
-            if (this.alive) { hp--; elHp.textContent = hp; }
+            if (this.alive) { hp--; document.getElementById('hp').innerText = hp; }
             this.alive = false;
         }
     }
     draw() {
         ctx.save();
-        ctx.translate(this.x, this.y);
-        ctx.scale(1, 1);
-        ctx.font = `${this.drawSize}px serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        // 奥にいるときは暗く
         ctx.globalAlpha = Math.min(1, 1.5 - this.z / 10);
-        ctx.fillText(this.type.icon, 0, 0);
+        ctx.font = `${this.size}px serif`;
+        ctx.textAlign = 'center';
+        ctx.fillText(this.icon, this.x, this.y);
         ctx.restore();
     }
 }
 
-class RoadLine {
-    constructor(z) { this.z = z; }
-    update() {
-        this.z -= GAME_SPEED;
-        if (this.z < 0) this.z = 10;
-    }
-    draw() {
-        const y = VP.y + (H - VP.y) * (1 - this.z / 10);
-        ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 * (1 - this.z / 10)})`;
-        ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
-    }
-}
-
 function init() {
-    enemies = []; groundLines = [];
-    for (let i = 0; i < 10; i++) groundLines.push(new RoadLine(i));
-    score = 0; hp = 10; gameState = 'play';
+    resize();
+    enemies = []; roadZ = 0; score = 0; hp = 10;
+    touch.x = W/2; touch.y = H/2;
 }
 
 function loop() {
-    if (gameState !== 'play') return requestAnimationFrame(loop);
-    ctx.clearRect(0, 0, W, H);
+    animFrame++;
+    roadZ += SCROLL_SPEED * 0.5; // 前進速度
+    
+    // 画面ガタガタ（オフロード感）
+    const shakeY = Math.sin(animFrame * 0.9) * 1.5;
+    ctx.setTransform(1, 0, 0, 1, 0, shakeY);
 
-    // 背景（道路の消失点演出）
-    ctx.fillStyle = '#1a3300'; ctx.fillRect(0, VP.y, W, H - VP.y);
-    ctx.strokeStyle = '#2e7d32';
-    for(let i=-5; i<=5; i++){
-        ctx.beginPath(); ctx.moveTo(VP.x, VP.y);
-        ctx.lineTo(VP.x + i * W * 0.5, H); ctx.stroke();
-    }
-    groundLines.forEach(l => { l.update(); l.draw(); });
+    ctx.fillStyle = '#000d00'; ctx.fillRect(0, 0, W, H); // 空
 
-    // 敵の生成
+    // 道路の描画（ここがメイン！）
+    drawRoad();
+
+    // 敵の生成と更新
     if (Math.random() < 0.05) enemies.push(new Enemy());
     enemies.forEach(e => { e.update(); e.draw(); });
     enemies = enemies.filter(e => e.alive);
 
-    // 照準（常時発射ビーム）
-    aim.x += (touchX - aim.x) * 0.2;
-    aim.y += (touchY - aim.y) * 0.2;
+    // 照準と自機
+    aim.x += (touch.x - aim.x) * 0.2;
+    aim.y += (touch.y - aim.y) * 0.2;
     
-    ctx.strokeStyle = 'rgba(0, 255, 255, 0.6)';
+    ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
     ctx.lineWidth = 4;
     ctx.beginPath(); ctx.moveTo(W/2, H); ctx.lineTo(aim.x, aim.y); ctx.stroke();
-    
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
-    ctx.strokeRect(aim.x - 10, aim.y - 10, 20, 20);
+    ctx.strokeRect(aim.x - 15, aim.y - 15, 30, 30);
 
-    // 自機（ジープ）
-    ctx.font = '50px serif'; ctx.textAlign = 'center';
-    ctx.fillText('🚙', W/2 + (aim.x - W/2) * 0.1, H - 20);
+    // 自機ジープ（アイコン）
+    ctx.font = '70px serif'; ctx.textAlign = 'center';
+    ctx.fillText('🚙', W/2 + (aim.x - W/2) * 0.1, H - 40);
 
-    if (hp <= 0) {
-        gameState = 'over';
-        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = 'white'; ctx.textAlign = 'center';
+    if (hp > 0) requestAnimationFrame(loop);
+    else {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,W,H);
+        ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = '30px sans-serif';
         ctx.fillText('ゲームオーバー', W/2, H/2);
     }
-    requestAnimationFrame(loop);
 }
 
 function handleInput(e) {
-    e.preventDefault();
+    const t = e.touches ? e.touches[0] : e;
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    touchX = (clientX - rect.left) * (W / rect.width);
-    touchY = (clientY - rect.top) * (H / rect.height);
+    touch.x = t.clientX - rect.left;
+    touch.y = t.clientY - rect.top;
 }
-canvas.addEventListener('mousemove', handleInput);
-canvas.addEventListener('touchmove', handleInput, {passive: false});
-canvas.addEventListener('touchstart', handleInput, {passive: false});
+window.addEventListener('mousemove', handleInput);
+window.addEventListener('touchmove', e => { e.preventDefault(); handleInput(e); }, {passive: false});
+window.addEventListener('touchstart', handleInput, {passive: false});
+window.addEventListener('resize', resize);
 
 init(); loop();
 </script>
