@@ -21,107 +21,72 @@
 <script>
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
 let W, H, VP;
-const ROAD_Z_MAX = 10;
 const SCROLL_SPEED = 0.08;
 
 let score = 0, hp = 10, roadZ = 0, animFrame = 0;
 let enemies = [], aim = { x: 0, y: 0 }, touch = { x: 0, y: 0 };
-let clouds = [];
 
 // --- 画像アセットの読み込み ---
 const roadImg = new Image();
 roadImg.src = 'img/road03.png';
 
-const horizonImg = new Image();
-horizonImg.src = 'img/horizon01.png'; // 先ほどの火山の地平線画像
-
-const cloudFiles = ['cloud02.png', 'cloud03.png', 'cloud04.png', 'cloud05.png', 'cloud06.png'];
-const cloudImgs = cloudFiles.map(file => {
-    const img = new Image();
-    img.src = `img/${file}`;
-    return img;
-});
-
-// --- 雲クラス（3Dパース対応） ---
-class Cloud {
-    constructor(z = Math.random() * 10) {
-        this.reset(z);
-    }
-    reset(z = 10) {
-        this.z = z;
-        // 消失点からの左右の広がり（大きいほど外側を流れる）
-        this.xOffset = (Math.random() - 0.5) * 3000;
-        // 地平線からの高さ（高度）
-        this.yOffset = 100 + Math.random() * 300;
-        // ランダムに画像を選択
-        this.img = cloudImgs[Math.floor(Math.random() * cloudImgs.length)];
-        // 個別のゆらぎ
-        this.scaleMult = 0.5 + Math.random() * 1.5;
-    }
-    update() {
-        // 道路より少しゆっくり動かすことで遠景らしさを出す
-        this.z -= SCROLL_SPEED * 0.4;
-        if (this.z <= 0.1) this.reset(10);
-    }
-    draw() {
-        if (!this.img.complete) return;
-        const scale = 1 / (this.z + 0.5);
-        const x = VP.x + this.xOffset * scale;
-        const y = VP.y - this.yOffset * scale; // 地平線より上に描画
-        const w = this.img.width * scale * this.scaleMult;
-        const h = this.img.height * scale * this.scaleMult;
-
-        ctx.save();
-        // 遠く（zが大きい）ほど薄くして空気遠近法を表現
-        ctx.globalAlpha = Math.min(1, (10 - this.z) / 3);
-        ctx.drawImage(this.img, x - w/2, y - h/2, w, h);
-        ctx.restore();
-    }
-}
+// 今回採用した、完璧な一枚絵の背景
+const bgImg = new Image();
+bgImg.src = 'img/image_15.png'; // 提示された画像を img/image_15.png として保存してください
 
 function resize() {
     W = canvas.width = window.innerWidth;
     H = canvas.height = window.innerHeight;
-    VP = { x: W / 2, y: H * 0.45 };
+    // 消失点（VP）は背景画像の構成に合わせて調整可能。今回は中央やや下に設定。
+    VP = { x: W / 2, y: H * 0.48 }; 
 }
 
-// --- 空の描画（夕暮れグラデーション） ---
-function drawSky() {
-    const grad = ctx.createLinearGradient(0, 0, 0, VP.y);
-    grad.addColorStop(0, '#001a33'); // 上空：濃い紺色
-    grad.addColorStop(0.6, '#4b0082'); // 中層：紫
-    grad.addColorStop(1, '#ff8c00'); // 地平線付近：オレンジ
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, W, VP.y);
+// --- 完璧な背景（遠景）の描画ロジック ---
+function drawBackground() {
+    if (!bgImg.complete) return;
 
-    // 地平線画像（火山）の描画
-    if (horizonImg.complete) {
-        const aspect = horizonImg.width / horizonImg.height;
-        const hW = W;
-        const hH = W / aspect;
-        ctx.drawImage(horizonImg, 0, VP.y - hH, hW, hH);
-    }
+    // 背景画像の地平線が、Canvasの消失点（VP.y）に重なるように描画
+    const aspect = bgImg.width / bgImg.height;
+    const hH = H; // 画面の高さいっぱいに広げる
+    const hW = hH * aspect; // アスペクト比を維持
+
+    // 消失点（VP.y）を中心とした配置計算
+    ctx.drawImage(bgImg, W/2 - hW/2, VP.y - hH/2, hW, hH);
 }
 
+// --- 疑似3D道路の描画ロジック ---
 function drawRoad() {
     if (!roadImg.complete) return;
-    const roadH = H - VP.y;
+
+    const roadH = H - VP.y; // 道路を描画するエリアの高さ
     const imgW = roadImg.width;
     const imgH = roadImg.height;
 
+    // 1ピクセルずつ横方向にスキャンして描画（スキャライン）
     for (let i = 0; i < roadH; i++) {
+        // 奥からの進捗率（0:奥, 1:手前）
         const progress = i / roadH;
+        
+        // 奥行き（Z値）の計算。奥ほど密に、手前ほど広く
         const z = 1 / (progress + 0.1); 
+        
+        // ソース画像のY座標（ループするように計算）
         let sy = ((z * 2 + roadZ) % 1) * imgH;
+        
+        // 描画する横幅。奥ほど狭く（W*0.1）、手前ほど広く（W*2.5）
         const drawW = W * (0.1 + progress * 2.5);
         const drawX = VP.x - drawW / 2;
-        const drawY = VP.y + i;
+        const drawY = VP.y + i; // 消失点から下へ向かって描画
 
-        ctx.drawImage(roadImg, 0, sy, imgW, 1, drawX, drawY, drawW, 1.5);
+        // 1ピクセル（実際は隙間対策で少し太め）の厚さで画像を描画
+        ctx.drawImage(
+            roadImg, 
+            0, sy, imgW, 1,    // ソース：画像の1ライン分
+            drawX, drawY, drawW, 1.5 // 先：画面の計算した位置へ拡大
+        );
     }
 }
 
-// 敵クラスなどは前回同様のため中略（動作に必要なので保持します）
 class Enemy {
     constructor() {
         this.z = 10;
@@ -159,29 +124,27 @@ function init() {
     resize();
     enemies = []; roadZ = 0; score = 0; hp = 10;
     touch.x = W/2; touch.y = H/2;
-    // 雲の初期化
-    clouds = [];
-    for(let i=0; i<8; i++) clouds.push(new Cloud(Math.random() * 10));
 }
 
 function loop() {
     animFrame++;
-    roadZ += SCROLL_SPEED * 0.5;
+    roadZ += SCROLL_SPEED * 0.5; // 前進速度
     
+    // 画面ガタガタ（オフロード感）
     const shakeY = Math.sin(animFrame * 0.9) * 1.5;
     ctx.setTransform(1, 0, 0, 1, 0, shakeY);
 
-    // 描画順序：空 -> 雲 -> 道路 -> 敵 -> UI
-    drawSky();
-
-    clouds.forEach(c => { c.update(); c.draw(); });
-
+    // 描画順序：背景（遠景） -> 道路（近景） -> 敵 -> UI
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); // クリア
+    drawBackground();
     drawRoad();
 
+    // 敵の生成と更新
     if (Math.random() < 0.05) enemies.push(new Enemy());
     enemies.forEach(e => { e.update(); e.draw(); });
     enemies = enemies.filter(e => e.alive);
 
+    // 照準と自機
     aim.x += (touch.x - aim.x) * 0.2;
     aim.y += (touch.y - aim.y) * 0.2;
     ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
