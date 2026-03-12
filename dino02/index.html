@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: T-REX ESCAPE</title>
+    <title>DINO-CHASE DX: SUNSET ESCAPE</title>
     <style>
         body { margin: 0; padding: 0; background-color: #000; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
@@ -15,13 +15,21 @@
 <script>
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
 let W, H, VP;
-const SCROLL_SPEED = 0.12;
+const SCROLL_SPEED = 0.12; // 以前より少し速くして疾走感を出す
 let roadZ = 0, animFrame = 0;
 let walls = [], effects = [];
 let touch = { x: 0, y: 0, down: false };
 
+// --- 画像アセットの読み込み ---
 const atlasImg = new Image();
-atlasImg.src = 'img/jungle02.png';
+atlasImg.src = 'img/jungle03.png'; // 統合された新しいアセット
+
+const tyranoImg = new Image();
+tyranoImg.src = 'img/Tyrano02.png'; // ティラノの画像（透過PNG）
+
+// 切り出し定数（2048x2048アトラスに基づく）
+// jungle03の天井と遠景は一つのつながった画像 (x 0-2048, y 0-1024)
+const BG_RECT = { sx: 0, sy: 0, sw: 2048, sh: 1024 }; 
 
 const LEFT_WALL_RECTS = [
     { sx: 0, sy: 1024, sw: 512, sh: 1024 },
@@ -32,6 +40,7 @@ const RIGHT_WALL_RECTS = [
     { sx: 1536, sy: 1024, sw: 512, sh: 1024 }
 ];
 
+// --- 壁クラス（疑似3D配置） ---
 class Wall {
     constructor(side) {
         this.z = 10;
@@ -47,19 +56,23 @@ class Wall {
     }
     draw() {
         const scale = 1 / (this.z + 0.5);
-        const w = 600 * scale;
+        const w = 600 * scale; // 画面幅に合わせてスケーリング
         const h = 1200 * scale;
-        const roadW = W * (0.1 + (1 / (this.z + 0.1)) * 0.1); // 簡易的な道路幅計算
+        // 簡易的な道路幅計算
+        const roadW = W * (0.1 + (1 / (this.z + 0.1)) * 0.1); 
         const x = (this.side === 'left') ? VP.x - roadW - w : VP.x + roadW;
+        // 消失点から下へ向かって配置
         const y = VP.y + (H - VP.y) * (1 / (this.z + 1)) - h;
 
         ctx.save();
+        // 遠く（zが大きい）ほど薄くして空気遠近法を表現
         ctx.globalAlpha = Math.min(1, (10 - this.z) / 3);
         ctx.drawImage(atlasImg, this.rect.sx, this.rect.sy, this.rect.sw, this.rect.sh, x, y, w, h);
         ctx.restore();
     }
 }
 
+// --- 着弾エフェクトクラス ---
 class HitEffect {
     constructor(x, y) {
         this.x = x; this.y = y; this.life = 15;
@@ -71,51 +84,114 @@ class HitEffect {
     }
 }
 
+// --- ティラノサウルス（ボス）の描画ロジック ---
+boss = {
+    x: VP.x,
+    y: VP.y,
+    z: 10, // 消失点付近
+    hp: Infinity, // 今回は無敵
+    size: 50, // 当たり判定の大きさ
+    alive: true
+};
+
 function resize() {
     W = canvas.width = window.innerWidth;
     H = canvas.height = window.innerHeight;
-    VP = { x: W / 2, y: H * 0.48 };
+    VP = { x: W / 2, y: H * 0.48 }; // 消失点
 }
 
+// --- 統合された天井と遠景（フタ）の描画ロジック ---
 function drawBackground() {
     if (!atlasImg.complete) return;
-    // 天井
-    ctx.drawImage(atlasImg, 0, 0, 2048, 512, 0, 0, W, VP.y);
-    // 遠景（中央）
-    ctx.drawImage(atlasImg, 0, 512, 2048, 512, 0, VP.y - 100, W, 200);
+    // 天井・遠景（画面上部と奥を埋める）
+    const aspect = BG_RECT.sw / BG_RECT.sh;
+    const hH = H / 2; // 消失点の上半分を埋める
+    const hW = hH * aspect;
+    ctx.drawImage(atlasImg, BG_RECT.sx, BG_RECT.sy, BG_RECT.sw, BG_RECT.sh, W/2 - hW/2, VP.y - hH, hW, hH * 2);
 }
 
+// --- ティラノサウルス（ボス）の描画ロジック ---
+function drawBoss() {
+    if (!tyranoImg.complete || !boss.alive) return;
+    const scale = 1 / (boss.z + 0.5);
+    const w = tyranoImg.width * scale * (W / 1000); // 画面幅に合わせてスケーリング
+    const h = tyranoImg.height * scale * (H / 1000);
+    // 消失点付近に配置
+    const x = VP.x - w / 2;
+    const y = VP.y - h / 2;
+
+    ctx.drawImage(tyranoImg, x, y, w, h);
+}
+
+// --- 疑似3D道路の描画ロジック（カーブと手前に走る流れ） ---
 function drawRoad() {
-    const roadH = H - VP.y;
+    const roadH = H - VP.y; // 道路を描画するエリアの高さ
+    
+    // カーブのうねりを計算 (Math.sinを使用)
+    const curveAmp = Math.sin(animFrame * 0.05) * (W * 0.2); // カーブの振幅
+    const curveFreq = 0.02; // カーブの周波数（うねりの細かさ）
+
     for (let i = 0; i < roadH; i++) {
-        const p = i / roadH;
-        const z = 1 / (p + 0.1);
-        let sy = 512 + ((z + roadZ) % 1) * 512;
+        const p = i / roadH; // 奥からの進捗率（0:奥, 1:手前）
+        const z = 1 / (p + 0.1); // 奥行き（Z値）
+
+        // スキャライン（行）単位のXオフセットを計算
+        // 消失点から手前に来るにつれて（pが大きくなるにつれて）、Xオフセットを徐々に大きくしていく
+        const xOffset = Math.sin(i * curveFreq) * (curveAmp * p);
+        const drawX = VP.x + xOffset; // 消失点XにXオフセットを加える
+
+        // ソース画像のY座標（ループするように計算）。遠景のY範囲 (512, 1024) 内で。
+        // roadZを足すことで前に進んでいるように見せる (jungle01の時のsy計算を修正)
+        let sy = 512 + ((z * 2 + roadZ) % 1) * 512;
+        
+        // 描画する横幅。奥ほど狭く（W*0.1）、手前ほど広く（W*2.5）
         const dw = W * (0.1 + p * 2.5);
-        ctx.drawImage(atlasImg, 0, sy, 2048, 1, VP.x - dw/2, VP.y + i, dw, 1.5);
+        
+        ctx.drawImage(atlasImg, 0, sy, 2048, 1, drawX - dw/2, VP.y + i, dw, 1.5);
     }
+}
+
+function init() {
+    resize();
+    roadZ = 0; animFrame = 0;
+    touch.x = W/2; touch.y = H/2;
+    walls = []; effects = [];
 }
 
 function loop() {
     animFrame++;
-    roadZ += SCROLL_SPEED * 0.5;
-    ctx.setTransform(1, 0, 0, 1, 0, Math.sin(animFrame * 0.8) * 2); // 走行振動
+    roadZ += SCROLL_SPEED * 0.5; // 前進速度（手前へ進行）
+    
+    // 画面ガタガタ（オフロード感）
+    ctx.setTransform(1, 0, 0, 1, 0, Math.sin(animFrame * 0.8) * 2);
 
+    // 描画順序：天井・遠景 -> ティラノ -> 壁 -> 道路 -> 自機 -> エフェクト -> UI
+    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); // クリア
     drawBackground();
+    drawBoss();
+
+    // 壁の生成と更新
     if (Math.random() < 0.15) walls.push(new Wall('left'), new Wall('right'));
     walls.forEach(w => { w.update(); w.draw(); });
     walls = walls.filter(w => w.alive);
+    
     drawRoad();
 
     // ティラノの当たり判定（消失点付近）
     if (touch.down) {
-        const dist = Math.hypot(touch.x - VP.x, touch.y - VP.y);
-        if (dist < 100) effects.push(new HitEffect(touch.x, touch.y));
+        // パースを考慮したティラノの座標
+        const scale = 1 / (boss.z + 0.5);
+        const tyranoX = VP.x;
+        const tyranoY = VP.y;
+        
+        const dist = Math.hypot(touch.x - tyranoX, touch.y - tyranoY);
+        // パースを考慮した当たり判定の大きさ
+        if (dist < 100 * scale) effects.push(new HitEffect(touch.x, touch.y));
     }
     effects = effects.filter(e => e.life > 0);
     effects.forEach(e => e.draw());
 
-    // 照準
+    // 照準と自機ジープ（前面）
     ctx.setTransform(1,0,0,1,0,0);
     ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2;
     ctx.strokeRect(touch.x - 20, touch.y - 20, 40, 40);
@@ -125,11 +201,35 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
-window.addEventListener('mousemove', e => { touch.x = e.clientX; touch.y = e.clientY; });
-window.addEventListener('mousedown', () => touch.down = true);
-window.addEventListener('mouseup', () => touch.down = false);
+// 入力処理（クリック・タップ）を拡張
+touch.down = false;
+function handleInput(e) {
+    const t = e.touches ? e.touches[0] : e;
+    touch.x = t.clientX;
+    touch.y = t.clientY;
+    if (e.type === 'mousedown' || e.type === 'touchstart') touch.down = true;
+    if (e.type === 'mouseup' || e.type === 'touchend') touch.down = false;
+}
+window.addEventListener('mousemove', handleInput);
+window.addEventListener('mousedown', handleInput);
+window.addEventListener('mouseup', handleInput);
+window.addEventListener('touchmove', e => { e.preventDefault(); handleInput(e); }, {passive: false});
+window.addEventListener('touchstart', handleInput, {passive: false});
+window.addEventListener('touchend', handleInput, {passive: false});
 window.addEventListener('resize', resize);
-atlasImg.onload = () => { resize(); loop(); };
+
+// 画像がロードされたらinitしてloop開始
+// 両方の画像がロードされるのを待つ
+let loadedCount = 0;
+const checkLoaded = () => {
+    loadedCount++;
+    if (loadedCount === 2) {
+        init();
+        loop();
+    }
+};
+atlasImg.onload = checkLoaded;
+tyranoImg.onload = checkLoaded;
 </script>
 </body>
 </html>
