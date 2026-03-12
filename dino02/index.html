@@ -24,155 +24,204 @@ let W, H, VP;
 const SCROLL_SPEED = 0.08;
 
 let score = 0, hp = 10, roadZ = 0, animFrame = 0;
-let enemies = [], aim = { x: 0, y: 0 }, touch = { x: 0, y: 0 };
+let walls = [], aim = { x: 0, y: 0 }, touch = { x: 0, y: 0 };
+let boss, effects = [];
 
-// --- 画像アセットの読み込み ---
-const roadImg = new Image();
-roadImg.src = 'img/road03.png';
+// --- 画像アセット（テクスチャアトラス）の読み込み ---
+const atlasImg = new Image();
+atlasImg.src = 'img/jungle01.png'; // パパ提供の完璧なアセット
 
-// 今回採用した、完璧な一枚絵の背景
-const bgImg = new Image();
-bgImg.src = 'img/image_15.png'; // 提示された画像を img/image_15.png として保存してください
+// 切り出し定数（2048x2048アトラスに基づく）
+const CEILING_RECT = { sx: 0, sy: 0, sw: 2048, sh: 512 };
+const FOREST_RECT = { sx: 0, sy: 512, sw: 2048, sh: 512 };
+const LEFT_WALL_RECTS = [
+    { sx: 0, sy: 1024, sw: 512, sh: 1024 },
+    { sx: 512, sy: 1024, sw: 512, sh: 1024 },
+    { sx: 1024, sy: 1024, sw: 512, sh: 1024 }
+];
+const RIGHT_WALL_RECTS = [
+    { sx: 1536, sy: 1024, sw: 512, sh: 1024 },
+    { sx: 1024, sy: 1024, sw: 512, sh: 1024 }, // バリエーションとして再利用
+    { sx: 512, sy: 1024, sw: 512, sh: 1024 }  // バリエーションとして再利用
+];
 
-function resize() {
-    W = canvas.width = window.innerWidth;
-    H = canvas.height = window.innerHeight;
-    // 消失点（VP）は背景画像の構成に合わせて調整可能。今回は中央やや下に設定。
-    VP = { x: W / 2, y: H * 0.48 }; 
+// --- 疑似3D背景パーツ（壁・天井・遠景）の描画ロジック ---
+
+function drawCeilingAndForest() {
+    if (!atlasImg.complete) return;
+
+    // 天井（画面上部のフタ）
+    const aspect = CEILING_RECT.sw / CEILING_RECT.sh;
+    const hH = H / 2; // 消失点の上半分を埋める
+    const hW = hH * aspect;
+    ctx.drawImage(atlasImg, CEILING_RECT.sx, CEILING_RECT.sy, CEILING_RECT.sw, CEILING_RECT.sh, W/2 - hW/2, VP.y - hH, hW, hH * 2);
+
+    // 遠景（道路の突き当たり）
+    const fAspect = FOREST_RECT.sw / FOREST_RECT.sh;
+    const fH = H / 3; // 消失点の奥に配置
+    const fW = fH * fAspect;
+    ctx.drawImage(atlasImg, FOREST_RECT.sx, FOREST_RECT.sy, FOREST_RECT.sw, FOREST_RECT.sh, W/2 - fW/2, VP.y - fH/2, fW, fH);
 }
 
-// --- 完璧な背景（遠景）の描画ロジック ---
-function drawBackground() {
-    if (!bgImg.complete) return;
-
-    // 背景画像の地平線が、Canvasの消失点（VP.y）に重なるように描画
-    const aspect = bgImg.width / bgImg.height;
-    const hH = H; // 画面の高さいっぱいに広げる
-    const hW = hH * aspect; // アスペクト比を維持
-
-    // 消失点（VP.y）を中心とした配置計算
-    ctx.drawImage(bgImg, W/2 - hW/2, VP.y - hH/2, hW, hH);
-}
-
-// --- 疑似3D道路の描画ロジック ---
-function drawRoad() {
-    if (!roadImg.complete) return;
-
-    const roadH = H - VP.y; // 道路を描画するエリアの高さ
-    const imgW = roadImg.width;
-    const imgH = roadImg.height;
-
-    // 1ピクセルずつ横方向にスキャンして描画（スキャライン）
-    for (let i = 0; i < roadH; i++) {
-        // 奥からの進捗率（0:奥, 1:手前）
-        const progress = i / roadH;
-        
-        // 奥行き（Z値）の計算。奥ほど密に、手前ほど広く
-        const z = 1 / (progress + 0.1); 
-        
-        // ソース画像のY座標（ループするように計算）
-        let sy = ((z * 2 + roadZ) % 1) * imgH;
-        
-        // 描画する横幅。奥ほど狭く（W*0.1）、手前ほど広く（W*2.5）
-        const drawW = W * (0.1 + progress * 2.5);
-        const drawX = VP.x - drawW / 2;
-        const drawY = VP.y + i; // 消失点から下へ向かって描画
-
-        // 1ピクセル（実際は隙間対策で少し太め）の厚さで画像を描画
-        ctx.drawImage(
-            roadImg, 
-            0, sy, imgW, 1,    // ソース：画像の1ライン分
-            drawX, drawY, drawW, 1.5 // 先：画面の計算した位置へ拡大
-        );
-    }
-}
-
-class Enemy {
-    constructor() {
+// --- 壁クラス（ザコ敵のロジックを利用） ---
+class Wall {
+    constructor(side) {
         this.z = 10;
-        this.offset = (Math.random() - 0.5) * 2;
-        this.icon = Math.random() < 0.2 ? '🦖' : '🦎';
+        this.side = side; // 'left' or 'right'
+        // 壁の画像をランダムに選択
+        this.rect = (side === 'left') ? 
+            LEFT_WALL_RECTS[Math.floor(Math.random() * LEFT_WALL_RECTS.length)] : 
+            RIGHT_WALL_RECTS[Math.floor(Math.random() * RIGHT_WALL_RECTS.length)];
         this.alive = true;
     }
     update() {
+        // 道路と同じパースに従って、奥から手前に向かって流れる
         this.z -= SCROLL_SPEED * 1.5;
-        const progress = (10 - this.z) / 10;
-        const scale = 1 / (this.z * 0.2 + 0.5);
-        this.x = VP.x + this.offset * W * progress * 1.5;
-        this.y = VP.y + (H - VP.y) * progress;
-        this.size = 30 * scale;
-        const dist = Math.hypot(this.x - aim.x, this.y - aim.y);
-        if (this.alive && dist < this.size * 0.7) {
-            this.alive = false; score += 100; document.getElementById('score').innerText = score;
-        }
-        if (this.z < 0.2) {
-            if (this.alive) { hp--; document.getElementById('hp').innerText = hp; }
-            this.alive = false;
-        }
+        if (this.z < 0.1) this.alive = false;
     }
     draw() {
+        const scale = 1 / (this.z + 0.5);
+        const w = 512 * scale * (W / 1000); // 画面幅に合わせてスケーリング
+        const h = 1024 * scale * (H / 1000);
+        // 道路の外側に配置
+        const x = (this.side === 'left') ? VP.x - drawW/2 - w/2 : VP.x + drawW/2 - w/2;
+        const y = VP.y + (H - VP.y) * progress - h; // 消失点から下へ向かって配置
+
+        // 遠く（zが大きい）ほど薄くして空気遠近法を表現
         ctx.save();
-        ctx.globalAlpha = Math.min(1, 1.5 - this.z / 10);
-        ctx.font = `${this.size}px serif`;
-        ctx.textAlign = 'center';
-        ctx.fillText(this.icon, this.x, this.y);
+        ctx.globalAlpha = Math.min(1, (10 - this.z) / 3);
+        ctx.drawImage(atlasImg, this.rect.sx, this.rect.sy, this.rect.sw, this.rect.sh, x, y, w, h);
         ctx.restore();
     }
 }
 
+// --- 疑似3D道路の描画ロジック（アトラス画像から切り出し） ---
+function drawRoad() {
+    if (!atlasImg.complete) return;
+    const roadH = H - VP.y;
+    // アトラスの遠景（奥の森）の一部を地面として利用
+    const imgW = FOREST_RECT.sw;
+    const imgH = FOREST_RECT.sh;
+
+    for (let i = 0; i < roadH; i++) {
+        const progress = i / roadH;
+        const z = 1 / (progress + 0.1); 
+        // ソース画像のY座標（ループするように計算）。遠景のY範囲 (512, 1024) 内で。
+        let sy = 512 + ((z * 2 + roadZ) % 1) * imgH;
+        const drawW = W * (0.1 + progress * 2.5);
+        const drawX = VP.x - drawW / 2;
+        const drawY = VP.y + i;
+
+        ctx.drawImage(atlasImg, FOREST_RECT.sx, sy, imgW, 1, drawX, drawY, drawW, 1.5);
+    }
+}
+
+// --- ティラノサウルス（ボス）の定義 ---
+boss = {
+    x: VP.x,
+    y: VP.y,
+    z: 10, // 消失点付近
+    hp: Infinity, // 今回は無敵
+    size: 50, // 当たり判定の大きさ
+    alive: true
+};
+
+// --- 着弾エフェクトクラス ---
+class Effect {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.life = 20; // フェードアウトまでのフレーム数
+    }
+    update() { this.life--; }
+    draw() {
+        ctx.save();
+        ctx.globalAlpha = this.life / 20;
+        ctx.fillStyle = 'rgba(255, 100, 0, 0.8)';
+        ctx.beginPath(); ctx.arc(this.x, this.y, 10, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = 'rgba(255, 200, 0, 1)';
+        ctx.beginPath(); ctx.arc(this.x, this.y, 5, 0, Math.PI*2); ctx.fill();
+        ctx.restore();
+    }
+}
+
+function resize() {
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+    VP = { x: W / 2, y: H * 0.45 }; // 消失点
+}
+
 function init() {
     resize();
-    enemies = []; roadZ = 0; score = 0; hp = 10;
+    score = 0; hp = 10; roadZ = 0;
     touch.x = W/2; touch.y = H/2;
+    walls = [];
 }
 
 function loop() {
     animFrame++;
-    roadZ += SCROLL_SPEED * 0.5; // 前進速度
+    roadZ += SCROLL_SPEED * 0.5; // 前進速度（手前へ進行）
     
-    // 画面ガタガタ（オフロード感）
     const shakeY = Math.sin(animFrame * 0.9) * 1.5;
     ctx.setTransform(1, 0, 0, 1, 0, shakeY);
 
-    // 描画順序：背景（遠景） -> 道路（近景） -> 敵 -> UI
+    // 描画順序：天井・遠景 -> 壁 -> 道路 -> 自機 -> ティラノ -> エフェクト -> UI
     ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H); // クリア
-    drawBackground();
+    drawCeilingAndForest();
+
+    // 壁の生成と更新
+    if (Math.random() < 0.1) walls.push(new Wall('left'), new Wall('right'));
+    walls.forEach(w => { w.update(); w.draw(); });
+    walls = walls.filter(w => w.alive);
+
     drawRoad();
 
-    // 敵の生成と更新
-    if (Math.random() < 0.05) enemies.push(new Enemy());
-    enemies.forEach(e => { e.update(); e.draw(); });
-    enemies = enemies.filter(e => e.alive);
-
-    // 照準と自機
     aim.x += (touch.x - aim.x) * 0.2;
     aim.y += (touch.y - aim.y) * 0.2;
     ctx.strokeStyle = 'rgba(0, 255, 255, 0.5)';
     ctx.lineWidth = 4;
-    ctx.beginPath(); ctx.moveTo(W/2, H); ctx.lineTo(aim.x, aim.y); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(aim.x, H); ctx.lineTo(aim.x, aim.y); ctx.stroke();
     ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
     ctx.strokeRect(aim.x - 15, aim.y - 15, 30, 30);
+
+    // ティラノサウルスの存在（消失点）と当たり判定
+    if (boss.alive) {
+        // 撃つ（クリック・タップ）
+        if (touch.down) { // クリック（タップ）されたら
+            const dist = Math.hypot(boss.x - aim.x, boss.y - aim.y);
+            if (dist < boss.size * (1 / (boss.z + 0.5))) { // パースを考慮した当たり判定
+                effects.push(new Effect(aim.x, aim.y)); // 着弾エフェクト
+            }
+        }
+    }
+
+    // エフェクトの更新と描画
+    effects.forEach(e => { e.update(); e.draw(); });
+    effects = effects.filter(e => e.life > 0);
+
+    // 自機ジープ（前面）を手前に配置
     ctx.font = '70px serif'; ctx.textAlign = 'center';
     ctx.fillText('🚙', W/2 + (aim.x - W/2) * 0.1, H - 40);
 
-    if (hp > 0) requestAnimationFrame(loop);
-    else {
-        ctx.setTransform(1,0,0,1,0,0);
-        ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0,0,W,H);
-        ctx.fillStyle = 'white'; ctx.textAlign = 'center'; ctx.font = '30px sans-serif';
-        ctx.fillText('ゲームオーバー', W/2, H/2);
-    }
+    requestAnimationFrame(loop);
 }
 
+// 入力処理（クリック・タップ）を拡張
+touch.down = false;
 function handleInput(e) {
     const t = e.touches ? e.touches[0] : e;
     const rect = canvas.getBoundingClientRect();
     touch.x = t.clientX - rect.left;
     touch.y = t.clientY - rect.top;
+    if (e.type === 'mousedown' || e.type === 'touchstart') touch.down = true;
+    if (e.type === 'mouseup' || e.type === 'touchend') touch.down = false;
 }
 window.addEventListener('mousemove', handleInput);
+window.addEventListener('mousedown', handleInput);
+window.addEventListener('mouseup', handleInput);
 window.addEventListener('touchmove', e => { e.preventDefault(); handleInput(e); }, {passive: false});
 window.addEventListener('touchstart', handleInput, {passive: false});
+window.addEventListener('touchend', handleInput, {passive: false});
 window.addEventListener('resize', resize);
 
 init(); loop();
