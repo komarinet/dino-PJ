@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: JUNGLE RUN</title>
+    <title>DINO-CHASE DX: THE FINAL ESCAPE (Rebuilt)</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #051005; overflow: hidden; touch-action: none; }
+        body { margin: 0; padding: 0; background-color: #0a140a; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
     </style>
 </head>
@@ -14,8 +14,8 @@
 
 <script>
 /**
- * DINO-CHASE DX - V2.0 Pseudo-3D Engine
- * 開発: 先生 & Gemini
+ * DINO-CHASE DX - V3.0 Rebuilt Engine
+ * 開発: 先生 & Gemini (AAA Graphics & Logic Fix)
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
@@ -24,8 +24,8 @@ let W, H, hW, hH;
 // --- エンジン定数 ---
 const CAMERA_HEIGHT = 1500;
 const CAMERA_DEPTH = 0.8; 
-const RENDER_DISTANCE = 200; 
-const SCROLL_SPEED = 0.8; 
+const RENDER_DISTANCE = 200; // 描画距離。奥の限界。
+const SCROLL_SPEED = 0.8; // 木の流れ、地面の流れが自然に見える速度
 
 let animTime = 0;
 let travelDist = 0;
@@ -34,10 +34,11 @@ let effects = [];
 let touch = { x: 0, y: 0, down: false };
 
 // --- 画像アセット ---
-const roadImg = new Image(); roadImg.src = 'img/road03.png'; 
-const bgImg = new Image(); bgImg.src = 'img/jungle03.png'; 
+// ※実際のパスに合わせてください。プレースホルダー的な挙動も内包。
+const roadImg = new Image(); roadImg.src = 'img/road03.png'; // 復活
+const bgImg = new Image(); bgImg.src = 'img/jungle03.png'; // 遠景＋地表統合アトラス
 const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano02.png';
-const plantImg = new Image(); plantImg.src = 'img/plant01.png'; // 統合完了
+const plantImg = new Image(); plantImg.src = 'img/plant01.png';
 
 // --- 植物スプライトのUV定義 (1024x1024アトラス仕様) ---
 const PLANT_DEFS = {
@@ -104,11 +105,12 @@ function init() {
     sprites = []; effects = [];
 
     // ジャングルの初期生成（手前から奥までばらまく）
+    // スクロール方向反転のため、手前から奥へ流れるように配置
     for(let i = 0; i < 200; i++) {
         spawnPlant(Math.random() * RENDER_DISTANCE);
     }
-    // ボスを固定Z位置に配置
-    sprites.push(new Sprite('boss', 0, 40));
+    // ボスを遠景固定Z位置に配置
+    sprites.push(new Sprite('boss', 0, RENDER_DISTANCE - 10)); // 遠景奥
 }
 
 function spawnPlant(zPos) {
@@ -136,15 +138,10 @@ function loop() {
     ctx.fillStyle = '#0a140a'; // 奥の暗闇
     ctx.fillRect(0, 0, W, H);
 
-    // 1. 背景（遠景）のパン処理
+    // 1. 背景（遠景）の描画（画面上部に固定）
     if (bgImg.complete && bgImg.width > 0) {
-        // カーブに合わせて背景を横にスライドさせる
-        let bgPan = -(currentCurve * 150) % bgImg.width;
-        if (bgPan > 0) bgPan -= bgImg.width;
-        
-        // シームレスループのため2回描画
-        ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height/2, bgPan, 0, bgImg.width, hH);
-        ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height/2, bgPan + bgImg.width, 0, bgImg.width, hH);
+        // jungle03.pngの上半分(遠景)を固定描画
+        ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height/2, 0, 0, W, hH);
     }
 
     // 2. 道路と地表のラスタースクロール (Painter's Algorithm: 奥から手前)
@@ -158,13 +155,45 @@ function loop() {
         const x = hW + curveOffsetX;
         const roadWidth = 1200 * projScale;
 
-        // 地表（泥・草）を画面幅いっぱいに描画
-        ctx.fillStyle = (i + Math.floor(travelDist)) % 4 < 2 ? '#2a1a0a' : '#201005';
-        ctx.fillRect(0, y, W, Math.max(2, (RENDER_DISTANCE - i) * 0.05)); 
+        // --- 地表（泥・草）の描画 ---
+        // jungle03.pngの下半分(地表アトラス)から地表パッチをばらまく
+        const groundAtlasW = 512;
+        const groundAtlasH = 512;
+        const groundAtlasY = 512;
 
-        // 道路レイヤー
+        const dw = roadWidth;
+        const drawX = x;
+        const roadW = dw;
+
+        // 地表パッチの描画
+        const p_ground = i / RENDER_DISTANCE;
+        const z_ground = 1 / (p_ground + 0.1);
+        const groundW = 1000 * projScale; // 地表パッチの幅
+        const groundH = 1000 * projScale; // 地表パッチの高さ
+
+        // 左側の地表パッチ
+        ctx.save();
+        ctx.globalAlpha = Math.min(1, (i) / 10); // 遠くほど薄く
+        ctx.drawImage(
+            bgImg, 
+            Math.floor(animTime * 0.1 + i) % 4 * groundAtlasW, groundAtlasY, // アトラス切り出し
+            groundAtlasW, groundAtlasH,
+            drawX - roadW/2 - groundW, y - groundH, groundW, groundH // キャンバス描画
+        );
+        // 右側の地表パッチ
+        ctx.drawImage(
+            bgImg, 
+            Math.floor(animTime * 0.1 - i + 2) % 4 * groundAtlasW, groundAtlasY, 
+            groundAtlasW, groundAtlasH,
+            drawX + roadW/2, y - groundH, groundW, groundH
+        );
+        ctx.restore();
+
+
+        // --- 道路レイヤーの描画 ---
         if (roadImg.complete && roadImg.width > 0) {
-            let texY = ((i * 10 - travelDist * 50) % roadImg.height);
+            // スクロール方向反転: 手前から奥へ流れる
+            let texY = ((i * 10 + travelDist * 50) % roadImg.height);
             if (texY < 0) texY += roadImg.height;
             ctx.drawImage(roadImg, 0, texY, roadImg.width, 2, x - roadWidth/2, y, roadWidth, 3);
         }
@@ -173,14 +202,15 @@ function loop() {
     // 3. スプライトのZソートと描画
     sprites.forEach(s => {
         if (s.type !== 'boss') {
-            s.z -= SCROLL_SPEED;
-            if (s.z < 1) { // カメラの後ろに回ったら奥へ再配置
-                s.z += RENDER_DISTANCE;
+            // スクロール方向反転: 手前から奥へ流れる
+            s.z += SCROLL_SPEED;
+            if (s.z > RENDER_DISTANCE) { // カメラを過ぎたら手前へ再配置
+                s.z -= RENDER_DISTANCE;
                 s.xOffset = (Math.random() > 0.5 ? 1 : -1) * (600 + Math.random() * 2500);
             }
         } else {
-            // ボスは道の中央付近を維持しつつ、左右に揺さぶりをかける
-            s.xOffset = Math.sin(animTime * 0.04) * 200;
+            // ボスは遠景中央付近を維持
+            s.xOffset = 0; 
         }
     });
 
@@ -201,13 +231,13 @@ function loop() {
 
         if (s.type === 'boss') {
             if (tyranoImg.complete && tyranoImg.width > 0) {
-                // ボスのドスドスというバウンド
+                // 遠景固定ティラノのドスドスというバウンド
                 const bounce = Math.abs(Math.sin(animTime * 0.15)) * 40 * projScale;
                 ctx.drawImage(tyranoImg, x - drawW/2, y - drawH - bounce, drawW, drawH);
             }
         } else {
             if (plantImg.complete && plantImg.width > 0) {
-                // 作成いただいたアトラスから、正しいUV座標で切り出して描画
+                // plantImgから、正しいUV座標で切り出して描画
                 ctx.drawImage(
                     plantImg, 
                     s.def.x, s.def.y, s.def.w, s.def.h, // 元画像の切り出し元
