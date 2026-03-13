@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: PERFECT LOOP & JUNGLE RUN v5.4</title>
+    <title>DINO-CHASE DX: PERFECT LOOP v5.4.1</title>
     <style>
         body { margin: 0; padding: 0; background-color: #050a05; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
@@ -14,8 +14,7 @@
 
 <script>
 /**
- * DINO-CHASE DX - V5.4 Perfect Loop & JUNGLE JIVE
- * 開発: 先生 & Gemini (Missing Code Fixed)
+ * DINO-CHASE DX - V5.4.1 Bug Fix (ReferenceError Resolved)
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
@@ -24,8 +23,8 @@ let W, H, hW, hH;
 // --- エンジン定数 ---
 const CAMERA_HEIGHT = 1500;
 const CAMERA_DEPTH = 0.8; 
-const RENDER_DISTANCE = 200; // 奥の描画距離（Z値）
-const SCROLL_SPEED = 0.5; // 速度を半分に落とし、重厚感を出す
+const RENDER_DISTANCE = 200; 
+const SCROLL_SPEED = 0.5; // 重厚なスピード感
 
 let animTime = 0;
 let travelDist = 0;
@@ -35,12 +34,12 @@ let effects = [];
 let touch = { x: 0, y: 0, down: false };
 
 // --- 画像アセット ---
-const roadImg = new Image(); roadImg.src = 'img/road03.png'; // 復活
-const backImg = new Image(); backImg.src = 'img/back01.png'; // 新規追加: 遠景パノラマ
+const roadImg = new Image(); roadImg.src = 'img/road03.png'; 
+const backImg = new Image(); backImg.src = 'img/back01.png'; 
 const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano_ani01.png'; 
-const plantImg = new Image(); plantImg.src = 'img/plant01.png'; // 新規追加
+const plantImg = new Image(); plantImg.src = 'img/plant01.png'; 
 
-// --- 植物スプライトのUV定義 (1024x1024アトラス仕様) ---
+// --- 植物スプライトのUV定義 ---
 const PLANT_DEFS = {
     'tall': [
         { x: 0, y: 0, w: 256, h: 512 },
@@ -59,25 +58,25 @@ const PLANT_DEFS = {
     ]
 };
 
-// --- スプライト（ビルボード）クラス ---
+// --- スプライトクラス ---
 class Sprite {
     constructor(type, xOffset, z) {
-        this.type = type; // 'tall', 'short', 'ground', 'boss'
-        this.xOffset = xOffset; // 道路中心からの横ズレ
+        this.type = type; 
+        this.xOffset = xOffset; 
         this.z = z;
+        this.screenX = 0;
+        this.screenY = 0;
         
-        // 仮のサイズ設定（本来はplant01.pngの切り出しサイズ）
         if(type !== 'boss') {
             this.index = Math.floor(Math.random() * 3);
             this.def = PLANT_DEFS[type][this.index];
             this.w = this.def.w;
             this.h = this.def.h;
-            // 木のサイズを少し落ち着かせる
             this.scaleBase = type === 'tall' ? 5.0 : type === 'short' ? 3.5 : 2.5;
         } else {
             this.w = 512; 
             this.h = 512; 
-            // 【重要修正】巨大すぎたスケールを、無理のない巨獣サイズ(7.5)に調整
+            // 無理のない適正な巨獣サイズ
             this.scaleBase = 7.5; 
         }
     }
@@ -100,20 +99,17 @@ function resize() {
 
 function init() {
     resize();
-    animTime = 0; travelDist = 0;
+    animTime = 0; travelDist = 0; cameraYaw = 0;
     sprites = []; effects = [];
 
-    // 植物を生成。道路に被らないように配置
     for(let i = 0; i < 250; i++) {
         spawnPlant(Math.random() * RENDER_DISTANCE);
     }
-    // ボス配置。遠近法を効かせるため遠くに配置。
-    sprites.push(new Sprite('boss', 0, 100)); // 遠景奥
+    sprites.push(new Sprite('boss', 0, 100)); 
 }
 
 function spawnPlant(zPos) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    // AAAのテクニック。道路（幅約1200）に絶対被らないように配置する
     const xOffset = side * (800 + Math.random() * 3000); 
     const r = Math.random();
     let type = 'ground';
@@ -123,9 +119,7 @@ function spawnPlant(zPos) {
     sprites.push(new Sprite(type, xOffset, zPos));
 }
 
-// 複合サイン波による「予測不能なロングカーブ」の生成
 function getCurrentCurve() {
-    // 複数の波を合成して、右へ左へ大きくうねるコースを作る
     return Math.sin(travelDist * 0.003) * 1.5 + Math.cos(travelDist * 0.0015) * 1.0;
 }
 
@@ -135,99 +129,81 @@ function loop() {
     const currentCurve = getCurrentCurve();
     cameraYaw += currentCurve * 0.5;
 
-    ctx.fillStyle = '#050a05'; // ジャングルの奥の暗闇
+    ctx.fillStyle = '#050a05'; 
     ctx.fillRect(0, 0, W, H);
 
-    // 1. パララックス背景の描画（back01.pngを鏡合わせでループ）
+    // 1. 背景の鏡合わせループ
     if (backImg.complete && backImg.width > 0) {
-        // 画像の高さを画面半分(hH)に合わせ、アスペクト比を維持した幅を算出
         const bgScale = hH / backImg.height;
         const bgW = backImg.width * bgScale;
         
-        // 鏡合わせを含めた全体の幅は bgW * 2
-        // cameraYaw から bgPan を 0〜bgW*2 の範囲で計算
         let bgPan = cameraYaw % (bgW * 2);
         if (bgPan < 0) bgPan += (bgW * 2);
 
-        // 1枚目（正方向）を描画
         let drawX1 = -bgPan;
         ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, drawX1, 0, bgW, hH + 2);
 
-        // 2枚目（鏡合わせ）を描画。1枚目の右に繋げる
         let drawX2 = bgW - bgPan;
         ctx.save();
-        ctx.translate(drawX2 + bgW, 0); // 反転ピボットを右端に
+        ctx.translate(drawX2 + bgW, 0); 
         ctx.scale(-1, 1);
         ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, 0, 0, bgW, hH + 2);
         ctx.restore();
         
-        // 3枚目（正方向）を描画。画面がカバーしきれない場合の補完
         let drawX3 = bgW * 2 - bgPan;
         if (drawX3 < W) {
             ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, drawX3, 0, bgW, hH + 2);
         }
     }
 
-    // 2. 地面と道路の描画（隙間・かすれを完璧に修正）
+    // 2. 地面と道路（かすれ防止）
     for (let i = RENDER_DISTANCE; i > 1; i--) {
-        // 3D投影計算
         const projScale = CAMERA_DEPTH / i;
         const y = hH + (CAMERA_HEIGHT * projScale);
         
-        // 【重要修正】次のラインのY座標を計算し、隙間（描画高）を埋める
         const nextProjScale = CAMERA_DEPTH / (i - 1);
         const nextY = hH + (CAMERA_HEIGHT * nextProjScale);
-        const drawH = Math.ceil(nextY - y) + 1; // +1ピクセル余分に描いて隙間を撲滅
+        const drawH = Math.ceil(nextY - y) + 1; 
 
-        // 画面外（下部）ならスキップ
         if (y > H) continue;
 
-        // カーブによるX軸のオフセット（物理の等加速度運動の公式 x = 1/2*a*t^2 を応用）
         const curveOffsetX = 0.5 * currentCurve * i * i * projScale;
         const x = hW + curveOffsetX;
-
         const roadWidth = 1200 * projScale;
 
-        // 地表のストライプ描画。速度を感じさせるためにシマシマに
         ctx.fillStyle = (i + Math.floor(travelDist)) % 6 < 3 ? '#101a0e' : '#080d07';
         ctx.fillRect(0, y, W, drawH); 
 
-        // 道路レイヤー
         if (roadImg.complete && roadImg.width > 0) {
-            // テクスチャのY座標（手前に流れる計算）
             let texY = ((i * 10 + travelDist * 50) % roadImg.height);
             if (texY < 0) texY += roadImg.height;
-            // 高さ(drawH)分をしっかり引き伸ばして描画
             ctx.drawImage(roadImg, 0, texY, roadImg.width, 2, x - roadWidth/2, y, roadWidth, drawH);
         }
     }
 
-    // 3. スプライト更新とZソート（Painter's Algorithm: 奥から手前）
+    // 3. スプライト更新とZソート
     sprites.forEach(s => {
-        // ボス以外のオブジェクトはプレイヤーに向かってくる
         if (s.type !== 'boss') {
             s.z += SCROLL_SPEED;
-            if (s.z > RENDER_DISTANCE) { // カメラを過ぎたら奥に再配置
+            if (s.z > RENDER_DISTANCE) { 
                 s.z = 1;
+                // 【修正箇所】この行が抜けておりエラーになっていました
+                const side = Math.random() > 0.5 ? 1 : -1; 
                 s.xOffset = side * (800 + Math.random() * 3000); 
             }
         } else {
-            // 【重要修正: 無理のない迫力演出】
-            // Z=45(真ん中)を中心に、Z=20(迫力) 〜 Z=70(無理のない豆粒) を往復させる
-            s.xOffset = Math.sin(animTime * 0.03) * 100; // カーブ内での横揺れ
+            // ティラノサウルスの無理のない接近ロジック
+            s.xOffset = Math.sin(animTime * 0.03) * 100; 
             s.z = 45 + Math.sin(animTime * 0.02) * 25; 
         }
     });
 
-    // Z値が大きい（奥にある）順にソート
     sprites.sort((a, b) => b.z - a.z);
 
-    // ティラノのアニメーション計算
     const TOTAL_FRAMES = 12;
     const FRAME_W = 512;
     const FRAME_H = 512;
     const SPRITE_COL = 4;
-    // プレイヤーの速度(SCROLL_SPEED)に同期させる。重みを持たせる。
     const bossFrame = Math.floor(animTime * 0.4 * SCROLL_SPEED) % TOTAL_FRAMES;
 
     // 4. スプライト描画
@@ -245,18 +221,15 @@ function loop() {
 
         if (s.type === 'boss') {
             if (tyranoImg.complete && tyranoImg.width > 0) {
-                // スプライトシートからの切り出し（UV）座標
                 const sx = (bossFrame % SPRITE_COL) * FRAME_W;
                 const sy = Math.floor(bossFrame / SPRITE_COL) * FRAME_H;
-
                 ctx.drawImage(
                     tyranoImg, 
-                    sx, sy, FRAME_W, FRAME_H, // 切り出し
-                    x - drawW/2, y - drawH, drawW, drawH // 描画
+                    sx, sy, FRAME_W, FRAME_H,
+                    x - drawW/2, y - drawH, drawW, drawH 
                 );
             }
         } else {
-            // 植物の描画
             if (plantImg.complete && plantImg.width > 0) {
                 ctx.drawImage(
                     plantImg, 
@@ -281,7 +254,6 @@ function loop() {
     effects = effects.filter(e => e.life > 0);
     effects.forEach(e => e.draw());
 
-    // 照準とプレイヤー機。UIレイヤーは一番最後に描画。
     ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(touch.x, touch.y, 25, 0, Math.PI*2);
