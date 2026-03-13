@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: ESCAPE</title>
+    <title>DINO-CHASE DX: JUNGLE RUN</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #000; overflow: hidden; touch-action: none; }
+        body { margin: 0; padding: 0; background-color: #051005; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
     </style>
 </head>
@@ -13,155 +13,245 @@
     <canvas id="gameCanvas"></canvas>
 
 <script>
-const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
-let W, H, VP;
-const SCROLL_SPEED = 0.05; // ジャングルのディテールが見える速度
+/**
+ * DINO-CHASE DX - V2.0 Pseudo-3D Engine
+ * 開発: 先生 & Gemini
+ */
 
-let roadZ = 0, animFrame = 0;
-let walls = [], effects = [], boss;
+const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
+let W, H, hW, hH;
+
+// --- エンジン定数 ---
+const CAMERA_HEIGHT = 1500;
+const CAMERA_DEPTH = 0.8; 
+const RENDER_DISTANCE = 200; 
+const SCROLL_SPEED = 0.8; 
+
+let animTime = 0;
+let travelDist = 0;
+let sprites = [];
+let effects = [];
 let touch = { x: 0, y: 0, down: false };
 
-// --- 画像アセットの読み込み ---
-const roadImg = new Image();
-roadImg.src = 'img/road03.png'; 
+// --- 画像アセット ---
+const roadImg = new Image(); roadImg.src = 'img/road03.png'; 
+const bgImg = new Image(); bgImg.src = 'img/jungle03.png'; 
+const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano02.png';
+const plantImg = new Image(); plantImg.src = 'img/plant01.png'; // 統合完了
 
-const atlasImg = new Image();
-atlasImg.src = 'img/jungle03.png'; 
+// --- 植物スプライトのUV定義 (1024x1024アトラス仕様) ---
+const PLANT_DEFS = {
+    'tall': [
+        { x: 0, y: 0, w: 256, h: 512 },
+        { x: 256, y: 0, w: 256, h: 512 },
+        { x: 512, y: 0, w: 256, h: 512 }
+    ],
+    'short': [
+        { x: 0, y: 512, w: 256, h: 256 },
+        { x: 256, y: 512, w: 256, h: 256 },
+        { x: 512, y: 512, w: 256, h: 256 }
+    ],
+    'ground': [
+        { x: 0, y: 768, w: 256, h: 256 },
+        { x: 256, y: 768, w: 256, h: 256 },
+        { x: 512, y: 768, w: 256, h: 256 }
+    ]
+};
 
-const tyranoImg = new Image();
-tyranoImg.src = 'img/tyrano02.png'; // ご指摘通り小文字指定
+// --- スプライトクラス ---
+class Sprite {
+    constructor(type, xOffset, z) {
+        this.type = type; 
+        this.xOffset = xOffset; 
+        this.z = z;
+        this.screenX = 0;
+        this.screenY = 0;
 
-// --- クラス定義 ---
-class Wall {
-    constructor(side) {
-        this.z = 10;
-        this.side = side;
-        this.index = Math.floor(Math.random() * 4);
-        this.alive = true;
-    }
-    update() {
-        this.z -= SCROLL_SPEED; // Zを減らすことで手前に迫る
-        if (this.z < 0.1) this.alive = false;
-    }
-    draw(curveOffset) {
-        const scale = 1 / (this.z + 0.5);
-        const w = 1500 * scale; // さらに巨大化
-        const h = 2000 * scale;
-        // 道路の幅に合わせて配置。カーブのオフセットを考慮
-        const roadW = W * (0.15 + (1 / (this.z + 0.1)) * 0.15);
-        const x = (this.side === 'left') ? VP.x + curveOffset - roadW - w : VP.x + curveOffset + roadW;
-        const y = VP.y + (H - VP.y) * (1 / (this.z + 1)) - h;
-
-        ctx.save();
-        ctx.globalAlpha = Math.min(1, (10 - this.z) / 2);
-        // jungle03の下半分に壁があると仮定（なければy:0から）
-        ctx.drawImage(atlasImg, this.index * 512, 1024, 512, 1024, x, y, w, h);
-        ctx.restore();
+        if (type !== 'boss') {
+            // 3種類の中からランダムにインデックスを選択
+            this.index = Math.floor(Math.random() * 3);
+            this.def = PLANT_DEFS[type][this.index];
+            this.w = this.def.w;
+            this.h = this.def.h;
+            // 描画時のスケール調整（木の大きさを強調）
+            this.scaleBase = type === 'tall' ? 5.0 : type === 'short' ? 3.0 : 2.5;
+        } else {
+            this.w = 800; 
+            this.h = 800; 
+            this.scaleBase = 1.2;
+        }
     }
 }
 
 class HitEffect {
-    constructor(x, y) { this.x = x; this.y = y; this.life = 15; }
+    constructor(x, y) { this.x = x; this.y = y; this.life = 20; }
     draw() {
         this.life--;
-        ctx.fillStyle = `rgba(255, ${180 + this.life * 5}, 0, ${this.life / 15})`;
-        ctx.beginPath(); ctx.arc(this.x, this.y, 40 - this.life * 2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = `rgba(255, ${150 + this.life * 5}, 50, ${this.life / 20})`;
+        ctx.beginPath(); ctx.arc(this.x, this.y, 50 - this.life * 2, 0, Math.PI*2); ctx.fill();
     }
 }
 
 function resize() {
     W = canvas.width = window.innerWidth;
     H = canvas.height = window.innerHeight;
-    VP = { x: W / 2, y: H * 0.48 };
+    hW = W / 2; hH = H / 2;
 }
 
 function init() {
     resize();
-    roadZ = 0; animFrame = 0;
-    touch.x = W/2; touch.y = H/2;
-    walls = []; effects = [];
-    // Z値を3に設定して「すぐ後ろ」に配置
-    boss = { x: VP.x, y: VP.y, z: 3, size: 300, alive: true };
-}
+    animTime = 0; travelDist = 0;
+    sprites = []; effects = [];
 
-function drawBackground() {
-    if (!atlasImg.complete) return;
-    const aspect = 2048 / 1024;
-    const hH = H / 2;
-    const hW = hH * aspect;
-    // 逃走の揺れに合わせる
-    ctx.drawImage(atlasImg, 0, 0, 2048, 1024, W/2 - hW/2, VP.y - hH, hW, hH * 2);
-}
-
-function drawBoss() {
-    if (!tyranoImg.complete || !boss.alive) return;
-    const scale = 1 / (boss.z + 0.5);
-    const w = tyranoImg.width * scale * (W / 450); // より大きく調整
-    const h = tyranoImg.height * scale * (H / 450);
-    const hover = Math.sin(animFrame * 0.08) * 15;
-    ctx.drawImage(tyranoImg, VP.x - w/2, VP.y - h/2 + hover, w, h);
-}
-
-function drawRoad() {
-    if (!roadImg.complete) return;
-    const roadH = H - VP.y;
-    const curveAmp = Math.sin(animFrame * 0.02) * (W * 0.25); 
-
-    for (let i = 0; i < roadH; i++) {
-        const p = i / roadH;
-        const z = 1 / (p + 0.1);
-        const xOffset = Math.sin(i * 0.02) * (curveAmp * p);
-        const drawX = VP.x + xOffset;
-
-        // 手前に流れる方向 (z - roadZ)
-        let sy = ((z - roadZ) % 1) * roadImg.height;
-        if (sy < 0) sy += roadImg.height;
-
-        const dw = W * (0.1 + p * 4.0);
-        ctx.drawImage(roadImg, 0, sy, roadImg.width, 1, drawX - dw/2, VP.y + i, dw, 2);
+    // ジャングルの初期生成（手前から奥までばらまく）
+    for(let i = 0; i < 200; i++) {
+        spawnPlant(Math.random() * RENDER_DISTANCE);
     }
+    // ボスを固定Z位置に配置
+    sprites.push(new Sprite('boss', 0, 40));
+}
+
+function spawnPlant(zPos) {
+    const side = Math.random() > 0.5 ? 1 : -1;
+    // 道路の外側にランダム配置 (Xオフセット)
+    const xOffset = side * (600 + Math.random() * 2500); 
+    const r = Math.random();
+    let type = 'ground';
+    if (r > 0.85) type = 'tall';
+    else if (r > 0.5) type = 'short';
+    
+    sprites.push(new Sprite(type, xOffset, zPos));
+}
+
+// 予測不能なロングカーブの生成
+function getCurrentCurve() {
+    return Math.sin(travelDist * 0.004) * 1.5 + Math.cos(travelDist * 0.002) * 1.0;
 }
 
 function loop() {
-    animFrame++;
-    roadZ += SCROLL_SPEED * 0.4;
+    animTime++;
+    travelDist += SCROLL_SPEED;
+    const currentCurve = getCurrentCurve();
 
-    const shakeY = Math.sin(animFrame * 0.7) * 4;
-    ctx.setTransform(1, 0, 0, 1, 0, shakeY);
+    ctx.fillStyle = '#0a140a'; // 奥の暗闇
+    ctx.fillRect(0, 0, W, H);
 
-    ctx.fillStyle = '#000'; ctx.fillRect(0, 0, W, H);
-    drawBackground();
-    drawBoss();
-
-    // カーブの現在のオフセットを壁に渡す
-    const currentCurve = Math.sin(animFrame * 0.02) * (W * 0.1);
-    if (Math.random() < 0.07) walls.push(new Wall('left'), new Wall('right'));
-    walls.forEach(w => { w.update(); w.draw(currentCurve); });
-    walls = walls.filter(w => w.alive);
-
-    drawRoad();
-
-    if (touch.down) {
-        const dist = Math.hypot(touch.x - VP.x, touch.y - (VP.y + Math.sin(animFrame * 0.08) * 15));
-        if (dist < 200) effects.push(new HitEffect(touch.x, touch.y));
+    // 1. 背景（遠景）のパン処理
+    if (bgImg.complete && bgImg.width > 0) {
+        // カーブに合わせて背景を横にスライドさせる
+        let bgPan = -(currentCurve * 150) % bgImg.width;
+        if (bgPan > 0) bgPan -= bgImg.width;
+        
+        // シームレスループのため2回描画
+        ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height/2, bgPan, 0, bgImg.width, hH);
+        ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height/2, bgPan + bgImg.width, 0, bgImg.width, hH);
     }
+
+    // 2. 道路と地表のラスタースクロール (Painter's Algorithm: 奥から手前)
+    for (let i = RENDER_DISTANCE; i > 1; i--) {
+        const projScale = CAMERA_DEPTH / i;
+        const y = hH + (CAMERA_HEIGHT * projScale);
+        
+        if (y > H) continue;
+
+        const curveOffsetX = 0.5 * currentCurve * i * i * projScale;
+        const x = hW + curveOffsetX;
+        const roadWidth = 1200 * projScale;
+
+        // 地表（泥・草）を画面幅いっぱいに描画
+        ctx.fillStyle = (i + Math.floor(travelDist)) % 4 < 2 ? '#2a1a0a' : '#201005';
+        ctx.fillRect(0, y, W, Math.max(2, (RENDER_DISTANCE - i) * 0.05)); 
+
+        // 道路レイヤー
+        if (roadImg.complete && roadImg.width > 0) {
+            let texY = ((i * 10 - travelDist * 50) % roadImg.height);
+            if (texY < 0) texY += roadImg.height;
+            ctx.drawImage(roadImg, 0, texY, roadImg.width, 2, x - roadWidth/2, y, roadWidth, 3);
+        }
+    }
+
+    // 3. スプライトのZソートと描画
+    sprites.forEach(s => {
+        if (s.type !== 'boss') {
+            s.z -= SCROLL_SPEED;
+            if (s.z < 1) { // カメラの後ろに回ったら奥へ再配置
+                s.z += RENDER_DISTANCE;
+                s.xOffset = (Math.random() > 0.5 ? 1 : -1) * (600 + Math.random() * 2500);
+            }
+        } else {
+            // ボスは道の中央付近を維持しつつ、左右に揺さぶりをかける
+            s.xOffset = Math.sin(animTime * 0.04) * 200;
+        }
+    });
+
+    // Zソート (奥のものが先、手前のものが後)
+    sprites.sort((a, b) => b.z - a.z);
+
+    sprites.forEach(s => {
+        const projScale = CAMERA_DEPTH / s.z;
+        const y = hH + (CAMERA_HEIGHT * projScale);
+        const curveOffsetX = 0.5 * currentCurve * s.z * s.z * projScale;
+        const x = hW + (s.xOffset * projScale) + curveOffsetX;
+
+        const drawW = s.w * projScale * s.scaleBase;
+        const drawH = s.h * projScale * s.scaleBase;
+
+        s.screenX = x;
+        s.screenY = y - drawH / 2; // ヒット判定用の中心点
+
+        if (s.type === 'boss') {
+            if (tyranoImg.complete && tyranoImg.width > 0) {
+                // ボスのドスドスというバウンド
+                const bounce = Math.abs(Math.sin(animTime * 0.15)) * 40 * projScale;
+                ctx.drawImage(tyranoImg, x - drawW/2, y - drawH - bounce, drawW, drawH);
+            }
+        } else {
+            if (plantImg.complete && plantImg.width > 0) {
+                // 作成いただいたアトラスから、正しいUV座標で切り出して描画
+                ctx.drawImage(
+                    plantImg, 
+                    s.def.x, s.def.y, s.def.w, s.def.h, // 元画像の切り出し元
+                    x - drawW / 2, y - drawH, drawW, drawH // キャンバスの描画先
+                );
+            }
+        }
+    });
+
+    // 4. ヒットエフェクトとUI
+    if (touch.down) {
+        const bossObj = sprites.find(s => s.type === 'boss');
+        if (bossObj) {
+            const dist = Math.hypot(touch.x - bossObj.screenX, touch.y - bossObj.screenY);
+            // 距離感に応じた当たり判定の広さ
+            if (dist < bossObj.w * (CAMERA_DEPTH/bossObj.z) * 0.6) {
+                effects.push(new HitEffect(touch.x, touch.y));
+            }
+        }
+    }
+    
     effects = effects.filter(e => e.life > 0);
     effects.forEach(e => e.draw());
 
-    ctx.setTransform(1,0,0,1,0,0);
-    ctx.strokeStyle = '#0ff'; ctx.lineWidth = 3;
-    ctx.strokeRect(touch.x - 25, touch.y - 25, 50, 50);
-    ctx.font = '100px serif'; ctx.textAlign = 'center';
-    ctx.fillText('🚙', W/2, H - 50); 
+    // UIレイヤー（レティクルとジープ）
+    ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(touch.x, touch.y, 25, 0, Math.PI*2);
+    ctx.moveTo(touch.x - 40, touch.y); ctx.lineTo(touch.x - 10, touch.y);
+    ctx.moveTo(touch.x + 10, touch.y); ctx.lineTo(touch.x + 40, touch.y);
+    ctx.moveTo(touch.x, touch.y - 40); ctx.lineTo(touch.x, touch.y - 10);
+    ctx.moveTo(touch.x, touch.y + 10); ctx.lineTo(touch.x, touch.y + 40);
+    ctx.stroke();
+
+    ctx.font = '80px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('🚙', hW, H - 20); 
 
     requestAnimationFrame(loop);
 }
 
+// --- イベントリスナー ---
 const handleInput = (e) => {
     const t = e.touches ? e.touches[0] : e;
-    const rect = canvas.getBoundingClientRect();
-    touch.x = t.clientX - rect.left;
-    touch.y = t.clientY - rect.top;
+    touch.x = t.clientX; touch.y = t.clientY;
     if (e.type === 'mousedown' || e.type === 'touchstart') touch.down = true;
     if (e.type === 'mouseup' || e.type === 'touchend') touch.down = false;
 };
@@ -173,16 +263,9 @@ window.addEventListener('touchend', handleInput);
 window.addEventListener('touchmove', e => { e.preventDefault(); handleInput(e); }, {passive: false});
 window.addEventListener('resize', resize);
 
-let loaded = 0;
-const onImgLoad = () => { if(++loaded === 3) { init(); loop(); } };
-atlasImg.onload = onImgLoad;
-tyranoImg.onload = onImgLoad;
-roadImg.onload = onImgLoad;
+init();
+loop();
 
-// 万が一ファイル名がまだ違う場合に備え、エラーをコンソールに出力
-atlasImg.onerror = () => console.error("jungle03.png failed to load");
-tyranoImg.onerror = () => console.error("tyrano02.png failed to load");
-roadImg.onerror = () => console.error("road03.png failed to load");
 </script>
 </body>
 </html>
