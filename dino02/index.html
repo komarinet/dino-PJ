@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: REBUILT ENGINE v3.0</title>
+    <title>DINO-CHASE DX: PERFECT ENGINE v5.1</title>
     <style>
-        body { margin: 0; padding: 0; background-color: #051005; overflow: hidden; touch-action: none; }
+        body { margin: 0; padding: 0; background-color: #050a05; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
     </style>
 </head>
@@ -14,8 +14,8 @@
 
 <script>
 /**
- * DINO-CHASE DX - V2.0 Pseudo-3D Engine
- * 開発: 先生 & Gemini (AAA Graphics Update)
+ * DINO-CHASE DX - V5.1 Sprite Animation & Full Logic
+ * 開発: 先生 & Gemini (Missing Code Fixed)
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
@@ -24,23 +24,23 @@ let W, H, hW, hH;
 // --- エンジン定数 ---
 const CAMERA_HEIGHT = 1500;
 const CAMERA_DEPTH = 0.8; 
-const RENDER_DISTANCE = 200; // 奥の描画距離（Z値）
-const SCROLL_SPEED = 0.8; 
+const RENDER_DISTANCE = 200; 
+const SCROLL_SPEED = 1.0; 
 
 let animTime = 0;
 let travelDist = 0;
+let cameraYaw = 0; 
 let sprites = [];
 let effects = [];
 let touch = { x: 0, y: 0, down: false };
 
 // --- 画像アセット ---
-// ※実際のパスに合わせてください。今回はプレースホルダー的な挙動も内包させています。
 const roadImg = new Image(); roadImg.src = 'img/road03.png'; 
-const bgImg = new Image(); bgImg.src = 'img/jungle03.png'; 
-const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano_ani01.png'; // 修正
-const plantImg = new Image(); plantImg.src = 'img/plant01.png'; // 新規追加
+const backImg = new Image(); backImg.src = 'img/back01.png'; 
+const plantImg = new Image(); plantImg.src = 'img/plant01.png'; 
+const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano_ani01.png'; // スプライトシート小文字化
 
-// --- 植物スプライトのUV定義 (1024x1024アトラス仕様) ---
+// --- 植物スプライトのUV定義 ---
 const PLANT_DEFS = {
     'tall': [
         { x: 0, y: 0, w: 256, h: 512 },
@@ -59,18 +59,27 @@ const PLANT_DEFS = {
     ]
 };
 
-// --- スプライト（ビルボード）クラス ---
 class Sprite {
     constructor(type, xOffset, z) {
-        this.type = type; // 'tall', 'short', 'ground', 'boss'
-        this.xOffset = xOffset; // 道路中心からの横ズレ
+        this.type = type; 
+        this.xOffset = xOffset; 
         this.z = z;
-        
-        // 仮のサイズ設定（本来はplant01.pngの切り出しサイズ）
-        if(type === 'tall') { this.w = 600; this.h = 1200; this.uv = {x:0, y:0}; }
-        else if(type === 'short') { this.w = 400; this.h = 400; this.uv = {x:0, y:1}; }
-        else if(type === 'ground') { this.w = 200; this.h = 100; this.uv = {x:0, y:2}; }
-        else if(type === 'boss') { this.w = 800; this.h = 800; }
+        this.screenX = 0;
+        this.screenY = 0;
+
+        if (type !== 'boss') {
+            this.index = Math.floor(Math.random() * 3);
+            this.def = PLANT_DEFS[type][this.index];
+            this.w = this.def.w;
+            this.h = this.def.h;
+            this.scaleBase = type === 'tall' ? 5.0 : type === 'short' ? 3.0 : 2.5;
+        } else {
+            // ティラノサウルスのベースサイズ（1コマ512x512）
+            this.w = 512; 
+            this.h = 512; 
+            // ここが小さすぎた原因！巨大生物にするため倍率を跳ね上げます
+            this.scaleBase = 8.0; 
+        }
     }
 }
 
@@ -91,144 +100,169 @@ function resize() {
 
 function init() {
     resize();
-    animTime = 0; travelDist = 0;
+    animTime = 0; travelDist = 0; cameraYaw = 0;
     sprites = []; effects = [];
 
-    // 初期ジャングルの生成（道路の両脇にランダム配置）
-    for(let i = 0; i < 150; i++) {
+    // 植物を生成
+    for(let i = 0; i < 200; i++) {
         spawnPlant(Math.random() * RENDER_DISTANCE);
     }
-    // ボスを固定Z位置（プレイヤーに近い位置）に配置
-    sprites.push(new Sprite('boss', 0, 30));
+    // ボスを配置 (ベース距離を 50 に設定し、迫り来る大きさを演出)
+    sprites.push(new Sprite('boss', 0, 50)); 
 }
 
 function spawnPlant(zPos) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    // 道幅より外側に配置
-    const xOffset = side * (800 + Math.random() * 2000); 
+    const xOffset = side * (600 + Math.random() * 2500); 
     const r = Math.random();
     let type = 'ground';
-    if (r > 0.8) type = 'tall';
-    else if (r > 0.4) type = 'short';
+    if (r > 0.85) type = 'tall';
+    else if (r > 0.5) type = 'short';
     
     sprites.push(new Sprite(type, xOffset, zPos));
 }
 
-// 複合サイン波による「予測不能なロングカーブ」の生成
 function getCurrentCurve() {
-    // 複数の波を合成して、右へ左へ大きくうねるコースを作る
-    return Math.sin(travelDist * 0.005) * 1.5 + Math.cos(travelDist * 0.003) * 1.0;
+    return Math.sin(travelDist * 0.003) * 1.5 + Math.cos(travelDist * 0.0015) * 1.0;
 }
 
 function loop() {
     animTime++;
     travelDist += SCROLL_SPEED;
     const currentCurve = getCurrentCurve();
+    cameraYaw += currentCurve * 0.5;
 
-    ctx.fillStyle = '#0a140a'; // ジャングルの奥の暗闇
+    ctx.fillStyle = '#050a05'; 
     ctx.fillRect(0, 0, W, H);
 
-    // 1. 背景の描画（カーブに合わせてカメラがパンする表現）
-    if (bgImg.complete) {
-        const bgPan = -(currentCurve * 100) % W;
-        ctx.drawImage(bgImg, 0, 0, bgImg.width, bgImg.height/2, bgPan, 0, W*2, hH);
+    // 1. 背景パノラマ
+    if (backImg.complete && backImg.width > 0) {
+        const bgScale = hH / backImg.height;
+        const bgW = backImg.width * bgScale;
+        let bgPan = cameraYaw % bgW;
+        if (bgPan < 0) bgPan += bgW;
+
+        ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, -bgPan, 0, bgW, hH + 2);
+        ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, bgW - bgPan, 0, bgW, hH + 2);
+        if (bgW - bgPan < W) {
+            ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, bgW * 2 - bgPan, 0, bgW, hH + 2);
+        }
     }
 
-    // 2. 道路と地表のラスタースクロール描画（奥から手前へ）
+    // 2. 地面と道路
     for (let i = RENDER_DISTANCE; i > 1; i--) {
-        // 3D投影計算
         const projScale = CAMERA_DEPTH / i;
         const y = hH + (CAMERA_HEIGHT * projScale);
         
-        // 画面外（下部）ならスキップ
         if (y > H) continue;
 
-        // カーブによるX軸のオフセット（物理の等加速度運動の公式 x = 1/2*a*t^2 を応用）
         const curveOffsetX = 0.5 * currentCurve * i * i * projScale;
         const x = hW + curveOffsetX;
-
         const roadWidth = 1200 * projScale;
 
-        // --- 外側の地表（泥・草） ---
-        ctx.fillStyle = (i + Math.floor(travelDist)) % 4 < 2 ? '#2a1a0a' : '#201005';
-        ctx.fillRect(0, y, W, 3); // 画面幅いっぱいに地表を描画
+        ctx.fillStyle = (i + Math.floor(travelDist)) % 6 < 3 ? '#162312' : '#0e160b';
+        ctx.fillRect(0, y, W, Math.max(2, (RENDER_DISTANCE - i) * 0.05)); 
 
-        // --- 道路の描画 ---
-        if (roadImg.complete) {
-            // テクスチャのY座標（手前に流れる計算）
-            let texY = ((i * 10 - travelDist * 50) % roadImg.height);
+        if (roadImg.complete && roadImg.width > 0) {
+            let texY = ((i * 10 + travelDist * 50) % roadImg.height);
             if (texY < 0) texY += roadImg.height;
-            
             ctx.drawImage(roadImg, 0, texY, roadImg.width, 2, x - roadWidth/2, y, roadWidth, 3);
         }
     }
 
-    // 3. スプライトのZソートと描画（Painter's Algorithm: 奥から手前）
+    // 3. スプライト更新とZソート
     sprites.forEach(s => {
-        // ボス以外のオブジェクトはプレイヤーに向かってくる
         if (s.type !== 'boss') {
-            s.z -= SCROLL_SPEED;
-            if (s.z < 1) { // カメラを過ぎたら奥に再配置
-                s.z += RENDER_DISTANCE;
+            s.z += SCROLL_SPEED;
+            if (s.z > RENDER_DISTANCE) { 
+                s.z = 1;
                 s.xOffset = (Math.random() > 0.5 ? 1 : -1) * (600 + Math.random() * 2500);
             }
         } else {
-            // ボスは道の中央付近をキープ（カーブに追従しつつ少し揺れる）
-            s.xOffset = Math.sin(animTime * 0.05) * 100;
+            // 【ティラノの追跡ロジック】
+            // カーブに合わせて左右に揺れつつ、距離(Z)がジワジワ近づいたり離れたりする
+            s.xOffset = Math.sin(animTime * 0.05) * 150; 
+            s.z = 50 + Math.sin(animTime * 0.02) * 20; // Z=30(近) ～ Z=70(遠)をウロウロする
         }
     });
 
-    // Z値が大きい（奥にある）順にソート
     sprites.sort((a, b) => b.z - a.z);
 
-    // ボスのアニメーションフレーム計算
+    // ティラノのアニメーション計算
     const TOTAL_FRAMES = 12;
     const FRAME_W = 512;
     const FRAME_H = 512;
     const SPRITE_COL = 4;
-    // プレイヤーの速度(SCROLL_SPEED)に同期させる
-    const bossFrame = Math.floor(animTime * 0.1 * SCROLL_SPEED) % TOTAL_FRAMES;
+    // 足の回転速度
+    const bossFrame = Math.floor(animTime * 0.3 * SCROLL_SPEED) % TOTAL_FRAMES;
 
+    // 4. スプライト描画（絶対に省略しない！）
     sprites.forEach(s => {
         const projScale = CAMERA_DEPTH / s.z;
         const y = hH + (CAMERA_HEIGHT * projScale);
         const curveOffsetX = 0.5 * currentCurve * s.z * s.z * projScale;
         const x = hW + (s.xOffset * projScale) + curveOffsetX;
 
-        // スケール調整（アトラスの512x512に合わせて巨大感を出す）
-        const scaleBase = s.type === 'boss' ? 2.0 : 1.0; 
-        const drawW = s.w * projScale * scaleBase;
-        const drawH = s.h * projScale * scaleBase;
+        const drawW = s.w * projScale * s.scaleBase;
+        const drawH = s.h * projScale * s.scaleBase;
 
-        s.screenX = x; s.screenY = y - drawH/2; 
+        s.screenX = x;
+        s.screenY = y - drawH / 2; 
 
         if (s.type === 'boss') {
-            if (tyranoImg.complete) {
-                // スプライトシートからの切り出し（UV）座標
+            if (tyranoImg.complete && tyranoImg.width > 0) {
+                // UVの切り出し計算
                 const sx = (bossFrame % SPRITE_COL) * FRAME_W;
                 const sy = Math.floor(bossFrame / SPRITE_COL) * FRAME_H;
 
                 ctx.drawImage(
                     tyranoImg, 
-                    sx, sy, FRAME_W, FRAME_H, // 切り出し
-                    x - drawW/2, y - drawH, drawW, drawH // 描画
+                    sx, sy, FRAME_W, FRAME_H,
+                    x - drawW/2, y - drawH, drawW, drawH 
                 );
             }
         } else {
-            // ... 植物の描画（変更なし） ...
+            // 省略して消えてしまっていた植物描画コードを完全復旧
+            if (plantImg.complete && plantImg.width > 0) {
+                ctx.drawImage(
+                    plantImg, 
+                    s.def.x, s.def.y, s.def.w, s.def.h, 
+                    x - drawW / 2, y - drawH, drawW, drawH 
+                );
+            }
         }
     });
 
-    // ... ヒットエフェクトとUI（変更なし） ...
-    ctx.strokeStyle = '#0ff'; ctx.lineWidth = 3;
-    ctx.strokeRect(touch.x - 25, touch.y - 25, 50, 50);
-    ctx.font = '100px serif'; ctx.textAlign = 'center';
-    ctx.fillText('🚙', W/2, H - 50); 
+    // 5. ヒット判定とUI
+    if (touch.down) {
+        const bossObj = sprites.find(s => s.type === 'boss');
+        if (bossObj) {
+            const dist = Math.hypot(touch.x - bossObj.screenX, touch.y - bossObj.screenY);
+            if (dist < bossObj.w * (CAMERA_DEPTH/bossObj.z) * bossObj.scaleBase * 0.4) {
+                effects.push(new HitEffect(touch.x, touch.y));
+            }
+        }
+    }
+    
+    effects = effects.filter(e => e.life > 0);
+    effects.forEach(e => e.draw());
+
+    ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(touch.x, touch.y, 25, 0, Math.PI*2);
+    ctx.moveTo(touch.x - 40, touch.y); ctx.lineTo(touch.x - 10, touch.y);
+    ctx.moveTo(touch.x + 10, touch.y); ctx.lineTo(touch.x + 40, touch.y);
+    ctx.moveTo(touch.x, touch.y - 40); ctx.lineTo(touch.x, touch.y - 10);
+    ctx.moveTo(touch.x, touch.y + 10); ctx.lineTo(touch.x, touch.y + 40);
+    ctx.stroke();
+
+    ctx.font = '80px sans-serif'; ctx.textAlign = 'center';
+    ctx.fillText('🚙', hW, H - 20); 
 
     requestAnimationFrame(loop);
 }
 
-// ... イベントリスナー ...
+// --- 入力制御 ---
 const handleInput = (e) => {
     const t = e.touches ? e.touches[0] : e;
     touch.x = t.clientX; touch.y = t.clientY;
