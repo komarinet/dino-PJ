@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: THRILL RIDE v5.2</title>
+    <title>DINO-CHASE DX: STABLE ENGINE v5.3</title>
     <style>
         body { margin: 0; padding: 0; background-color: #050a05; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
@@ -14,8 +14,8 @@
 
 <script>
 /**
- * DINO-CHASE DX - V5.2 High Density & Thrill Update
- * 開発: 先生 & Gemini
+ * DINO-CHASE DX - V5.3 Stable Engine Update
+ * 開発: 先生 & Gemini (ビジュアル・破綻の完全修正)
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
@@ -25,7 +25,7 @@ let W, H, hW, hH;
 const CAMERA_HEIGHT = 1500;
 const CAMERA_DEPTH = 0.8; 
 const RENDER_DISTANCE = 200; 
-const SCROLL_SPEED = 1.0; 
+const SCROLL_SPEED = 0.5; // 速度を半分に落とし、重厚感を出す
 
 let animTime = 0;
 let travelDist = 0;
@@ -72,13 +72,13 @@ class Sprite {
             this.def = PLANT_DEFS[type][this.index];
             this.w = this.def.w;
             this.h = this.def.h;
-            // 木のサイズも少し大きくしてジャングルの圧迫感を増す
-            this.scaleBase = type === 'tall' ? 6.0 : type === 'short' ? 4.0 : 3.0;
+            // 木のサイズを少し落ち着かせる
+            this.scaleBase = type === 'tall' ? 5.0 : type === 'short' ? 3.5 : 2.5;
         } else {
             this.w = 512; 
             this.h = 512; 
-            // 巨大化！
-            this.scaleBase = 10.0; 
+            // 巨大すぎたスケールを適正な巨獣サイズ(6.0)に修正
+            this.scaleBase = 6.0; 
         }
     }
 }
@@ -103,23 +103,22 @@ function init() {
     animTime = 0; travelDist = 0; cameraYaw = 0;
     sprites = []; effects = [];
 
-    // 植物の数を倍増 (200 -> 400)
-    for(let i = 0; i < 400; i++) {
+    // 植物の数を適正化 (250)
+    for(let i = 0; i < 250; i++) {
         spawnPlant(Math.random() * RENDER_DISTANCE);
     }
     // ボス配置
-    sprites.push(new Sprite('boss', 0, 30)); 
+    sprites.push(new Sprite('boss', 0, 60)); 
 }
 
 function spawnPlant(zPos) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    // AAAのテクニック: Math.powを使って、道端（500付近）に木を密集させる
-    const xOffset = side * (500 + Math.pow(Math.random(), 3) * 3500); 
+    // 道路（幅約1200）に絶対被らないよう、最低800pxは外側に配置する
+    const xOffset = side * (800 + Math.random() * 3000); 
     const r = Math.random();
     let type = 'ground';
-    // 高い木と低い木の出現率を上げて、森を深くする
-    if (r > 0.6) type = 'tall';
-    else if (r > 0.3) type = 'short';
+    if (r > 0.7) type = 'tall';
+    else if (r > 0.4) type = 'short';
     
     sprites.push(new Sprite(type, xOffset, zPos));
 }
@@ -151,25 +150,32 @@ function loop() {
         }
     }
 
-    // 2. 地面と道路
+    // 2. 地面と道路（隙間・かすれを完璧に修正）
     for (let i = RENDER_DISTANCE; i > 1; i--) {
         const projScale = CAMERA_DEPTH / i;
         const y = hH + (CAMERA_HEIGHT * projScale);
         
+        // 【重要修正】次のラインのY座標を計算し、隙間（描画高）を埋める
+        const nextProjScale = CAMERA_DEPTH / (i - 1);
+        const nextY = hH + (CAMERA_HEIGHT * nextProjScale);
+        const drawH = Math.ceil(nextY - y) + 1; // +1ピクセル余分に描いて隙間を撲滅
+
         if (y > H) continue;
 
         const curveOffsetX = 0.5 * currentCurve * i * i * projScale;
         const x = hW + curveOffsetX;
         const roadWidth = 1200 * projScale;
 
-        // ジャングルの地面の色を少し濃くして密度感を出す
+        // 地表のストライプ描画
         ctx.fillStyle = (i + Math.floor(travelDist)) % 6 < 3 ? '#101a0e' : '#080d07';
-        ctx.fillRect(0, y, W, Math.max(2, (RENDER_DISTANCE - i) * 0.05)); 
+        ctx.fillRect(0, y, W, drawH); 
 
+        // 道路レイヤー
         if (roadImg.complete && roadImg.width > 0) {
             let texY = ((i * 10 + travelDist * 50) % roadImg.height);
             if (texY < 0) texY += roadImg.height;
-            ctx.drawImage(roadImg, 0, texY, roadImg.width, 2, x - roadWidth/2, y, roadWidth, 3);
+            // 高さ(drawH)分をしっかり引き伸ばして描画
+            ctx.drawImage(roadImg, 0, texY, roadImg.width, 2, x - roadWidth/2, y, roadWidth, drawH);
         }
     }
 
@@ -179,27 +185,25 @@ function loop() {
             s.z += SCROLL_SPEED;
             if (s.z > RENDER_DISTANCE) { 
                 s.z = 1;
-                // 手前に来たら再び密集アルゴリズムで配置
                 const side = Math.random() > 0.5 ? 1 : -1;
-                s.xOffset = side * (500 + Math.pow(Math.random(), 3) * 3500); 
+                s.xOffset = side * (800 + Math.random() * 3000); 
             }
         } else {
-            // 【ティラノの肉薄ロジック】
-            // ベース距離を25とし、±17の振幅で動く (最接近時 Z=8、最遠時 Z=42)
-            // Z=8 のときは画面を覆い尽くすほどのサイズになります
-            s.xOffset = Math.sin(animTime * 0.05) * 80; // カーブ内での横揺れ
-            s.z = 25 + Math.sin(animTime * 0.025) * 17; 
+            // 【ティラノの適正距離ロジック】
+            // 視界の真ん中(Z=60)を中心に、Z=40(近) 〜 Z=80(遠) を往復する
+            s.xOffset = Math.sin(animTime * 0.03) * 100; 
+            s.z = 60 + Math.sin(animTime * 0.02) * 20; 
         }
     });
 
     sprites.sort((a, b) => b.z - a.z);
 
-    // ティラノのアニメーション計算 (少し重みを持たせる速度に)
+    // ティラノのアニメーション計算 (全体速度に合わせて足の回転も調整)
     const TOTAL_FRAMES = 12;
     const FRAME_W = 512;
     const FRAME_H = 512;
     const SPRITE_COL = 4;
-    const bossFrame = Math.floor(animTime * 0.25 * SCROLL_SPEED) % TOTAL_FRAMES;
+    const bossFrame = Math.floor(animTime * 0.4 * SCROLL_SPEED) % TOTAL_FRAMES;
 
     // 4. スプライト描画
     sprites.forEach(s => {
