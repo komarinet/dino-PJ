@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: PERFECT ENGINE v5.1</title>
+    <title>DINO-CHASE DX: THRILL RIDE v5.2</title>
     <style>
         body { margin: 0; padding: 0; background-color: #050a05; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
@@ -14,8 +14,8 @@
 
 <script>
 /**
- * DINO-CHASE DX - V5.1 Sprite Animation & Full Logic
- * 開発: 先生 & Gemini (Missing Code Fixed)
+ * DINO-CHASE DX - V5.2 High Density & Thrill Update
+ * 開発: 先生 & Gemini
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
@@ -38,7 +38,7 @@ let touch = { x: 0, y: 0, down: false };
 const roadImg = new Image(); roadImg.src = 'img/road03.png'; 
 const backImg = new Image(); backImg.src = 'img/back01.png'; 
 const plantImg = new Image(); plantImg.src = 'img/plant01.png'; 
-const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano_ani01.png'; // スプライトシート小文字化
+const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano_ani01.png'; 
 
 // --- 植物スプライトのUV定義 ---
 const PLANT_DEFS = {
@@ -72,13 +72,13 @@ class Sprite {
             this.def = PLANT_DEFS[type][this.index];
             this.w = this.def.w;
             this.h = this.def.h;
-            this.scaleBase = type === 'tall' ? 5.0 : type === 'short' ? 3.0 : 2.5;
+            // 木のサイズも少し大きくしてジャングルの圧迫感を増す
+            this.scaleBase = type === 'tall' ? 6.0 : type === 'short' ? 4.0 : 3.0;
         } else {
-            // ティラノサウルスのベースサイズ（1コマ512x512）
             this.w = 512; 
             this.h = 512; 
-            // ここが小さすぎた原因！巨大生物にするため倍率を跳ね上げます
-            this.scaleBase = 8.0; 
+            // 巨大化！
+            this.scaleBase = 10.0; 
         }
     }
 }
@@ -103,21 +103,23 @@ function init() {
     animTime = 0; travelDist = 0; cameraYaw = 0;
     sprites = []; effects = [];
 
-    // 植物を生成
-    for(let i = 0; i < 200; i++) {
+    // 植物の数を倍増 (200 -> 400)
+    for(let i = 0; i < 400; i++) {
         spawnPlant(Math.random() * RENDER_DISTANCE);
     }
-    // ボスを配置 (ベース距離を 50 に設定し、迫り来る大きさを演出)
-    sprites.push(new Sprite('boss', 0, 50)); 
+    // ボス配置
+    sprites.push(new Sprite('boss', 0, 30)); 
 }
 
 function spawnPlant(zPos) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    const xOffset = side * (600 + Math.random() * 2500); 
+    // AAAのテクニック: Math.powを使って、道端（500付近）に木を密集させる
+    const xOffset = side * (500 + Math.pow(Math.random(), 3) * 3500); 
     const r = Math.random();
     let type = 'ground';
-    if (r > 0.85) type = 'tall';
-    else if (r > 0.5) type = 'short';
+    // 高い木と低い木の出現率を上げて、森を深くする
+    if (r > 0.6) type = 'tall';
+    else if (r > 0.3) type = 'short';
     
     sprites.push(new Sprite(type, xOffset, zPos));
 }
@@ -160,7 +162,8 @@ function loop() {
         const x = hW + curveOffsetX;
         const roadWidth = 1200 * projScale;
 
-        ctx.fillStyle = (i + Math.floor(travelDist)) % 6 < 3 ? '#162312' : '#0e160b';
+        // ジャングルの地面の色を少し濃くして密度感を出す
+        ctx.fillStyle = (i + Math.floor(travelDist)) % 6 < 3 ? '#101a0e' : '#080d07';
         ctx.fillRect(0, y, W, Math.max(2, (RENDER_DISTANCE - i) * 0.05)); 
 
         if (roadImg.complete && roadImg.width > 0) {
@@ -176,27 +179,29 @@ function loop() {
             s.z += SCROLL_SPEED;
             if (s.z > RENDER_DISTANCE) { 
                 s.z = 1;
-                s.xOffset = (Math.random() > 0.5 ? 1 : -1) * (600 + Math.random() * 2500);
+                // 手前に来たら再び密集アルゴリズムで配置
+                const side = Math.random() > 0.5 ? 1 : -1;
+                s.xOffset = side * (500 + Math.pow(Math.random(), 3) * 3500); 
             }
         } else {
-            // 【ティラノの追跡ロジック】
-            // カーブに合わせて左右に揺れつつ、距離(Z)がジワジワ近づいたり離れたりする
-            s.xOffset = Math.sin(animTime * 0.05) * 150; 
-            s.z = 50 + Math.sin(animTime * 0.02) * 20; // Z=30(近) ～ Z=70(遠)をウロウロする
+            // 【ティラノの肉薄ロジック】
+            // ベース距離を25とし、±17の振幅で動く (最接近時 Z=8、最遠時 Z=42)
+            // Z=8 のときは画面を覆い尽くすほどのサイズになります
+            s.xOffset = Math.sin(animTime * 0.05) * 80; // カーブ内での横揺れ
+            s.z = 25 + Math.sin(animTime * 0.025) * 17; 
         }
     });
 
     sprites.sort((a, b) => b.z - a.z);
 
-    // ティラノのアニメーション計算
+    // ティラノのアニメーション計算 (少し重みを持たせる速度に)
     const TOTAL_FRAMES = 12;
     const FRAME_W = 512;
     const FRAME_H = 512;
     const SPRITE_COL = 4;
-    // 足の回転速度
-    const bossFrame = Math.floor(animTime * 0.3 * SCROLL_SPEED) % TOTAL_FRAMES;
+    const bossFrame = Math.floor(animTime * 0.25 * SCROLL_SPEED) % TOTAL_FRAMES;
 
-    // 4. スプライト描画（絶対に省略しない！）
+    // 4. スプライト描画
     sprites.forEach(s => {
         const projScale = CAMERA_DEPTH / s.z;
         const y = hH + (CAMERA_HEIGHT * projScale);
@@ -211,7 +216,6 @@ function loop() {
 
         if (s.type === 'boss') {
             if (tyranoImg.complete && tyranoImg.width > 0) {
-                // UVの切り出し計算
                 const sx = (bossFrame % SPRITE_COL) * FRAME_W;
                 const sy = Math.floor(bossFrame / SPRITE_COL) * FRAME_H;
 
@@ -222,7 +226,6 @@ function loop() {
                 );
             }
         } else {
-            // 省略して消えてしまっていた植物描画コードを完全復旧
             if (plantImg.complete && plantImg.width > 0) {
                 ctx.drawImage(
                     plantImg, 
@@ -247,6 +250,7 @@ function loop() {
     effects = effects.filter(e => e.life > 0);
     effects.forEach(e => e.draw());
 
+    // UI
     ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.arc(touch.x, touch.y, 25, 0, Math.PI*2);
