@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: REAR-VIEW ESCAPE v6.0</title>
+    <title>DINO-CHASE DX: TRUE SCANLINE v6.1</title>
     <style>
-        /* ガタガタの原因だった pixelated を削除し、滑らかにレンダリング */
         body { margin: 0; padding: 0; background-color: #050a05; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; }
     </style>
@@ -15,18 +14,16 @@
 
 <script>
 /**
- * DINO-CHASE DX - V6.0 Rear-View & Deep Forest Engine
- * 開発: 先生 & Gemini (AAA Smooth Rendering)
+ * DINO-CHASE DX - V6.1 True Scanline Rendering
+ * 開発: 先生 & Gemini (Mode-7 style Rasterizer)
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
 let W, H, hW, horizonY;
 
-// --- エンジン定数 ---
 const CAMERA_HEIGHT = 800; 
 const CAMERA_DEPTH = 1.2; 
 const RENDER_DISTANCE = 200; 
-// バック視点に合わせて速度調整
 const SCROLL_SPEED = 0.8; 
 
 let animTime = 0;
@@ -36,7 +33,6 @@ let sprites = [];
 let effects = [];
 let touch = { x: 0, y: 0, down: false };
 
-// --- 画像アセット ---
 const roadImg = new Image(); roadImg.src = 'img/road03.png'; 
 const backImg = new Image(); backImg.src = 'img/back01.png'; 
 const tyranoImg = new Image(); tyranoImg.src = 'img/tyrano_ani01.png'; 
@@ -65,7 +61,6 @@ class Sprite {
         } else {
             this.w = 512; 
             this.h = 512; 
-            // 画面に収まりつつ迫力のある適正巨獣サイズ
             this.scaleBase = 7.5; 
         }
     }
@@ -92,21 +87,17 @@ function init() {
     animTime = 0; travelDist = 0; cameraYaw = 0;
     sprites = []; effects = [];
 
-    // 柵っぽさを消すため、800本もの木を無造作に高密度配置
     for(let i = 0; i < 800; i++) {
         spawnPlant(Math.random() * RENDER_DISTANCE);
     }
-    // バック視点：ティラノサウルスは「奥(Z=30〜60付近)」から追ってくる
     sprites.push(new Sprite('boss', 0, 45)); 
 }
 
 function spawnPlant(zPos) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    // 道路（幅約1200）を絶対にあけつつ、奥深く(10000px)まで森を形成
     const xOffset = side * (1200 + Math.pow(Math.random(), 2.0) * 10000); 
     const r = Math.random();
     let type = 'ground';
-    // 密林感を出すため、背の高い木を大量に
     if (r > 0.5) type = 'tall';
     else if (r > 0.2) type = 'short';
     
@@ -114,7 +105,6 @@ function spawnPlant(zPos) {
 }
 
 function getCurrentCurve() {
-    // 逃走の激しさを表現する大きなうねり
     return Math.sin(travelDist * 0.005) * 2.8 + Math.cos(travelDist * 0.0025) * 1.5;
 }
 
@@ -123,91 +113,79 @@ function loop() {
     travelDist += SCROLL_SPEED;
     const currentCurve = getCurrentCurve();
     
-    // バック視点では、カーブの進行方向に対するカメラの向き（Yaw）が逆相になる
     cameraYaw -= currentCurve * 0.4;
 
     ctx.fillStyle = '#050a05'; 
     ctx.fillRect(0, 0, W, H);
 
-    // 1. 背景の鏡合わせループ
+    // 1. 背景（つなぎ目の縦線を撲滅した完全シームレス）
     if (backImg.complete && backImg.width > 0) {
         const bgScale = horizonY / backImg.height;
-        const bgW = backImg.width * bgScale;
+        const bgW = Math.ceil(backImg.width * bgScale); // 整数化
         
-        let bgPan = cameraYaw % (bgW * 2);
+        let bgPan = Math.floor(cameraYaw) % (bgW * 2);
         if (bgPan < 0) bgPan += (bgW * 2);
 
         let drawX1 = -bgPan;
-        ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, drawX1, 0, bgW, horizonY + 2);
+        // 1px余分に描画して隙間を潰す
+        ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, drawX1, 0, bgW + 1, horizonY + 2);
 
-        let drawX2 = bgW - bgPan;
+        let drawX2 = drawX1 + bgW;
         ctx.save();
         ctx.translate(drawX2 + bgW, 0); 
         ctx.scale(-1, 1);
-        ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, 0, 0, bgW, horizonY + 2);
+        ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, 0, 0, bgW + 1, horizonY + 2);
         ctx.restore();
         
-        let drawX3 = bgW * 2 - bgPan;
+        let drawX3 = drawX2 + bgW;
         if (drawX3 < W) {
-            ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, drawX3, 0, bgW, horizonY + 2);
+            ctx.drawImage(backImg, 0, 0, backImg.width, backImg.height, drawX3, 0, bgW + 1, horizonY + 2);
         }
     }
 
-    // 2. なめらかな道路と地表の描画 (バック視点)
-    // 奥から手前(画面下)へ向かって描画することで重なりを正常に保つ
-    for (let i = RENDER_DISTANCE; i > 1; i--) {
-        const projScale = CAMERA_DEPTH / i;
-        const y = horizonY + (CAMERA_HEIGHT * projScale);
+    // 2. 道路と地表の描画 【真・スキャンラインレンダラ】
+    // Zベースではなく、画面のY座標（1pxごと）にループを回す！
+    if (roadImg.complete && roadImg.width > 0) {
+        const w = roadImg.width;
         
-        const nextProjScale = CAMERA_DEPTH / (i - 1);
-        const nextY = horizonY + (CAMERA_HEIGHT * nextProjScale);
-        
-        // +0.5 を加えることで小数ピクセルの隙間を完全に埋める
-        const drawH = Math.ceil(nextY - y) + 0.5; 
+        for (let y = Math.floor(horizonY) + 1; y < H; y++) {
+            // スクリーンY座標から、そのピクセルのZ深度を逆算
+            const z = (CAMERA_HEIGHT * CAMERA_DEPTH) / (y - horizonY);
 
-        if (y > H) continue;
+            const projScale = CAMERA_DEPTH / z;
+            const curveOffsetX = 0.5 * currentCurve * z * z * projScale;
+            const x = hW + curveOffsetX;
+            const roadWidth = Math.floor(1800 * projScale);
 
-        const curveOffsetX = 0.5 * currentCurve * i * i * projScale;
-        const x = hW + curveOffsetX;
-        const roadWidth = Math.floor(1800 * projScale);
-
-        if (roadImg.complete && roadImg.width > 0) {
-            // 【逆スクロール対応】 travelDist を引き算にすることで、奥へ流れるようにする
-            let texY = Math.floor(i * 15 - travelDist * 100) % roadImg.height;
+            // Z深度と移動距離からテクスチャYを算出（バック視点）
+            let texY = Math.floor(z * 15 - travelDist * 100) % roadImg.height;
             if (texY < 0) texY += roadImg.height;
             
-            const w = roadImg.width;
-            
-            // 左側地表 (0% 〜 25%)
-            ctx.drawImage(roadImg, 0, texY, w * 0.25, 1, 0, y, x - roadWidth/2, drawH);
-            
-            // 中央道路 (25% 〜 75%)
-            ctx.drawImage(roadImg, w * 0.25, texY, w * 0.5, 1, x - roadWidth/2, y, roadWidth, drawH);
-            
-            // 右側地表 (75% 〜 100%)
-            ctx.drawImage(roadImg, w * 0.75, texY, w * 0.25, 1, x + roadWidth/2, y, W - (x + roadWidth/2), drawH);
+            // 高さ1pxで描画（縦伸び・バーコード化を完全に防ぐ）
+            // 左側地表
+            ctx.drawImage(roadImg, 0, texY, w * 0.25, 1, 0, y, x - roadWidth/2, 1);
+            // 中央道路
+            ctx.drawImage(roadImg, w * 0.25, texY, w * 0.5, 1, x - roadWidth/2, y, roadWidth, 1);
+            // 右側地表
+            ctx.drawImage(roadImg, w * 0.75, texY, w * 0.25, 1, x + roadWidth/2, y, W - (x + roadWidth/2), 1);
         }
     }
 
     // 3. スプライト更新とZソート (バック視点)
     sprites.forEach(s => {
         if (s.type !== 'boss') {
-            // 【逆スクロール】 手前(画面下)から発生し、奥(消失点)へ向かって去っていく
             s.z += SCROLL_SPEED;
-            // 消失点を超えたら、手前(Z=1:画面外下部)に再配置
             if (s.z > RENDER_DISTANCE) { 
                 s.z = 1;
                 const side = Math.random() > 0.5 ? 1 : -1; 
                 s.xOffset = side * (1200 + Math.pow(Math.random(), 2.0) * 10000); 
             }
         } else {
-            // ティラノは奥(Z=30〜60)で一定の距離を保ちながら追ってくる
             s.xOffset = Math.sin(animTime * 0.04) * 150; 
             s.z = 45 + Math.sin(animTime * 0.02) * 15; 
         }
     });
 
-    // Zソート: 奥のものを先に描く
     sprites.sort((a, b) => b.z - a.z);
 
     const TOTAL_FRAMES = 12;
@@ -218,6 +196,9 @@ function loop() {
 
     // 4. スプライト描画
     sprites.forEach(s => {
+        // 描画限界より遠いものはスキップ
+        if (s.z > RENDER_DISTANCE) return;
+
         const projScale = CAMERA_DEPTH / s.z;
         const curveOffsetX = 0.5 * currentCurve * s.z * s.z * projScale;
         const x = hW + (s.xOffset * projScale) + curveOffsetX;
@@ -281,7 +262,6 @@ function loop() {
     requestAnimationFrame(loop);
 }
 
-// --- 入力制御 ---
 const handleInput = (e) => {
     const t = e.touches ? e.touches[0] : e;
     touch.x = t.clientX; touch.y = t.clientY;
