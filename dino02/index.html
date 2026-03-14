@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: PERFECT LOOP v5.4.1</title>
+    <title>DINO-CHASE DX: SMOOTH HIGHWAY v5.5</title>
     <style>
         body { margin: 0; padding: 0; background-color: #050a05; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
@@ -14,7 +14,8 @@
 
 <script>
 /**
- * DINO-CHASE DX - V5.4.1 Bug Fix (ReferenceError Resolved)
+ * DINO-CHASE DX - V5.5 Smooth Texture & Wide Jungle
+ * 開発: 先生 & Gemini
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
@@ -24,7 +25,8 @@ let W, H, hW, hH;
 const CAMERA_HEIGHT = 1500;
 const CAMERA_DEPTH = 0.8; 
 const RENDER_DISTANCE = 200; 
-const SCROLL_SPEED = 0.5; // 重厚なスピード感
+// 木を遠ざけた分の体感速度低下を補うため、0.5 -> 0.75 へスピードアップ
+const SCROLL_SPEED = 0.75; 
 
 let animTime = 0;
 let travelDist = 0;
@@ -72,12 +74,12 @@ class Sprite {
             this.def = PLANT_DEFS[type][this.index];
             this.w = this.def.w;
             this.h = this.def.h;
-            this.scaleBase = type === 'tall' ? 5.0 : type === 'short' ? 3.5 : 2.5;
+            // 【修正】木を全体的に小さくし、巨大になりすぎるのを防ぐ
+            this.scaleBase = type === 'tall' ? 3.0 : type === 'short' ? 2.0 : 1.5;
         } else {
             this.w = 512; 
             this.h = 512; 
-            // 無理のない適正な巨獣サイズ
-            this.scaleBase = 7.5; 
+            this.scaleBase = 7.0; 
         }
     }
 }
@@ -102,7 +104,8 @@ function init() {
     animTime = 0; travelDist = 0; cameraYaw = 0;
     sprites = []; effects = [];
 
-    for(let i = 0; i < 250; i++) {
+    // 木の数を調整
+    for(let i = 0; i < 300; i++) {
         spawnPlant(Math.random() * RENDER_DISTANCE);
     }
     sprites.push(new Sprite('boss', 0, 100)); 
@@ -110,7 +113,8 @@ function init() {
 
 function spawnPlant(zPos) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    const xOffset = side * (800 + Math.random() * 3000); 
+    // 【修正】ベースのオフセットを 1100 に押し出し、完全に道路の外側に配置
+    const xOffset = side * (1100 + Math.random() * 2500); 
     const r = Math.random();
     let type = 'ground';
     if (r > 0.7) type = 'tall';
@@ -156,28 +160,39 @@ function loop() {
         }
     }
 
-    // 2. 地面と道路（かすれ防止）
+    // 2. 地面と道路（完全な平滑化アルゴリズム）
     for (let i = RENDER_DISTANCE; i > 1; i--) {
         const projScale = CAMERA_DEPTH / i;
-        const y = hH + (CAMERA_HEIGHT * projScale);
+        // 【重要】Math.floorを用いてキャンバス上の少数ピクセルを排除し、にじみを防ぐ
+        const intY = Math.floor(hH + (CAMERA_HEIGHT * projScale));
         
         const nextProjScale = CAMERA_DEPTH / (i - 1);
-        const nextY = hH + (CAMERA_HEIGHT * nextProjScale);
-        const drawH = Math.ceil(nextY - y) + 1; 
+        const intNextY = Math.ceil(hH + (CAMERA_HEIGHT * nextProjScale));
+        
+        // 隙間を絶対に作らない描画高
+        const drawH = intNextY - intY; 
 
-        if (y > H) continue;
+        if (intY > H) continue;
 
         const curveOffsetX = 0.5 * currentCurve * i * i * projScale;
         const x = hW + curveOffsetX;
-        const roadWidth = 1200 * projScale;
+        const roadWidth = Math.floor(1200 * projScale);
 
+        // 地表ストライプ
         ctx.fillStyle = (i + Math.floor(travelDist)) % 6 < 3 ? '#101a0e' : '#080d07';
-        ctx.fillRect(0, y, W, drawH); 
+        ctx.fillRect(0, intY, W, drawH); 
 
         if (roadImg.complete && roadImg.width > 0) {
-            let texY = ((i * 10 + travelDist * 50) % roadImg.height);
+            // テクスチャサンプリングの精度向上
+            let texY = Math.floor(i * 12 + travelDist * 80) % roadImg.height;
             if (texY < 0) texY += roadImg.height;
-            ctx.drawImage(roadImg, 0, texY, roadImg.width, 2, x - roadWidth/2, y, roadWidth, drawH);
+            
+            // 【超重要】元画像から「厳密に1px」だけ切り出し、drawHの高さへ綺麗に引き伸ばす
+            ctx.drawImage(
+                roadImg, 
+                0, texY, roadImg.width, 1, 
+                Math.floor(x - roadWidth/2), intY, roadWidth, drawH
+            );
         }
     }
 
@@ -187,14 +202,13 @@ function loop() {
             s.z += SCROLL_SPEED;
             if (s.z > RENDER_DISTANCE) { 
                 s.z = 1;
-                // 【修正箇所】この行が抜けておりエラーになっていました
                 const side = Math.random() > 0.5 ? 1 : -1; 
-                s.xOffset = side * (800 + Math.random() * 3000); 
+                s.xOffset = side * (1100 + Math.random() * 2500); 
             }
         } else {
-            // ティラノサウルスの無理のない接近ロジック
+            // ティラノサウルスは広くなった道の真ん中をキープしつつ迫る
             s.xOffset = Math.sin(animTime * 0.03) * 100; 
-            s.z = 45 + Math.sin(animTime * 0.02) * 25; 
+            s.z = 45 + Math.sin(animTime * 0.02) * 20; 
         }
     });
 
@@ -204,20 +218,24 @@ function loop() {
     const FRAME_W = 512;
     const FRAME_H = 512;
     const SPRITE_COL = 4;
-    const bossFrame = Math.floor(animTime * 0.4 * SCROLL_SPEED) % TOTAL_FRAMES;
+    // 足の回転速度も新しいSCROLL_SPEEDに合わせる
+    const bossFrame = Math.floor(animTime * 0.35 * SCROLL_SPEED) % TOTAL_FRAMES;
 
     // 4. スプライト描画
     sprites.forEach(s => {
         const projScale = CAMERA_DEPTH / s.z;
-        const y = hH + (CAMERA_HEIGHT * projScale);
         const curveOffsetX = 0.5 * currentCurve * s.z * s.z * projScale;
         const x = hW + (s.xOffset * projScale) + curveOffsetX;
 
         const drawW = s.w * projScale * s.scaleBase;
         const drawH = s.h * projScale * s.scaleBase;
 
+        // 【重要】スプライトの描画先も整数に丸めて綺麗に表示
+        const drawX = Math.floor(x - drawW / 2);
+        const drawY = Math.floor(hH + (CAMERA_HEIGHT * projScale) - drawH);
+
         s.screenX = x;
-        s.screenY = y - drawH / 2; 
+        s.screenY = drawY + drawH / 2; 
 
         if (s.type === 'boss') {
             if (tyranoImg.complete && tyranoImg.width > 0) {
@@ -226,7 +244,7 @@ function loop() {
                 ctx.drawImage(
                     tyranoImg, 
                     sx, sy, FRAME_W, FRAME_H,
-                    x - drawW/2, y - drawH, drawW, drawH 
+                    drawX, drawY, Math.floor(drawW), Math.floor(drawH)
                 );
             }
         } else {
@@ -234,7 +252,7 @@ function loop() {
                 ctx.drawImage(
                     plantImg, 
                     s.def.x, s.def.y, s.def.w, s.def.h, 
-                    x - drawW / 2, y - drawH, drawW, drawH 
+                    drawX, drawY, Math.floor(drawW), Math.floor(drawH)
                 );
             }
         }
