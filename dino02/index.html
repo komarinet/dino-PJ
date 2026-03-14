@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-CHASE DX: LOW-ANGLE WIDE FOV v5.6</title>
+    <title>DINO-CHASE DX: PERFECT ESCAPE v5.7</title>
     <style>
         body { margin: 0; padding: 0; background-color: #050a05; overflow: hidden; touch-action: none; }
         canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
@@ -14,17 +14,15 @@
 
 <script>
 /**
- * DINO-CHASE DX - V5.6 Cinematic Low-Angle & Deep Forest
- * 開発: 先生 & Gemini (FromSoftware-style Camera Integration)
+ * DINO-CHASE DX - V5.7 Missing Code Fixed & Perfect Logic
+ * 開発: 先生 & Gemini (AAA Graphics & Camera Plan Integration)
  */
 
 const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
 let W, H, hW, horizonY;
 
 // --- エンジン定数（シネマティック・ローアングル設定） ---
-// カメラの高さを下げて地を這う視点にし、巨大感を煽る
 const CAMERA_HEIGHT = 800; 
-// 画角(FOV)を広げ、広角レンズ特有の手前のスピード感と奥の密集感を出す
 const CAMERA_DEPTH = 1.2; 
 const RENDER_DISTANCE = 200; 
 const SCROLL_SPEED = 0.8; 
@@ -61,13 +59,13 @@ class Sprite {
             this.def = PLANT_DEFS[type][this.index];
             this.w = this.def.w;
             this.h = this.def.h;
-            // ローアングル化により勝手に大きく見えるため、ベーススケールは適正値に保つ
+            // 木のサイズを少し落ち着かせる
             this.scaleBase = type === 'tall' ? 4.5 : type === 'short' ? 2.5 : 2.0;
         } else {
             this.w = 512; 
             this.h = 512; 
-            // 眼前まで迫った時に画面を埋め尽くすスケール計算
-            this.scaleBase = 8.5; 
+            // 【重要修正】はみ出さない適正な巨獣サイズ
+            this.scaleBase = 7.5; 
         }
     }
 }
@@ -85,7 +83,6 @@ function resize() {
     W = canvas.width = window.innerWidth;
     H = canvas.height = window.innerHeight;
     hW = W / 2; 
-    // 水平線を少し下げて、見上げるアングルを強調
     horizonY = H * 0.45; 
 }
 
@@ -94,17 +91,16 @@ function init() {
     animTime = 0; travelDist = 0; cameraYaw = 0;
     sprites = []; effects = [];
 
-    // 木の数を500本に増量し、森の厚みを出す
+    // 木を消失点（奥）に配置
     for(let i = 0; i < 500; i++) {
-        spawnPlant(Math.random() * RENDER_DISTANCE);
+        spawnPlant(RENDER_DISTANCE);
     }
-    sprites.push(new Sprite('boss', 0, 80)); 
+    // ボス配置。Z=60 ±20 (Z=40〜80) で往復
+    sprites.push(new Sprite('boss', 0, 60)); 
 }
 
 function spawnPlant(zPos) {
     const side = Math.random() > 0.5 ? 1 : -1;
-    // 【広域展開アルゴリズム】
-    // 最低1200px(道路の完全な外側)を確保しつつ、Math.powで奥深く(最大8000px外)まで木を敷き詰める
     const xOffset = side * (1200 + Math.pow(Math.random(), 1.5) * 8000); 
     const r = Math.random();
     let type = 'ground';
@@ -114,9 +110,10 @@ function spawnPlant(zPos) {
     sprites.push(new Sprite(type, xOffset, zPos));
 }
 
+// 複合サイン波による「予測不能なロングカーブ」の生成
 function getCurrentCurve() {
-    // スピード感に合わせたうねり
-    return Math.sin(travelDist * 0.0035) * 1.5 + Math.cos(travelDist * 0.002) * 1.2;
+    // カーブの振幅（2.5, 1.8）と周波数（0.005, 0.003）を大きくしてダイナミックにする
+    return Math.sin(travelDist * 0.005) * 2.5 + Math.cos(travelDist * 0.003) * 1.8;
 }
 
 function loop() {
@@ -152,16 +149,16 @@ function loop() {
         }
     }
 
-    // 2. 地面と道路（ローアングル・広角計算）
-    for (let i = RENDER_DISTANCE; i > 1; i--) {
+    // 2. 地面と道路・地表の描画 (Painter's Algorithm: 手前から奥へ)
+    for (let i = 2; i <= RENDER_DISTANCE; i++) {
         const projScale = CAMERA_DEPTH / i;
-        const intY = Math.floor(horizonY + (CAMERA_HEIGHT * projScale));
+        const y = horizonY + (CAMERA_HEIGHT * projScale);
         
-        const nextProjScale = CAMERA_DEPTH / (i - 1);
-        const intNextY = Math.ceil(horizonY + (CAMERA_HEIGHT * nextProjScale));
-        const drawH = intNextY - intY; 
+        const prevProjScale = CAMERA_DEPTH / (i + 1);
+        const prevY = horizonY + (CAMERA_HEIGHT * prevProjScale);
+        const drawH = Math.ceil(y - prevY) + 1; // +1ピクセル余分に描いて隙間を撲滅
 
-        if (intY > H) continue;
+        if (y < 0) break; // 画面上部を過ぎたら終了
 
         const curveOffsetX = 0.5 * currentCurve * i * i * projScale;
         const x = hW + curveOffsetX;
@@ -169,35 +166,51 @@ function loop() {
         // 道路のベース幅
         const roadWidth = Math.floor(1500 * projScale);
 
-        ctx.fillStyle = (i + Math.floor(travelDist)) % 6 < 3 ? '#101a0e' : '#080d07';
-        ctx.fillRect(0, intY, W, drawH); 
-
+        // --- 道路外側の地表の描画 ---
         if (roadImg.complete && roadImg.width > 0) {
+            // スクロール方向: 奥から手前
             let texY = Math.floor(i * 12 + travelDist * 80) % roadImg.height;
             if (texY < 0) texY += roadImg.height;
             
-            ctx.drawImage(
-                roadImg, 
-                0, texY, roadImg.width, 1, 
-                Math.floor(x - roadWidth/2), intY, roadWidth, drawH
-            );
+            const atlasW = roadImg.width;
+            const atlasH = 1; // 1px単位で描画
+            const sx1 = 0; // 左側1/4
+            const sx2 = atlasW * 0.75; // 右側1/4
+
+            // 左側外
+            ctx.drawImage(roadImg, sx1, texY, atlasW * 0.25, atlasH, 0, y - drawH, x - roadWidth/2, drawH);
+            // 右側外
+            ctx.drawImage(roadImg, sx2, texY, atlasW * 0.25, atlasH, x + roadWidth/2, y - drawH, W - (x + roadWidth/2), drawH);
+        }
+
+        // --- 中央の道路レイヤーの描画 (完全な平滑化アルゴリズム) ---
+        if (roadImg.complete && roadImg.width > 0) {
+            // スクロール方向: 奥から手前
+            let texY = Math.floor(i * 12 + travelDist * 80) % roadImg.height;
+            if (texY < 0) texY += roadImg.height;
+            
+            // 切り出し範囲
+            const sx = roadImg.width * 0.25; // 中央2/4
+            const sw = roadImg.width * 0.5;
+
+            ctx.drawImage(roadImg, sx, texY, sw, 1, Math.floor(x - roadWidth/2), y - drawH, roadWidth, drawH);
         }
     }
 
     // 3. スプライト更新とZソート
     sprites.forEach(s => {
         if (s.type !== 'boss') {
+            // スクロール方向: 奥から手前
             s.z -= SCROLL_SPEED;
-            if (s.z < 1) { 
+            if (s.z < 1) { // カメラを過ぎたら奥に再配置
                 s.z += RENDER_DISTANCE;
                 const side = Math.random() > 0.5 ? 1 : -1; 
                 s.xOffset = side * (1200 + Math.pow(Math.random(), 1.5) * 8000); 
             }
         } else {
-            // 【ティラノ極限接近ロジック】
-            // Z=20(中心)から ±15 の振幅。つまり、最接近時は Z=5（画面を噛み砕く距離）まで寄る！
+            // 【重要修正: はみ出さない接近ロジック Z=60 ±20】
             s.xOffset = Math.sin(animTime * 0.04) * 120; // 迫りくる巨獣の横揺れ
-            s.z = 20 + Math.sin(animTime * 0.02) * 15; 
+            s.z = 60 + Math.sin(animTime * 0.02) * 20; 
         }
     });
 
