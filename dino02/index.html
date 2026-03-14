@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>DINO-SHOOTER 2D</title>
+    <style>
+        body { margin: 0; background-color: #111; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; margin: 0 auto; background-color: #000; }
+    </style>
+</head>
+<body>
+<canvas id="gameCanvas"></canvas>
+
+<script>
+/**
+ * DINO-SHOOTER 2D Engine
+ * 状態遷移、当たり判定、パワーアップを搭載したモダンSTGフレームワーク
+ */
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+let W, H;
+
+// ゲームの状態管理 ('TITLE', 'PLAYING', 'GAMEOVER', 'ENDING')
+let gameState = 'TITLE';
+let frame = 0;
+let score = 0;
+let bgY = 0;
+
+// 入力状態
+const input = { x: 0, y: 0, isTouching: false };
+
+// エンティティリスト
+let player;
+let bullets = [];
+let enemies = [];
+let items = [];
+let particles = [];
+
+// --- 画像読み込み（準備できたらパスを合わせてください） ---
+const imgs = {};
+['bg_jungle', 'jeep', 'dino_s', 'dino_l', 'item_p'].forEach(name => {
+    imgs[name] = new Image();
+    // imgs[name].src = `img/${name}.png`; // 画像ができたらコメントアウトを外す
+});
+
+// --- クラス定義 ---
+class Player {
+    constructor() {
+        this.x = W / 2;
+        this.y = H - 100;
+        this.size = 30;
+        this.power = 1; // 1:単発, 2:2連装, 3:3方向
+        this.fireTimer = 0;
+        this.hp = 3;
+        this.invincible = 0; // 無敵時間
+    }
+    update() {
+        // 指/マウスの位置に滑らかに追従
+        if (input.isTouching) {
+            this.x += (input.x - this.x) * 0.2;
+            this.y += (input.y - 40 - this.y) * 0.2; // 指で隠れないよう少し上にずらす
+        }
+        // 画面外に出ないように制限
+        this.x = Math.max(this.size, Math.min(W - this.size, this.x));
+        this.y = Math.max(this.size, Math.min(H - this.size, this.y));
+
+        if (this.invincible > 0) this.invincible--;
+
+        // オート連射
+        this.fireTimer++;
+        if (this.fireTimer > 10) { // 10フレーム毎に発射
+            this.fire();
+            this.fireTimer = 0;
+        }
+    }
+    fire() {
+        const speed = -15;
+        if (this.power === 1) {
+            bullets.push(new Bullet(this.x, this.y - 20, 0, speed));
+        } else if (this.power === 2) {
+            bullets.push(new Bullet(this.x - 10, this.y - 20, 0, speed));
+            bullets.push(new Bullet(this.x + 10, this.y - 20, 0, speed));
+        } else {
+            bullets.push(new Bullet(this.x, this.y - 20, 0, speed));
+            bullets.push(new Bullet(this.x - 15, this.y - 20, -3, speed * 0.9)); // 左斜め
+            bullets.push(new Bullet(this.x + 15, this.y - 20, 3, speed * 0.9));  // 右斜め
+        }
+    }
+    draw() {
+        if (this.invincible > 0 && frame % 4 < 2) return; // 点滅
+        
+        if (imgs['jeep'].complete && imgs['jeep'].width > 0) {
+            ctx.drawImage(imgs['jeep'], this.x - 32, this.y - 32, 64, 64);
+        } else {
+            // 仮グラフィック（青い四角）
+            ctx.fillStyle = '#4af';
+            ctx.fillRect(this.x - 20, this.y - 30, 40, 60);
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(this.x - 10, this.y - 20, 20, 20); // 窓
+        }
+    }
+}
+
+class Bullet {
+    constructor(x, y, vx, vy) {
+        this.x = x; this.y = y;
+        this.vx = vx; this.vy = vy;
+        this.size = 5;
+        this.alive = true;
+    }
+    update() {
+        this.x += this.vx; this.y += this.vy;
+        if (this.y < -50 || this.y > H + 50 || this.x < -50 || this.x > W + 50) this.alive = false;
+    }
+    draw() {
+        ctx.fillStyle = '#ff0';
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+    }
+}
+
+class Enemy {
+    constructor(type) {
+        this.type = type; // 'small' or 'boss'
+        this.x = Math.random() * (W - 100) + 50;
+        this.y = -50;
+        this.alive = true;
+        this.timer = 0;
+
+        if (type === 'small') {
+            this.hp = 2;
+            this.size = 25;
+            this.vy = 3 + Math.random() * 3;
+            this.vx = (Math.random() - 0.5) * 2;
+        } else if (type === 'boss') {
+            this.hp = 100;
+            this.size = 100;
+            this.x = W / 2;
+            this.y = -150;
+            this.vy = 2;
+            this.vx = 0;
+        }
+    }
+    update() {
+        this.timer++;
+        
+        if (this.type === 'boss') {
+            // ボスは画面上部で止まり、左右に揺れる
+            if (this.y < H * 0.2) this.y += this.vy;
+            this.x = W / 2 + Math.sin(this.timer * 0.05) * (W * 0.3);
+        } else {
+            this.x += this.vx;
+            this.y += this.vy;
+        }
+
+        if (this.y > H + 100) this.alive = false;
+    }
+    draw() {
+        if (this.type === 'small') {
+            if (imgs['dino_s'].complete && imgs['dino_s'].width > 0) {
+                ctx.drawImage(imgs['dino_s'], this.x - 32, this.y - 32, 64, 64);
+            } else {
+                ctx.fillStyle = '#f44';
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+            }
+        } else {
+            if (imgs['dino_l'].complete && imgs['dino_l'].width > 0) {
+                ctx.drawImage(imgs['dino_l'], this.x - 128, this.y - 128, 256, 256);
+            } else {
+                ctx.fillStyle = '#a22';
+                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
+            }
+        }
+    }
+}
+
+class Item {
+    constructor(x, y) {
+        this.x = x; this.y = y;
+        this.size = 15;
+        this.vy = 2;
+        this.alive = true;
+    }
+    update() {
+        this.y += this.vy;
+        if (this.y > H + 50) this.alive = false;
+    }
+    draw() {
+        if (imgs['item_p'].complete && imgs['item_p'].width > 0) {
+            ctx.drawImage(imgs['item_p'], this.x - 16, this.y - 16, 32, 32);
+        } else {
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(this.x - 15, this.y - 15, 30, 30);
+            ctx.fillStyle = '#000'; ctx.font = '20px Arial'; ctx.textAlign = 'center'; ctx.fillText('P', this.x, this.y + 7);
+        }
+    }
+}
+
+class Particle {
+    constructor(x, y, color) {
+        this.x = x; this.y = y;
+        this.vx = (Math.random() - 0.5) * 10;
+        this.vy = (Math.random() - 0.5) * 10;
+        this.life = 20 + Math.random() * 10;
+        this.color = color;
+    }
+    update() {
+        this.x += this.vx; this.y += this.vy;
+        this.life--;
+    }
+    draw() {
+        ctx.fillStyle = this.color;
+        ctx.globalAlpha = this.life / 30;
+        ctx.beginPath(); ctx.arc(this.x, this.y, this.life * 0.3, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1.0;
+    }
+}
+
+// --- メインシステム ---
+function resize() {
+    // 縦長スマホ画面を想定したアスペクト比維持
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W;
+    canvas.height = H;
+    // PC等の場合は最大幅を制限すると綺麗です
+    if(W > 600) { W = canvas.width = 600; } 
+}
+
+function initGame() {
+    player = new Player();
+    bullets = []; enemies = []; items = []; particles = [];
+    score = 0; frame = 0;
+    gameState = 'PLAYING';
+}
+
+function spawnParticles(x, y, color, count) {
+    for(let i=0; i<count; i++) particles.push(new Particle(x, y, color));
+}
+
+function checkCollisions() {
+    // 弾 vs 敵
+    bullets.forEach(b => {
+        enemies.forEach(e => {
+            if (b.alive && e.alive) {
+                const dist = Math.hypot(b.x - e.x, b.y - e.y);
+                if (dist < b.size + e.size) {
+                    b.alive = false;
+                    e.hp--;
+                    spawnParticles(b.x, b.y, '#ff0', 3); // ヒットエフェクト
+                    if (e.hp <= 0) {
+                        e.alive = false;
+                        score += (e.type === 'boss') ? 1000 : 10;
+                        spawnParticles(e.x, e.y, '#f44', 20); // 爆発エフェクト
+                        
+                        // ボス撃破でエンディング、ザコたまにアイテムドロップ
+                        if (e.type === 'boss') {
+                            setTimeout(() => { gameState = 'ENDING'; }, 2000);
+                        } else if (Math.random() < 0.1) {
+                            items.push(new Item(e.x, e.y));
+                        }
+                    }
+                }
+            }
+        });
+    });
+
+    // プレイヤー vs アイテム
+    items.forEach(i => {
+        if (i.alive) {
+            const dist = Math.hypot(player.x - i.x, player.y - i.y);
+            if (dist < player.size + i.size) {
+                i.alive = false;
+                if(player.power < 3) player.power++; // パワーアップ！
+                score += 50;
+            }
+        }
+    });
+
+    // プレイヤー vs 敵 (ダメージ判定)
+    if (player.invincible <= 0) {
+        enemies.forEach(e => {
+            if (e.alive) {
+                const dist = Math.hypot(player.x - e.x, player.y - e.y);
+                if (dist < player.size * 0.7 + e.size * 0.7) {
+                    player.hp--;
+                    player.invincible = 60; // 1秒無敵
+                    player.power = 1; // パワーダウン
+                    spawnParticles(player.x, player.y, '#0ff', 20);
+                    if (player.hp <= 0) {
+                        gameState = 'GAMEOVER';
+                    }
+                }
+            }
+        });
+    }
+}
+
+function loop() {
+    requestAnimationFrame(loop);
+    
+    // 背景のスクロール描画
+    bgY += 2;
+    if (imgs['bg_jungle'].complete && imgs['bg_jungle'].width > 0) {
+        const bgH = W * (imgs['bg_jungle'].height / imgs['bg_jungle'].width);
+        if (bgY > bgH) bgY = 0;
+        ctx.drawImage(imgs['bg_jungle'], 0, bgY - bgH, W, bgH + 2);
+        ctx.drawImage(imgs['bg_jungle'], 0, bgY, W, bgH + 2);
+    } else {
+        // 画像がない時の仮背景（シマシマでスクロール表現）
+        ctx.fillStyle = '#131'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#141';
+        for(let i=-50; i<H; i+=100) ctx.fillRect(0, i + (bgY%100), W, 50);
+    }
+
+    // --- 状態ごとの処理 ---
+    if (gameState === 'TITLE') {
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+        ctx.font = '40px Impact, sans-serif'; ctx.fillText('DINO-CHASE 2D', W/2, H/3);
+        ctx.font = '20px sans-serif'; ctx.fillText('TAP TO START', W/2, H/2);
+        ctx.fillText('Move: Drag / Auto-Fire', W/2, H/2 + 50);
+        
+        if (input.isTouching) initGame();
+        return;
+    }
+
+    if (gameState === 'GAMEOVER') {
+        ctx.fillStyle = 'rgba(255,0,0,0.3)'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+        ctx.font = '40px Impact'; ctx.fillText('GAME OVER', W/2, H/2);
+        ctx.font = '20px sans-serif'; ctx.fillText('Score: ' + score, W/2, H/2 + 50);
+        ctx.fillText('TAP TO RETRY', W/2, H/2 + 100);
+        
+        if (input.isTouching && frame > 60) initGame(); // 少し待ってからリトライ可能に
+        frame++;
+        return;
+    }
+
+    if (gameState === 'ENDING') {
+        ctx.fillStyle = 'rgba(0,100,255,0.3)'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
+        ctx.font = '40px Impact'; ctx.fillText('STAGE CLEAR!', W/2, H/2);
+        ctx.font = '20px sans-serif'; ctx.fillText('Score: ' + score, W/2, H/2 + 50);
+        return;
+    }
+
+    // --- PLAYING 状態の更新と描画 ---
+    frame++;
+
+    // 敵の出現制御
+    if (frame < 1500) { // 序盤はザコ
+        if (frame % 40 === 0) enemies.push(new Enemy('small'));
+    } else if (frame === 1500) { // ボス出現！
+        enemies.push(new Enemy('boss'));
+    }
+
+    player.update();
+    
+    [bullets, enemies, items, particles].forEach(arr => {
+        arr.forEach(obj => obj.update());
+    });
+
+    checkCollisions();
+
+    // 死亡したオブジェクトの掃除
+    bullets = bullets.filter(b => b.alive);
+    enemies = enemies.filter(e => e.alive);
+    items = items.filter(i => i.alive);
+    particles = particles.filter(p => p.life > 0);
+
+    // 描画
+    items.forEach(i => i.draw());
+    enemies.forEach(e => e.draw());
+    player.draw();
+    bullets.forEach(b => b.draw());
+    particles.forEach(p => p.draw());
+
+    // UI描画
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.font = '20px sans-serif';
+    ctx.fillText('SCORE: ' + score, 10, 30);
+    ctx.fillText('HP: ' + '❤️'.repeat(player.hp), 10, 60);
+}
+
+// --- 入力イベント ---
+const handleInput = (e) => {
+    e.preventDefault();
+    const t = e.touches ? e.touches[0] : e;
+    const rect = canvas.getBoundingClientRect();
+    input.x = t.clientX - rect.left;
+    input.y = t.clientY - rect.top;
+    if (e.type === 'mousedown' || e.type === 'touchstart') input.isTouching = true;
+    if (e.type === 'mouseup' || e.type === 'touchend') input.isTouching = false;
+};
+window.addEventListener('mousedown', handleInput);
+window.addEventListener('mousemove', handleInput);
+window.addEventListener('mouseup', handleInput);
+window.addEventListener('touchstart', handleInput, {passive: false});
+window.addEventListener('touchmove', handleInput, {passive: false});
+window.addEventListener('touchend', handleInput);
+window.addEventListener('resize', resize);
+
+// 起動
+resize();
+requestAnimationFrame(loop);
+
+</script>
+</body>
+</html>
