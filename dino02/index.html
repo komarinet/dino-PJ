@@ -3,29 +3,30 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>DINO-SHOOTER 2D</title>
+    <title>DINO-CHASE DX</title>
     <style>
-        body { margin: 0; background-color: #111; overflow: hidden; touch-action: none; font-family: sans-serif; }
-        canvas { display: block; margin: 0 auto; background-color: #000; }
+        body { margin: 0; padding: 0; background-color: #051005; overflow: hidden; touch-action: none; font-family: sans-serif; }
+        canvas { display: block; width: 100vw; height: 100dvh; image-rendering: pixelated; }
     </style>
 </head>
 <body>
-<canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas"></canvas>
 
 <script>
 /**
- * DINO-SHOOTER 2D Engine
- * 状態遷移、当たり判定、パワーアップを搭載したモダンSTGフレームワーク
+ * DINO-CHASE DX - V6.0 Perfect Graphics Integration
+ * 開発: 先生 & Gemini (AAA Graphics Update)
  */
-const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+
+const canvas = document.getElementById('gameCanvas'), ctx = canvas.getContext('2d');
 let W, H;
 
-// ゲームの状態管理 ('TITLE', 'PLAYING', 'GAMEOVER', 'ENDING')
-let gameState = 'TITLE';
+// --- エンジン定数 ---
+let gameState = 'TITLE'; // 'TITLE', 'PLAYING', 'GAMEOVER', 'ENDING'
 let frame = 0;
 let score = 0;
-let bgY = 0;
+let bgY = 0; // スクロール位置
+const SCROLL_SPEED = 2; // 背景スクロール速度
 
 // 入力状態
 const input = { x: 0, y: 0, isTouching: false };
@@ -37,29 +38,33 @@ let enemies = [];
 let items = [];
 let particles = [];
 
-// --- 画像読み込み（準備できたらパスを合わせてください） ---
+// --- 画像アセット（準備できたらパスを合わせてください） ---
 const imgs = {};
-['bg_jungle', 'jeep', 'dino_s', 'dino_l', 'item_p'].forEach(name => {
+imgs['bg_jungle01'] = new Image(); imgs['bg_jungle01'].src = 'img/bg_jungle01.png'; // image_0.png
+imgs['jeep01'] = new Image(); imgs['jeep01'].src = 'img/jeep01.png'; // image_1.png
+imgs['velo01'] = new Image(); imgs['velo01'].src = 'img/velo01.png'; // image_2.png
+// 以前の仮グラフィック用
+const imgNames_old = ['dino_l', 'item_p'];
+imgNames_old.forEach(name => {
     imgs[name] = new Image();
-    // imgs[name].src = `img/${name}.png`; // 画像ができたらコメントアウトを外す
 });
 
 // --- クラス定義 ---
 class Player {
     constructor() {
         this.x = W / 2;
-        this.y = H - 100;
-        this.size = 30;
+        this.y = H - 150;
+        this.size = 32;
         this.power = 1; // 1:単発, 2:2連装, 3:3方向
         this.fireTimer = 0;
         this.hp = 3;
         this.invincible = 0; // 無敵時間
     }
     update() {
-        // 指/マウスの位置に滑らかに追従
         if (input.isTouching) {
+            // 指の位置に滑らかに追従
             this.x += (input.x - this.x) * 0.2;
-            this.y += (input.y - 40 - this.y) * 0.2; // 指で隠れないよう少し上にずらす
+            this.y += (input.y - 100 - this.y) * 0.2; 
         }
         // 画面外に出ないように制限
         this.x = Math.max(this.size, Math.min(W - this.size, this.x));
@@ -69,7 +74,7 @@ class Player {
 
         // オート連射
         this.fireTimer++;
-        if (this.fireTimer > 10) { // 10フレーム毎に発射
+        if (this.fireTimer > 10) { 
             this.fire();
             this.fireTimer = 0;
         }
@@ -90,14 +95,13 @@ class Player {
     draw() {
         if (this.invincible > 0 && frame % 4 < 2) return; // 点滅
         
-        if (imgs['jeep'].complete && imgs['jeep'].width > 0) {
-            ctx.drawImage(imgs['jeep'], this.x - 32, this.y - 32, 64, 64);
+        if (imgs['jeep01'].complete && imgs['jeep01'].width > 0) {
+            // アセット画像の描画 (image_1.png)
+            ctx.drawImage(imgs['jeep01'], this.x - 32, this.y - 32, 64, 64);
         } else {
             // 仮グラフィック（青い四角）
             ctx.fillStyle = '#4af';
             ctx.fillRect(this.x - 20, this.y - 30, 40, 60);
-            ctx.fillStyle = '#fff';
-            ctx.fillRect(this.x - 10, this.y - 20, 20, 20); // 窓
         }
     }
 }
@@ -111,7 +115,7 @@ class Bullet {
     }
     update() {
         this.x += this.vx; this.y += this.vy;
-        if (this.y < -50 || this.y > H + 50 || this.x < -50 || this.x > W + 50) this.alive = false;
+        if (this.y < -50 || this.y > H + 50) this.alive = false;
     }
     draw() {
         ctx.fillStyle = '#ff0';
@@ -123,7 +127,7 @@ class Enemy {
     constructor(type) {
         this.type = type; // 'small' or 'boss'
         this.x = Math.random() * (W - 100) + 50;
-        this.y = -50;
+        this.y = -100;
         this.alive = true;
         this.timer = 0;
 
@@ -157,19 +161,32 @@ class Enemy {
     }
     draw() {
         if (this.type === 'small') {
-            if (imgs['dino_s'].complete && imgs['dino_s'].width > 0) {
-                ctx.drawImage(imgs['dino_s'], this.x - 32, this.y - 32, 64, 64);
+            if (imgs['velo01'].complete && imgs['velo01'].width > 0) {
+                // アセットアニメーションの描画 (image_2.png)
+                const TOTAL_FRAMES = 8; // 1200 / 150
+                const FRAME_W = 150;
+                const FRAME_H = 600;
+                // アニメーション速度
+                const animFrame = Math.floor(frame * 0.1) % TOTAL_FRAMES;
+                const sx = animFrame * FRAME_W;
+                
+                // 描画サイズ（敵キャラとしては少し小さく）
+                const drawW = 64;
+                const drawH = 256; // 150:600の比率
+                
+                ctx.drawImage(
+                    imgs['velo01'], 
+                    sx, 0, FRAME_W, FRAME_H, // 切り出し
+                    this.x - drawW/2, this.y - drawH/2, drawW, drawH // 描画
+                );
             } else {
                 ctx.fillStyle = '#f44';
                 ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
             }
         } else {
-            if (imgs['dino_l'].complete && imgs['dino_l'].width > 0) {
-                ctx.drawImage(imgs['dino_l'], this.x - 128, this.y - 128, 256, 256);
-            } else {
-                ctx.fillStyle = '#a22';
-                ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
-            }
+            // ボス（以前の仮グラフィック）
+            ctx.fillStyle = '#a22';
+            ctx.beginPath(); ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2); ctx.fill();
         }
     }
 }
@@ -186,13 +203,8 @@ class Item {
         if (this.y > H + 50) this.alive = false;
     }
     draw() {
-        if (imgs['item_p'].complete && imgs['item_p'].width > 0) {
-            ctx.drawImage(imgs['item_p'], this.x - 16, this.y - 16, 32, 32);
-        } else {
-            ctx.fillStyle = '#0f0';
-            ctx.fillRect(this.x - 15, this.y - 15, 30, 30);
-            ctx.fillStyle = '#000'; ctx.font = '20px Arial'; ctx.textAlign = 'center'; ctx.fillText('P', this.x, this.y + 7);
-        }
+        ctx.fillStyle = '#0f0';
+        ctx.fillRect(this.x - 15, this.y - 15, 30, 30);
     }
 }
 
@@ -218,13 +230,8 @@ class Particle {
 
 // --- メインシステム ---
 function resize() {
-    // 縦長スマホ画面を想定したアスペクト比維持
-    W = window.innerWidth;
-    H = window.innerHeight;
-    canvas.width = W;
-    canvas.height = H;
-    // PC等の場合は最大幅を制限すると綺麗です
-    if(W > 600) { W = canvas.width = 600; } 
+    W = canvas.width = window.innerWidth;
+    H = canvas.height = window.innerHeight;
 }
 
 function initGame() {
@@ -244,6 +251,7 @@ function checkCollisions() {
         enemies.forEach(e => {
             if (b.alive && e.alive) {
                 const dist = Math.hypot(b.x - e.x, b.y - e.y);
+                // 敵の描画サイズに合わせた当たり判定
                 if (dist < b.size + e.size) {
                     b.alive = false;
                     e.hp--;
@@ -299,25 +307,57 @@ function checkCollisions() {
 function loop() {
     requestAnimationFrame(loop);
     
-    // 背景のスクロール描画
-    bgY += 2;
-    if (imgs['bg_jungle'].complete && imgs['bg_jungle'].width > 0) {
-        const bgH = W * (imgs['bg_jungle'].height / imgs['bg_jungle'].width);
-        if (bgY > bgH) bgY = 0;
-        ctx.drawImage(imgs['bg_jungle'], 0, bgY - bgH, W, bgH + 2);
-        ctx.drawImage(imgs['bg_jungle'], 0, bgY, W, bgH + 2);
+    // --- 【重要】鏡合わせシームレス背景描画 (image_0.png) ---
+    if (imgs['bg_jungle01'].complete && imgs['bg_jungle01'].width > 0) {
+        const bg = imgs['bg_jungle01'];
+        // 画像を画面幅にフィットさせるスケール
+        const projScale = W / bg.width;
+        // スケール後の画像の高さ
+        const bgH_sc = bg.height * projScale;
+        
+        // スクロールオフセット（アセット上のY座標）
+        let yOff = (bgY % bgH_sc) / projScale;
+        if (yOff < 0) yOff += bg.height;
+
+        // 画面上での通常描画位置
+        let dy1 = yOff * projScale;
+        // 通常描画の切り出し高さ
+        let sh1 = bg.height - yOff;
+        // 通常描画の描画高さ
+        let dh1 = sh1 * projScale;
+
+        // 1枚目（通常、下部へ去っていく）を描画
+        ctx.drawImage(bg, 0, yOff, bg.width, sh1, 0, dy1, W, dh1);
+
+        // 2枚目（上下反転、繋げて描画）
+        // 切り出し高さ（yOff分）
+        let sh2 = yOff;
+        // 描画高さ
+        let dh2 = yOff * projScale;
+        
+        ctx.save();
+        ctx.translate(0, dh2); // ピボットを下に
+        ctx.scale(1, -1); // 上下反転
+        // 画像の上部 sh2 分を切り出して、dh2 の高さへ描画
+        ctx.drawImage(bg, 0, 0, bg.width, sh2, 0, 0, W, dh2);
+        ctx.restore();
+        
+        // シームレスループのために bgY を更新
+        bgY += SCROLL_SPEED;
     } else {
-        // 画像がない時の仮背景（シマシマでスクロール表現）
-        ctx.fillStyle = '#131'; ctx.fillRect(0, 0, W, H);
-        ctx.fillStyle = '#141';
-        for(let i=-50; i<H; i+=100) ctx.fillRect(0, i + (bgY%100), W, 50);
+        // 画像がない時の仮背景
+        ctx.fillStyle = '#0a140a'; ctx.fillRect(0, 0, W, H);
     }
 
     // --- 状態ごとの処理 ---
     if (gameState === 'TITLE') {
         ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-        ctx.font = '40px Impact, sans-serif'; ctx.fillText('DINO-CHASE 2D', W/2, H/3);
+        ctx.font = 'Impact, sans-serif'; 
+        // 画面サイズに合わせたフォントサイズ調整
+        const fontSize = Math.max(40, W * 0.1);
+        ctx.font = fontSize + 'px Impact, sans-serif';
+        ctx.fillText('DINO-CHASE DX', W/2, H/3);
         ctx.font = '20px sans-serif'; ctx.fillText('TAP TO START', W/2, H/2);
         ctx.fillText('Move: Drag / Auto-Fire', W/2, H/2 + 50);
         
@@ -328,11 +368,13 @@ function loop() {
     if (gameState === 'GAMEOVER') {
         ctx.fillStyle = 'rgba(255,0,0,0.3)'; ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-        ctx.font = '40px Impact'; ctx.fillText('GAME OVER', W/2, H/2);
-        ctx.font = '20px sans-serif'; ctx.fillText('Score: ' + score, W/2, H/2 + 50);
-        ctx.fillText('TAP TO RETRY', W/2, H/2 + 100);
+        const fontSize = Math.max(40, W * 0.1);
+        ctx.font = fontSize + 'px Impact';
+        ctx.fillText('GAME OVER', W/2, H/2);
+        ctx.font = '20px sans-serif'; ctx.fillText('Score: ' + score, W/2, H/2 + fontSize * 0.6);
+        ctx.fillText('TAP TO RETRY', W/2, H/2 + fontSize * 0.6 + 50);
         
-        if (input.isTouching && frame > 60) initGame(); // 少し待ってからリトライ可能に
+        if (input.isTouching && frame > 60) initGame(); 
         frame++;
         return;
     }
@@ -340,8 +382,10 @@ function loop() {
     if (gameState === 'ENDING') {
         ctx.fillStyle = 'rgba(0,100,255,0.3)'; ctx.fillRect(0, 0, W, H);
         ctx.fillStyle = '#fff'; ctx.textAlign = 'center';
-        ctx.font = '40px Impact'; ctx.fillText('STAGE CLEAR!', W/2, H/2);
-        ctx.font = '20px sans-serif'; ctx.fillText('Score: ' + score, W/2, H/2 + 50);
+        const fontSize = Math.max(40, W * 0.1);
+        ctx.font = fontSize + 'px Impact';
+        ctx.fillText('STAGE CLEAR!', W/2, H/2);
+        ctx.font = '20px sans-serif'; ctx.fillText('Score: ' + score, W/2, H/2 + fontSize * 0.6);
         return;
     }
 
@@ -349,9 +393,9 @@ function loop() {
     frame++;
 
     // 敵の出現制御
-    if (frame < 1500) { // 序盤はザコ
-        if (frame % 40 === 0) enemies.push(new Enemy('small'));
-    } else if (frame === 1500) { // ボス出現！
+    if (frame < 2000) { // ザコ出現時間を少し延長
+        if (frame % 30 === 0) enemies.push(new Enemy('small')); // 出現頻度をアップ
+    } else if (frame === 2000) { 
         enemies.push(new Enemy('boss'));
     }
 
