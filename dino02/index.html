@@ -3,117 +3,54 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>きょうりゅうはっくつゲーム - 大だっしゅつVer.</title>
+    <title>きょうりゅうはっくつゲーム - マグマ回避Ver.</title>
     <style>
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', sans-serif;
-            background-color: #f4e8d3;
-            text-align: center;
-            color: #333;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            min-height: 100vh;
-            padding: 10px;
-            overscroll-behavior: none;
+            background-color: #f4e8d3; text-align: center; color: #333;
+            display: flex; flex-direction: column; align-items: center;
+            min-height: 100vh; padding: 10px; overscroll-behavior: none;
         }
         
         .screen {
-            display: none;
-            width: 100%;
-            max-width: 500px;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            flex-grow: 1;
+            display: none; width: 100%; max-width: 500px;
+            flex-direction: column; align-items: center; justify-content: center; flex-grow: 1;
         }
-        .screen.active {
-            display: flex;
-        }
+        .screen.active { display: flex; }
 
         .btn {
-            border: none;
-            padding: 12px 20px;
-            font-size: 16px;
-            border-radius: 25px;
-            cursor: pointer;
-            font-weight: bold;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            transition: transform 0.1s, background-color 0.2s;
-            margin: 10px;
-            width: 80%;
-            max-width: 250px;
+            border: none; padding: 12px 20px; font-size: 16px; border-radius: 25px;
+            cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
+            transition: transform 0.1s, background-color 0.2s; margin: 10px; width: 80%; max-width: 250px;
         }
-        .btn:active {
-            transform: translateY(2px);
-            box-shadow: 0 2px 3px rgba(0,0,0,0.2);
-        }
+        .btn:active { transform: translateY(2px); box-shadow: 0 2px 3px rgba(0,0,0,0.2); }
         .btn-primary { background-color: #d35400; color: white; }
         .btn-secondary { background-color: #f39c12; color: white; }
         .btn-skip { background-color: #bdc3c7; color: #333; width: auto; padding: 8px 15px; font-size: 14px; position: absolute; top: 10px; right: 10px; }
 
         #title-logo {
-            width: 100%;
-            max-width: 350px;
-            height: auto;
-            border-radius: 15px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-            background-color: #ccc;
+            width: 100%; max-width: 350px; height: auto; border-radius: 15px;
+            margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); background-color: #ccc;
         }
-        h1 {
-            color: #d35400;
-            font-size: 24px;
-            margin-bottom: 20px;
-            line-height: 1.5;
-        }
+        h1 { color: #d35400; font-size: 24px; margin-bottom: 20px; line-height: 1.5; }
 
         #tutorial-text-box {
-            background-color: #fff;
-            border: 3px solid #d35400;
-            border-radius: 10px;
-            padding: 15px;
-            margin-bottom: 20px;
-            width: 90%;
-            font-size: 16px;
-            font-weight: bold;
-            line-height: 1.8;
-            min-height: 100px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            background-color: #fff; border: 3px solid #d35400; border-radius: 10px;
+            padding: 15px; margin-bottom: 20px; width: 90%; font-size: 16px; font-weight: bold;
+            line-height: 1.8; min-height: 100px; display: flex; align-items: center; justify-content: center;
         }
         #tut-board {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 5px;
-            width: 180px;
-            height: 180px;
-            background-color: #8d6e63;
-            padding: 5px;
-            border-radius: 10px;
-            margin-bottom: 20px;
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px;
+            width: 180px; height: 180px; background-color: #8d6e63; padding: 5px;
+            border-radius: 10px; margin-bottom: 20px;
         }
 
-        /* ゲーム本編画面 - レイアウト変更 */
         #game-layout {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            width: 100%;
+            display: flex; flex-direction: column; align-items: center; width: 100%;
         }
         @media (min-width: 600px) {
-            #game-layout {
-                flex-direction: row;
-                justify-content: space-around;
-                align-items: flex-start;
-                max-width: 800px;
-            }
+            #game-layout { flex-direction: row; justify-content: space-around; align-items: flex-start; max-width: 800px; }
         }
         header { width: 100%; margin-bottom: 10px; flex-shrink: 0; }
         #top-image { max-width: 60px; height: auto; }
@@ -123,119 +60,53 @@
         #controls { display: flex; gap: 10px; margin-bottom: 10px; width: 100%; justify-content: center; }
         #controls .btn { width: auto; margin: 0; padding: 10px 15px; font-size: 14px; }
 
-        .game-main {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            flex-grow: 1;
-        }
+        .game-main { display: flex; flex-direction: column; align-items: center; flex-grow: 1; }
         .board-container {
-            width: 100%;
-            max-width: 350px;
-            aspect-ratio: 1 / 1;
-            background-color: #8d6e63;
-            padding: 5px;
-            border-radius: 10px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            margin-bottom: 20px;
+            width: 100%; max-width: 350px; aspect-ratio: 1 / 1;
+            background-color: #8d6e63; padding: 5px; border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; margin-bottom: 20px;
         }
-        #game-board {
-            display: grid;
-            grid-template-columns: repeat(5, 1fr);
-            gap: 4px;
-            width: 100%;
-            height: 100%;
-        }
+        #game-board { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; width: 100%; height: 100%; }
         .cell {
-            background-color: #d7ccc8;
-            border: 2px solid #a1887f;
-            border-radius: 4px;
-            font-size: 6vw;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            user-select: none;
-            -webkit-tap-highlight-color: transparent;
-            transition: background-color 0.2s, color 0.2s;
+            background-color: #d7ccc8; border: 2px solid #a1887f; border-radius: 4px;
+            font-size: 6vw; font-weight: bold; display: flex; align-items: center; justify-content: center;
+            cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; transition: background-color 0.2s, color 0.2s;
         }
         @media (min-width: 500px) { .cell { font-size: 30px; } }
-        .cell.revealed {
-            background-color: #efebe9;
-            border: 1px solid #d7ccc8;
-            cursor: default;
-        }
-        .bone-img { width: 80%; height: 80%; object-fit: contain; }
+        .cell.revealed { background-color: #efebe9; border: 1px solid #d7ccc8; cursor: default; }
+        
+        /* マグマのスタイル */
+        .magma { font-size: 8vw; }
+        @media (min-width: 500px) { .magma { font-size: 40px; } }
 
-        /* 化石ディスプレイスペース */
+        /* 化石ディスプレイスペース（発掘進捗） */
         #fossil-display {
-            width: 100%;
-            max-width: 250px;
-            background-color: #fff;
-            border: 4px solid #8d6e63;
-            border-radius: 15px;
-            padding: 15px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2);
-            margin-bottom: 20px;
+            width: 100%; max-width: 250px; background-color: #fff; border: 4px solid #8d6e63;
+            border-radius: 15px; padding: 15px; display: flex; flex-direction: column; align-items: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2); margin-bottom: 20px; position: relative;
         }
-        #fossil-display img {
-            width: 100%;
-            height: auto;
-            object-fit: contain;
-            transition: transform 0.3s ease-out;
+        #large-fossil-img {
+            width: 100%; height: auto; object-fit: contain;
+            /* 最初は暗くて色あせている（土に埋まっている表現） */
+            filter: brightness(0.2) grayscale(0.8);
+            transition: filter 0.5s ease-out, transform 0.5s ease;
         }
-        /* 化石が光る演出 */
-        #fossil-display.flash img {
-            transform: scale(1.1);
-            filter: brightness(1.3) drop-shadow(0 0 10px #f1c40f);
-        }
-        #fossil-counter {
-            font-size: 18px;
-            font-weight: bold;
-            color: #d35400;
-            margin-top: 10px;
-        }
+        #progress-text { font-size: 16px; font-weight: bold; color: #8d6e63; margin-top: 10px; }
 
-        /* 復活シーンコンテナ */
+        /* 復活シーン */
         #revival-scene {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #000;
-            z-index: 90;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            opacity: 0;
-            transition: opacity 1s ease-in-out;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000; z-index: 90; flex-direction: column; justify-content: center; align-items: center;
+            opacity: 0; transition: opacity 1s ease-in-out;
         }
         #revival-scene.active { display: flex; opacity: 1; }
-        #revival-image {
-            width: 100%;
-            max-width: 400px;
-            height: auto;
-            opacity: 0;
-            transition: opacity 2s ease-in-out, transform 0.5s ease;
-        }
+        #revival-image { width: 100%; max-width: 400px; height: auto; opacity: 0; transition: opacity 2s ease-in-out, transform 0.5s ease; }
         #revival-image.show { opacity: 1; }
         
         /* 動画コンテナ */
         #video-container {
-            display: none;
-            position: fixed;
-            top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #000;
-            z-index: 100;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: #000; z-index: 100; flex-direction: column; justify-content: center; align-items: center;
         }
         video { width: 100%; height: auto; max-height: 85vh; object-fit: contain; }
         #close-video-btn { margin-top: 20px; }
@@ -254,9 +125,7 @@
 
     <div id="screen-tutorial" class="screen">
         <button class="btn btn-skip" onclick="startGame()">スキップ ➡</button>
-        <div id="tutorial-text-box">
-            <span id="tut-text"></span>
-        </div>
+        <div id="tutorial-text-box"><span id="tut-text"></span></div>
         <div id="tut-board">
             <div class="cell" id="tut-cell-0"></div><div class="cell" id="tut-cell-1"></div><div class="cell" id="tut-cell-2"></div>
             <div class="cell" id="tut-cell-3"></div><div class="cell" id="tut-cell-4"></div><div class="cell" id="tut-cell-5"></div>
@@ -269,14 +138,14 @@
         <div id="game-layout">
             <div id="fossil-display">
                 <img id="large-fossil-img" src="img/tyrano_born.png" alt="大きな化石">
-                <p id="fossil-counter"><ruby>見<rt>み</rt></ruby>つけたピース: 0 / 4</p>
+                <p id="progress-text"><ruby>発掘<rt>はっくつ</rt></ruby>メーター: 0%</p>
             </div>
             
             <div class="game-main">
                 <header>
                     <img id="top-image" src="img/tyrano.png" alt="アイコン">
                     <h2>きょうりゅう<ruby>発掘<rt>はっくつ</rt></ruby>ゲーム！</h2>
-                    <p id="message"><ruby>数字<rt>すうじ</rt></ruby>は ヒントだよ。かくれている<br>４つの <ruby>化石<rt>かせき</rt></ruby>を ぜんぶみつけよう！</p>
+                    <p id="message"><ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>危険<rt>きけん</rt></ruby>なマグマをよけろ！<br><ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ぜんぶほればクリアだ！</p>
                 </header>
                 <div id="controls">
                     <button id="reset-btn" class="btn btn-primary" onclick="initGame()">やりなおす</button>
@@ -300,7 +169,6 @@
     </div>
 
     <script>
-        // --- 画面切り替え ---
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
@@ -311,78 +179,30 @@
         const tutTextElement = document.getElementById('tut-text');
         
         const tutorialSteps = [
-            {
-                text: "土(つち)の 下(した)に ねむる<br><ruby>化石<rt>かせき</rt></ruby>を さがそう！",
-                action: () => { resetTutBoard(); }
-            },
-            {
-                text: "<ruby>土<rt>つち</rt></ruby>をほったら 『１』が でたよ。<br>これは ヒントだよ！",
-                action: () => {
-                    let c = document.getElementById('tut-cell-4');
-                    c.classList.add('revealed');
-                    c.style.color = '#0000FF';
-                    c.textContent = '1';
-                }
-            },
-            {
-                text: "『１』の まわりの どこかに<br><ruby>化石<rt>かせき</rt></ruby>が １つあるよ。",
-                action: () => {
-                    for(let i=0; i<9; i++) {
-                        if(i !== 4) document.getElementById('tut-cell-'+i).style.borderColor = '#e74c3c';
-                    }
-                }
-            },
-            {
-                text: "あ！ここに <ruby>化石<rt>かせき</rt></ruby>があった！<br><ruby>大発見<rt>だいはっけん</rt></ruby>！",
-                action: () => {
-                    for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; }
-                    let bomb = document.getElementById('tut-cell-0');
-                    bomb.classList.add('revealed');
-                    bomb.innerHTML = '<img src="img/tyrano_born.png" class="bone-img">';
-                    bomb.style.backgroundColor = '#fff9c4'; // 発見した喜びの色
-                }
-            },
-            {
-                text: "４つの <ruby>化石<rt>かせき</rt></ruby>を ぜんぶあつめて<br>ティラノサウルスを 復活(ふっかつ)させよう！",
-                action: () => { document.getElementById('tut-next-btn').textContent = "あそぶ！"; }
-            }
+            { text: "<ruby>土<rt>つち</rt></ruby>の 下(した)には <ruby>危険<rt>きけん</rt></ruby>なマグマが<br>かくれている ことがあるよ！", action: () => { resetTutBoard(); } },
+            { text: "まずは まん中の <ruby>土<rt>つち</rt></ruby>を<br>ほってみよう！", action: () => { let c = document.getElementById('tut-cell-4'); c.classList.add('revealed'); c.style.color = '#0000FF'; c.textContent = '1'; } },
+            { text: "『１』が でたね！<br>まわりの どこかに １つだけ<br>マグマが かくれているよ。", action: () => { for(let i=0; i<9; i++) { if(i !== 4) document.getElementById('tut-cell-'+i).style.borderColor = '#e74c3c'; } } },
+            { text: "あ！マグマを ほってしまった！<br>これだと <ruby>化石<rt>かせき</rt></ruby>が もえちゃうよ。", action: () => { for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; } let bomb = document.getElementById('tut-cell-0'); bomb.classList.add('revealed'); bomb.innerHTML = '<span class="magma">🌋</span>'; bomb.style.backgroundColor = '#ffcdd2'; } },
+            { text: "マグマをよけて、<ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を<br>ぜんぶほれば <ruby>発掘<rt>はっくつ</rt></ruby>クリアだ！", action: () => { [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; } }
         ];
 
-        function startTutorial() {
-            showScreen('screen-tutorial');
-            tutStep = 0;
-            document.getElementById('tut-next-btn').textContent = "つぎへ";
-            playTutStep(tutStep);
-        }
-
+        function startTutorial() { showScreen('screen-tutorial'); tutStep = 0; document.getElementById('tut-next-btn').textContent = "つぎへ"; playTutStep(tutStep); }
         function playTutStep(step) { tutTextElement.innerHTML = tutorialSteps[step].text; tutorialSteps[step].action(); }
-
-        function nextTutorial() {
-            tutStep++;
-            if (tutStep >= tutorialSteps.length) { startGame(); } else { playTutStep(tutStep); }
-        }
-
-        function resetTutBoard() {
-            for(let i=0; i<9; i++) {
-                let c = document.getElementById('tut-cell-'+i);
-                c.className = 'cell';
-                c.innerHTML = '';
-                c.style.borderColor = '#a1887f';
-                c.style.backgroundColor = '#d7ccc8';
-            }
-        }
+        function nextTutorial() { tutStep++; if (tutStep >= tutorialSteps.length) { startGame(); } else { playTutStep(tutStep); } }
+        function resetTutBoard() { for(let i=0; i<9; i++) { let c = document.getElementById('tut-cell-'+i); c.className = 'cell'; c.innerHTML = ''; c.style.borderColor = '#a1887f'; c.style.backgroundColor = '#d7ccc8'; } }
 
         // --- ゲーム本編 ---
         const ROWS = 5;
         const COLS = 5;
-        const FOSSIL_COUNT = 4;
+        const MINES_COUNT = 4;
+        const TARGET_SAFE_CELLS = (ROWS * COLS) - MINES_COUNT;
         let board = [];
-        let fossilsFound = 0;
+        let revealedCount = 0;
         let gameOver = false;
 
         const boardElement = document.getElementById('game-board');
-        const fossilDisplay = document.getElementById('fossil-display');
-        const fossilCounterElement = document.getElementById('fossil-counter');
+        const largeFossilImg = document.getElementById('large-fossil-img');
+        const progressText = document.getElementById('progress-text');
         const revivalScene = document.getElementById('revival-scene');
         const revivalImage = document.getElementById('revival-image');
         const videoContainer = document.getElementById('video-container');
@@ -392,60 +212,46 @@
         function startGame() { showScreen('screen-game'); initGame(); }
 
         function initGame() {
-            board = [];
-            fossilsFound = 0;
-            gameOver = false;
-
-            videoContainer.style.display = 'none';
-            revivalScene.classList.remove('active');
-            revivalImage.classList.remove('show');
-            winVideo.pause();
-            winVideo.currentTime = 0;
-            updateFossilCounter();
+            board = []; revealedCount = 0; gameOver = false;
+            videoContainer.style.display = 'none'; revivalScene.classList.remove('active'); revivalImage.classList.remove('show');
+            winVideo.pause(); winVideo.currentTime = 0;
+            
+            // 化石の見た目を初期化（暗くする）
+            updateFossilVisuals();
+            messageElement.innerHTML = "<ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>危険<rt>きけん</rt></ruby>なマグマをよけろ！<br><ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ぜんぶほればクリアだ！";
             boardElement.innerHTML = '';
 
             for (let r = 0; r < ROWS; r++) {
                 let row = [];
-                for (let c = 0; c < COLS; c++) {
-                    row.push({ isFossil: false, revealed: false, neighborFossils: 0 });
-                }
+                for (let c = 0; c < COLS; c++) { row.push({ isMine: false, revealed: false, neighborMines: 0 }); }
                 board.push(row);
             }
 
-            let placedFossils = 0;
-            while (placedFossils < FOSSIL_COUNT) {
-                let r = Math.floor(Math.random() * ROWS);
-                let c = Math.floor(Math.random() * COLS);
-                if (!board[r][c].isFossil) {
-                    board[r][c].isFossil = true;
-                    placedFossils++;
-                }
+            let placedMines = 0;
+            while (placedMines < MINES_COUNT) {
+                let r = Math.floor(Math.random() * ROWS); let c = Math.floor(Math.random() * COLS);
+                if (!board[r][c].isMine) { board[r][c].isMine = true; placedMines++; }
             }
 
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
-                    if (!board[r][c].isFossil) {
+                    if (!board[r][c].isMine) {
                         let count = 0;
                         for (let dr = -1; dr <= 1; dr++) {
                             for (let dc = -1; dc <= 1; dc++) {
-                                let nr = r + dr;
-                                let nc = c + dc;
-                                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isFossil) {
-                                    count++;
-                                }
+                                let nr = r + dr; let nc = c + dc;
+                                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) { count++; }
                             }
                         }
-                        board[r][c].neighborFossils = count;
+                        board[r][c].neighborMines = count;
                     }
                 }
             }
 
             for (let r = 0; r < ROWS; r++) {
                 for (let c = 0; c < COLS; c++) {
-                    let cellDiv = document.createElement('div');
-                    cellDiv.classList.add('cell');
-                    cellDiv.dataset.r = r;
-                    cellDiv.dataset.c = c;
+                    let cellDiv = document.createElement('div'); cellDiv.classList.add('cell');
+                    cellDiv.dataset.r = r; cellDiv.dataset.c = c;
                     cellDiv.addEventListener('click', () => handleCellClick(r, c));
                     boardElement.appendChild(cellDiv);
                 }
@@ -457,89 +263,109 @@
 
             let cellData = board[r][c];
             cellData.revealed = true;
+            revealedCount++;
 
             let cellDiv = boardElement.children[r * COLS + c];
             cellDiv.classList.add('revealed');
 
-            if (cellData.isFossil) {
-                // 化石を発見！
-                fossilsFound++;
-                cellDiv.innerHTML = '<img src="img/tyrano_born.png" class="bone-img" alt="化石">';
-                cellDiv.style.backgroundColor = '#fff9c4';
-                flashFossilDisplay();
-                updateFossilCounter();
+            if (cellData.isMine) {
+                // マグマを掘ってしまった（ゲームオーバー）
+                gameOver = true;
+                cellDiv.innerHTML = '<span class="magma">🌋</span>';
+                cellDiv.style.backgroundColor = '#ffcdd2';
+                messageElement.innerHTML = "<span style='color:red;'>あ！マグマが ふきだした！<br>「やりなおす」をおしてね。</span>";
                 
-                checkWin();
+                // 化石が燃え尽きる演出（真っ黒になる）
+                largeFossilImg.style.filter = "brightness(0) grayscale(1)";
+                largeFossilImg.style.transform = "scale(0.9)";
+                progressText.innerHTML = "<span style='color:red;'>しっぱい...</span>";
+                progressText.style.color = "red";
+                
+                revealAllMines();
             } else {
-                if (cellData.neighborFossils > 0) {
+                // 安全な土を掘った（化石の発掘が進む）
+                updateFossilVisuals();
+
+                if (cellData.neighborMines > 0) {
                     const colors = ["", "#0000FF", "#008000", "#FF0000", "#800080", "#800000", "#40E0D0", "#000000", "#808080"];
-                    cellDiv.style.color = colors[cellData.neighborFossils];
-                    cellDiv.textContent = cellData.neighborFossils;
+                    cellDiv.style.color = colors[cellData.neighborMines];
+                    cellDiv.textContent = cellData.neighborMines;
                 } else {
                     for (let dr = -1; dr <= 1; dr++) {
                         for (let dc = -1; dc <= 1; dc++) {
-                            let nr = r + dr;
-                            let nc = c + dc;
+                            let nr = r + dr; let nc = c + dc;
                             if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
-                                handleCellClick(nr, nc);
+                                // 自動で広がる時はアニメーションを少し遅延させると綺麗
+                                setTimeout(() => handleCellClick(nr, nc), 50);
                             }
+                        }
+                    }
+                }
+                checkWin();
+            }
+        }
+
+        function revealAllMines() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (board[r][c].isMine) {
+                        let cellDiv = boardElement.children[r * COLS + c];
+                        if (!cellDiv.classList.contains('revealed')) {
+                            cellDiv.classList.add('revealed');
+                            cellDiv.innerHTML = '<span class="magma">🌋</span>';
                         }
                     }
                 }
             }
         }
 
-        // 化石ディスプレイスペースを光らせる演出
-        function flashFossilDisplay() {
-            fossilDisplay.classList.add('flash');
-            setTimeout(() => fossilDisplay.classList.remove('flash'), 300);
+        // 掘った数に応じて化石の画像を明るくする
+        function updateFossilVisuals() {
+            if(gameOver) return;
+            // 0(未発掘) 〜 1(すべて発掘) の割合
+            let progress = revealedCount / TARGET_SAFE_CELLS;
+            let percent = Math.floor(progress * 100);
+            
+            progressText.innerHTML = `<ruby>発掘<rt>はっくつ</rt></ruby>メーター: ${percent}%`;
+            progressText.style.color = "#8d6e63";
+
+            // brightness は 0.2(暗い) から 1.0(元の明るさ) へ
+            // grayscale は 0.8(色あせ) から 0.0(フルカラー) へ
+            let brightness = 0.2 + (0.8 * progress);
+            let grayscale = 0.8 - (0.8 * progress);
+            
+            largeFossilImg.style.filter = `brightness(${brightness}) grayscale(${grayscale})`;
+            largeFossilImg.style.transform = "scale(1)";
         }
 
-        function updateFossilCounter() {
-            fossilCounterElement.innerHTML = `<ruby>見<rt>み</rt></ruby>つけたピース: ${fossilsFound} / ${FOSSIL_COUNT}`;
-        }
-
-        // 勝利判定
         function checkWin() {
-            if (fossilsFound === FOSSIL_COUNT) {
+            if (revealedCount === TARGET_SAFE_CELLS) {
                 gameOver = true;
+                messageElement.innerHTML = "<span style='color:#d35400; font-size:20px;'><ruby>発掘<rt>はっくつ</rt></ruby>コンプリート！！</span>";
                 
-                // 1.5秒待ってから復活シーンを開始
+                // クリア時、化石がピカッと光る
+                largeFossilImg.style.filter = "brightness(1.2) drop-shadow(0 0 10px #f1c40f)";
+                progressText.innerHTML = "<span style='color:#d35400;'>コンプリート！</span>";
+
                 setTimeout(startRevivalSequence, 1500);
             }
         }
 
-        // 復活シーケンス
         function startRevivalSequence() {
-            revivalScene.classList.add('active'); // 黒画面フェードイン
-            
+            revivalScene.classList.add('active'); 
+            setTimeout(() => { revivalImage.classList.add('show'); }, 1000);
             setTimeout(() => {
-                revivalImage.classList.add('show'); // 本体画像ふんわり表示
-            }, 1000);
-
-            // 本体画像が表示されて2秒後に、ガオー！と動画へ
-            setTimeout(() => {
-                // ちょっと振動させる演出
                 revivalImage.style.transform = "scale(1.1) rotate(5deg)";
                 setTimeout(() => revivalImage.style.transform = "scale(1) rotate(0deg)", 200);
-
                 setTimeout(() => {
-                    videoContainer.style.display = 'flex';
-                    revivalScene.classList.remove('active'); // 復活シーンは消す
+                    videoContainer.style.display = 'flex'; revivalScene.classList.remove('active');
                     winVideo.muted = true;
-                    winVideo.play().then(() => winVideo.muted = false)
-                                  .catch(error => { winVideo.muted = false; winVideo.controls = true; });
+                    winVideo.play().then(() => winVideo.muted = false).catch(e => { winVideo.muted = false; winVideo.controls = true; });
                 }, 500);
-
             }, 3000);
         }
 
-        function closeVideo() {
-            winVideo.pause();
-            winVideo.muted = false;
-            videoContainer.style.display = 'none';
-            initGame();
-        }
+        function closeVideo() { winVideo.pause(); winVideo.muted = false; videoContainer.style.display = 'none'; initGame(); }
     </script>
 </body>
 </html>
