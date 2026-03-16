@@ -3,96 +3,251 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta http-equiv="refresh" content="5;url=https://komarinet.github.io/dino-PJ/">
-    <title>迷子になったかな？</title>
+    <title>きょうりゅうはっくつゲーム</title>
     <style>
         body {
-            background-color: #000;
-            color: #2e7d32; /* ジャングルグリーン */
-            font-family: 'Courier New', Courier, monospace;
+            font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', sans-serif;
+            background-color: #f4e8d3;
+            text-align: center;
+            margin: 0;
+            padding: 20px;
+            color: #333;
+        }
+        h1 {
+            color: #d35400;
+            font-size: 24px;
+        }
+        p {
+            font-size: 14px;
+            font-weight: bold;
+        }
+        /* トップの画像表示用 */
+        #top-image {
+            max-width: 150px;
+            margin-bottom: 10px;
+        }
+        /* ゲーム盤のスタイル */
+        #game-board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 5px;
+            max-width: 350px;
+            margin: 20px auto;
+            background-color: #8d6e63;
+            padding: 10px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        .cell {
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            background-color: #d7ccc8;
+            border: 2px solid #a1887f;
+            border-radius: 5px;
+            font-size: 24px;
+            font-weight: bold;
             display: flex;
-            flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            margin: 0;
-            text-align: center;
+            cursor: pointer;
+            user-select: none;
+        }
+        .cell:active {
+            background-color: #bcaaa4;
+        }
+        .cell.revealed {
+            background-color: #efebe9;
+            border: 2px solid #d7ccc8;
+            cursor: default;
+        }
+        /* 化石（地雷）の画像スタイル */
+        .bone-img {
+            width: 80%;
+            height: 80%;
+            object-fit: contain;
+        }
+        /* クリア後の動画コンテナ */
+        #video-container {
+            display: none;
+            max-width: 500px;
+            margin: 20px auto;
+            background: #000;
+            border: 5px solid #d35400;
+            border-radius: 10px;
             overflow: hidden;
         }
-
-        .message {
-            font-size: 24px;
-            margin-bottom: 20px;
+        video {
+            width: 100%;
+            display: block;
         }
-
-        .countdown {
-            color: #ff8c00; /* アクセントオレンジ */
-            font-size: 18px;
-            margin-bottom: 30px;
-        }
-
-        pre {
-            font-size: 12px;
-            line-height: 1.2;
-            color: #ff8c00;
-            text-shadow: 0 0 5px rgba(255, 140, 0, 0.5);
-        }
-
-        ruby rt {
-            font-size: 0.6em;
-            color: #888;
-        }
-
-        a {
-            color: #2e7d32;
-            text-decoration: underline;
+        button.reset-btn {
+            background-color: #d35400;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
             margin-top: 20px;
+            font-weight: bold;
         }
     </style>
 </head>
 <body>
 
-    <div class="message">
-        ここには <ruby>何<rt>なに</rt></ruby>も ないよ！
+    <img id="top-image" src="img/tyrano.png" alt="ティラノサウルス">
+    <h1>きょうりゅうはっくつゲーム！</h1>
+    <p id="message">数字をヒントに、化石(かせき)をよけて土をほろう！<br>ぜんぶほれるとティラノサウルスがふっかつするよ！</p>
+
+    <div id="game-board"></div>
+
+    <div id="video-container">
+        <h2 style="color: white; margin: 10px 0;">ティラノサウルス ふっかつ！！</h2>
+        <video id="win-video" controls playsinline>
+            <source src="img/tyrano01.mp4" type="video/mp4">
+            お使いのブラウザは動画に対応していません。
+        </video>
     </div>
 
-    <div class="countdown">
-        <span id="timer">5</span><ruby>秒<rt>びょう</rt></ruby><ruby>後<rt>ご</rt></ruby>に <ruby>最初<rt>さいしょ</rt></ruby>の <ruby>画面<rt>がめん</rt></ruby>に <ruby>戻<rt>もど</rt></ruby>るよ。
-    </div>
-
-    <pre>
-                                    ██████████████                
-                                  ██            ██              
-                                ██    ██      ██                
-                              ██      ██      ██                
-                            ██          ██████                  
-                          ██          ██                        
-        ██████████████████          ██                          
-      ██                            ██                          
-    ██                              ██                          
-  ██          ██████████████████████                            
-  ██        ██                                                  
-  ██        ██                                                  
-  ██      ██                                                    
-  ██    ██                                                      
-  ██  ██                                                        
-  ████                                                          
-    </pre>
-
-    <a href="https://komarinet.github.io/dino-PJ/"><ruby>今<rt>いま</rt></ruby>すぐ <ruby>戻<rt>もど</rt></ruby>る</a>
+    <button class="reset-btn" onclick="initGame()">もういちどあそぶ</button>
 
     <script>
-        // カウントダウン表示のスクリプト
-        let timeLeft = 5;
-        const timerElement = document.getElementById('timer');
-        
-        const countdown = setInterval(() => {
-            timeLeft--;
-            timerElement.textContent = timeLeft;
-            if (timeLeft <= 0) {
-                clearInterval(countdown);
+        const ROWS = 5;
+        const COLS = 5;
+        const MINES_COUNT = 4;
+        let board = [];
+        let revealedCount = 0;
+        let gameOver = false;
+
+        const boardElement = document.getElementById('game-board');
+        const videoContainer = document.getElementById('video-container');
+        const winVideo = document.getElementById('win-video');
+        const messageElement = document.getElementById('message');
+
+        function initGame() {
+            board = [];
+            revealedCount = 0;
+            gameOver = false;
+            boardElement.style.display = 'grid';
+            videoContainer.style.display = 'none';
+            winVideo.pause();
+            winVideo.currentTime = 0;
+            messageElement.innerHTML = "数字をヒントに、化石(かせき)をよけて土をほろう！<br>ぜんぶほれるとティラノサウルスがふっかつするよ！";
+            boardElement.innerHTML = '';
+
+            for (let r = 0; r < ROWS; r++) {
+                let row = [];
+                for (let c = 0; c < COLS; c++) {
+                    row.push({ isMine: false, revealed: false, neighborMines: 0 });
+                }
+                board.push(row);
             }
-        }, 1000);
+
+            let placedMines = 0;
+            while (placedMines < MINES_COUNT) {
+                let r = Math.floor(Math.random() * ROWS);
+                let c = Math.floor(Math.random() * COLS);
+                if (!board[r][c].isMine) {
+                    board[r][c].isMine = true;
+                    placedMines++;
+                }
+            }
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (!board[r][c].isMine) {
+                        let count = 0;
+                        for (let dr = -1; dr <= 1; dr++) {
+                            for (let dc = -1; dc <= 1; dc++) {
+                                let nr = r + dr;
+                                let nc = c + dc;
+                                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) {
+                                    count++;
+                                }
+                            }
+                        }
+                        board[r][c].neighborMines = count;
+                    }
+                }
+            }
+
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    let cellDiv = document.createElement('div');
+                    cellDiv.classList.add('cell');
+                    cellDiv.dataset.r = r;
+                    cellDiv.dataset.c = c;
+                    cellDiv.addEventListener('click', () => handleCellClick(r, c));
+                    boardElement.appendChild(cellDiv);
+                }
+            }
+        }
+
+        function handleCellClick(r, c) {
+            if (gameOver || board[r][c].revealed) return;
+
+            let cellData = board[r][c];
+            cellData.revealed = true;
+            revealedCount++;
+
+            let cellDiv = boardElement.children[r * COLS + c];
+            cellDiv.classList.add('revealed');
+
+            if (cellData.isMine) {
+                gameOver = true;
+                // 化石の画像のパスを img/tyrano_born.png に変更
+                cellDiv.innerHTML = '<img src="img/tyrano_born.png" class="bone-img" alt="化石">';
+                cellDiv.style.backgroundColor = '#ffcdd2';
+                messageElement.innerHTML = "<span style='color:red;'>あ！化石(かせき)をこわしちゃった！<br>「もういちどあそぶ」をおしてね。</span>";
+                revealAllMines();
+            } else {
+                if (cellData.neighborMines > 0) {
+                    const colors = ["", "blue", "green", "red", "purple", "maroon", "turquoise", "black", "gray"];
+                    cellDiv.style.color = colors[cellData.neighborMines];
+                    cellDiv.textContent = cellData.neighborMines;
+                } else {
+                    for (let dr = -1; dr <= 1; dr++) {
+                        for (let dc = -1; dc <= 1; dc++) {
+                            let nr = r + dr;
+                            let nc = c + dc;
+                            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
+                                handleCellClick(nr, nc);
+                            }
+                        }
+                    }
+                }
+                checkWin();
+            }
+        }
+
+        function revealAllMines() {
+            for (let r = 0; r < ROWS; r++) {
+                for (let c = 0; c < COLS; c++) {
+                    if (board[r][c].isMine) {
+                        let cellDiv = boardElement.children[r * COLS + c];
+                        cellDiv.classList.add('revealed');
+                        // 化石の画像のパスを img/tyrano_born.png に変更
+                        cellDiv.innerHTML = '<img src="img/tyrano_born.png" class="bone-img" alt="化石">';
+                    }
+                }
+            }
+        }
+
+        function checkWin() {
+            const safeCells = (ROWS * COLS) - MINES_COUNT;
+            if (revealedCount === safeCells) {
+                gameOver = true;
+                messageElement.innerHTML = "<span style='color:blue; font-size:18px;'>はっくつ大せいこう！！</span>";
+                
+                setTimeout(() => {
+                    boardElement.style.display = 'none';
+                    videoContainer.style.display = 'block';
+                    winVideo.play();
+                }, 1000);
+            }
+        }
+
+        initGame();
     </script>
 </body>
 </html>
