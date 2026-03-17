@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>きょうりゅうはっくつゲーム - マグマ回避Ver.</title>
+    <title>きょうりゅうはっくつゲーム - 全2ステージ</title>
     <style>
+        /* 基本設定 */
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
             font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', sans-serif;
@@ -29,12 +30,14 @@
         .btn-secondary { background-color: #f39c12; color: white; }
         .btn-skip { background-color: #bdc3c7; color: #333; width: auto; padding: 8px 15px; font-size: 14px; position: absolute; top: 10px; right: 10px; }
 
+        /* タイトル画面 */
         #title-logo {
             width: 100%; max-width: 350px; height: auto; border-radius: 15px;
             margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); background-color: #ccc;
         }
         h1 { color: #d35400; font-size: 24px; margin-bottom: 20px; line-height: 1.5; }
 
+        /* チュートリアル */
         #tutorial-text-box {
             background-color: #fff; border: 3px solid #d35400; border-radius: 10px;
             padding: 15px; margin-bottom: 20px; width: 90%; font-size: 16px; font-weight: bold;
@@ -46,6 +49,7 @@
             border-radius: 10px; margin-bottom: 20px;
         }
 
+        /* ゲーム本編 */
         #game-layout {
             display: flex; flex-direction: column; align-items: center; width: 100%;
         }
@@ -53,52 +57,66 @@
             #game-layout { flex-direction: row; justify-content: space-around; align-items: flex-start; max-width: 800px; }
         }
         header { width: 100%; margin-bottom: 10px; flex-shrink: 0; }
-        #top-image { max-width: 60px; height: auto; }
-        h2 { color: #d35400; font-size: 18px; margin: 5px 0; }
-        p#message { font-size: 14px; font-weight: bold; line-height: 1.6; margin-bottom: 10px; }
+        #top-image { max-width: 60px; height: 60px; object-fit: contain; }
+        h2 { color: #d35400; font-size: 20px; margin: 5px 0; }
+        #stage-info { font-size: 14px; font-weight: bold; color: #f39c12; background: #fff; padding: 2px 10px; border-radius: 15px; display: inline-block; margin-bottom: 5px;}
+        p#message { font-size: 14px; font-weight: bold; line-height: 1.6; margin-bottom: 10px; height: 45px;}
         
         #controls { display: flex; gap: 10px; margin-bottom: 10px; width: 100%; justify-content: center; }
         #controls .btn { width: auto; margin: 0; padding: 10px 15px; font-size: 14px; }
 
-        .game-main { display: flex; flex-direction: column; align-items: center; flex-grow: 1; }
+        .game-main { display: flex; flex-direction: column; align-items: center; flex-grow: 1; width: 100%; }
+        
+        /* ゲーム盤（CSS変数を使って動的に列・行を変える） */
         .board-container {
-            width: 100%; max-width: 350px; aspect-ratio: 1 / 1;
+            width: 100%; max-width: 380px; aspect-ratio: 1 / 1;
             background-color: #8d6e63; padding: 5px; border-radius: 10px;
             box-shadow: 0 4px 8px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; margin-bottom: 20px;
         }
-        
-        /* ゲーム盤とマスの揺れ（ガタつき）を防止する設定 */
         #game-board { 
             display: grid; 
-            grid-template-columns: repeat(5, 1fr); 
-            grid-template-rows: repeat(5, 1fr); 
-            gap: 4px; 
-            width: 100%; 
-            height: 100%; 
+            /* JSで上書きするが、念のため初期値を設定 */
+            grid-template-columns: repeat(var(--cols, 6), 1fr); 
+            grid-template-rows: repeat(var(--rows, 6), 1fr); 
+            gap: 2px; 
+            width: 100%; height: 100%; 
         }
         .cell {
             background-color: #d7ccc8; border: 2px solid #a1887f; border-radius: 4px;
-            font-size: 6vw; font-weight: bold; display: flex; align-items: center; justify-content: center;
+            /* マスが増えた時に文字がはみ出ないよう、動的に計算 */
+            font-size: calc(250px / var(--cols, 6)); 
+            font-weight: bold; display: flex; align-items: center; justify-content: center;
             cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; 
-            aspect-ratio: 1 / 1; /* 正方形をガッチリ固定 */
-            overflow: hidden; /* 中身がはみ出ないようにする */
+            aspect-ratio: 1 / 1; overflow: hidden;
         }
-        @media (min-width: 500px) { .cell { font-size: 30px; } }
+        @media (min-width: 500px) { .cell { font-size: calc(300px / var(--cols, 6)); } }
         .cell.revealed { background-color: #efebe9; border: 1px solid #d7ccc8; cursor: default; }
         
-        .magma { font-size: 8vw; line-height: 1; }
-        @media (min-width: 500px) { .magma { font-size: 40px; } }
+        .cell.cracked { background-color: #ffccbc; border: 2px dashed #e64a19; }
+        .cell.cracked span { opacity: 0.6; font-size: 80%; }
+
+        .magma { font-size: 100%; line-height: 1; }
 
         /* 化石ディスプレイスペース */
         #fossil-display {
             width: 100%; max-width: 250px; background-color: #fff; border: 4px solid #8d6e63;
             border-radius: 15px; padding: 15px; display: flex; flex-direction: column; align-items: center;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.2); margin-bottom: 20px; position: relative;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.2); margin-bottom: 20px;
+        }
+        #fossil-puzzle-container {
+            position: relative; width: 100%; aspect-ratio: 1 / 1;
+            border-radius: 5px; overflow: hidden; background-color: #fff;
         }
         #large-fossil-img {
-            width: 100%; height: auto; object-fit: contain;
-            filter: brightness(0.2) grayscale(0.8);
-            transition: filter 0.5s ease-out;
+            width: 100%; height: 100%; object-fit: contain; display: block;
+        }
+        #fossil-cover-grid {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr);
+        }
+        .cover-block {
+            background-color: #795548; border: 1px solid #5d4037;
+            transition: opacity 0.5s ease;
         }
         #progress-text { font-size: 16px; font-weight: bold; color: #8d6e63; margin-top: 10px; }
         
@@ -119,11 +137,11 @@
         <img id="title-logo" src="img/title.png" alt="タイトル画像" onerror="this.style.display='none'">
         <h1>きょうりゅう<br><ruby>発掘<rt>はっくつ</rt></ruby>ゲーム</h1>
         <button class="btn btn-secondary" onclick="startTutorial()">あそびかた</button>
-        <button class="btn btn-primary" onclick="startGame()">すぐにあそぶ</button>
+        <button class="btn btn-primary" onclick="startGame(0)">すぐにあそぶ</button>
     </div>
 
     <div id="screen-tutorial" class="screen">
-        <button class="btn btn-skip" onclick="startGame()">スキップ ➡</button>
+        <button class="btn btn-skip" onclick="startGame(0)">スキップ ➡</button>
         <div id="tutorial-text-box"><span id="tut-text"></span></div>
         <div id="tut-board">
             <div class="cell" id="tut-cell-0"></div><div class="cell" id="tut-cell-1"></div><div class="cell" id="tut-cell-2"></div>
@@ -136,15 +154,19 @@
     <div id="screen-game" class="screen">
         <div id="game-layout">
             <div id="fossil-display">
-                <img id="large-fossil-img" src="img/tyrano_born.png" alt="大きな化石">
+                <div id="fossil-puzzle-container">
+                    <img id="large-fossil-img" src="" alt="化石">
+                    <div id="fossil-cover-grid"></div>
+                </div>
                 <p id="progress-text"><ruby>発掘<rt>はっくつ</rt></ruby>メーター: 0%</p>
             </div>
             
             <div class="game-main">
                 <header>
-                    <img id="top-image" src="img/tyrano.png" alt="アイコン">
-                    <h2>きょうりゅう<ruby>発掘<rt>はっくつ</rt></ruby>ゲーム！</h2>
-                    <p id="message"><ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>危険<rt>きけん</rt></ruby>なマグマをよけろ！<br><ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ぜんぶほればクリアだ！</p>
+                    <img id="top-image" src="" alt="アイコン">
+                    <br><span id="stage-info">ステージ 1</span>
+                    <h2 id="stage-dino-name">きょうりゅう</h2>
+                    <p id="message"><ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ほろう！</p>
                 </header>
                 <div id="controls">
                     <button id="reset-btn" class="btn btn-primary" onclick="initGame()">やりなおす</button>
@@ -157,10 +179,8 @@
     </div>
 
     <div id="video-container">
-        <video id="win-video" playsinline>
-            <source src="img/tyrano01.mp4" type="video/mp4">
-        </video>
-        <button id="close-video-btn" class="btn btn-primary" onclick="closeVideo()">とじる</button>
+        <video id="win-video" playsinline></video>
+        <button id="close-video-btn" class="btn btn-primary" onclick="closeVideo()">つぎへ進む</button>
     </div>
 
     <script>
@@ -176,128 +196,220 @@
         const tutorialSteps = [
             { text: "<ruby>土<rt>つち</rt></ruby>の 下(した)には <ruby>危険<rt>きけん</rt></ruby>なマグマが<br>かくれている ことがあるよ！", action: () => { resetTutBoard(); } },
             { text: "まずは まん中の <ruby>土<rt>つち</rt></ruby>を<br>ほってみよう！", action: () => { let c = document.getElementById('tut-cell-4'); c.classList.add('revealed'); c.style.color = '#0000FF'; c.textContent = '1'; } },
-            { text: "『１』が でたね！<br>まわりの どこかに １つだけ<br>マグマが かくれているよ。", action: () => { for(let i=0; i<9; i++) { if(i !== 4) document.getElementById('tut-cell-'+i).style.borderColor = '#e74c3c'; } } },
-            { text: "あ！マグマを ほってしまった！<br>これだと <ruby>化石<rt>かせき</rt></ruby>が もえちゃうよ。", action: () => { for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; } let bomb = document.getElementById('tut-cell-0'); bomb.classList.add('revealed'); bomb.innerHTML = '<span class="magma">🌋</span>'; bomb.style.backgroundColor = '#ffcdd2'; } },
-            { text: "マグマをよけて、<ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を<br>ぜんぶほれば <ruby>発掘<rt>はっくつ</rt></ruby>クリアだ！", action: () => { [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; } }
+            { text: "『１』が でたね！まわりの どこか<br>１つだけに マグマが あるよ。", action: () => { for(let i=0; i<9; i++) { if(i !== 4) document.getElementById('tut-cell-'+i).style.borderColor = '#e74c3c'; } } },
+            { text: "あ！マグマを ほってしまった！<br>でも１回目(かいめ)なら セーフ！", action: () => { for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; } let bomb = document.getElementById('tut-cell-0'); bomb.classList.add('cracked'); bomb.innerHTML = '<span>🌋</span>'; } },
+            { text: "ヒビが 入ったところを もう１度<br>ほると バクハツしちゃうよ！<br>よけて ほかの<ruby>土<rt>つち</rt></ruby>を ほろう！", action: () => { [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; } }
         ];
 
         function startTutorial() { showScreen('screen-tutorial'); tutStep = 0; document.getElementById('tut-next-btn').textContent = "つぎへ"; playTutStep(tutStep); }
         function playTutStep(step) { tutTextElement.innerHTML = tutorialSteps[step].text; tutorialSteps[step].action(); }
-        function nextTutorial() { tutStep++; if (tutStep >= tutorialSteps.length) { startGame(); } else { playTutStep(tutStep); } }
+        function nextTutorial() { tutStep++; if (tutStep >= tutorialSteps.length) { startGame(0); } else { playTutStep(tutStep); } }
         function resetTutBoard() { for(let i=0; i<9; i++) { let c = document.getElementById('tut-cell-'+i); c.className = 'cell'; c.innerHTML = ''; c.style.borderColor = '#a1887f'; c.style.backgroundColor = '#d7ccc8'; } }
 
-        // --- ゲーム本編 ---
-        const ROWS = 5;
-        const COLS = 5;
-        const MINES_COUNT = 4;
-        const TARGET_SAFE_CELLS = (ROWS * COLS) - MINES_COUNT;
+
+        // --- ゲーム本編：ステージ管理 ---
+        const stages = [
+            {
+                name: "モササウルス",
+                rows: 6,
+                cols: 6,
+                mines: 6, // 36マス中6個のマグマ
+                bodyImg: "img/mosa.png",
+                fossilImg: "img/mosa_born.png",
+                videoSrc: "img/mosa.mp4"
+            },
+            {
+                name: "ティラノサウルス",
+                rows: 8,
+                cols: 8,
+                mines: 12, // 64マス中12個のマグマ
+                bodyImg: "img/tyrano.png",
+                fossilImg: "img/tyrano_born.png",
+                videoSrc: "img/tyrano01.mp4"
+            }
+        ];
+
+        let currentStageIndex = 0;
         let board = [];
         let revealedCount = 0;
         let gameOver = false;
+        let isFirstClick = true;
+        let puzzleRevealOrder = [];
+
+        const PUZZLE_ROWS = 4;
+        const PUZZLE_COLS = 4;
+        const TOTAL_PIECES = PUZZLE_ROWS * PUZZLE_COLS; // 16ピース
 
         const boardElement = document.getElementById('game-board');
-        const largeFossilImg = document.getElementById('large-fossil-img');
+        const coverGrid = document.getElementById('fossil-cover-grid');
         const progressText = document.getElementById('progress-text');
         const videoContainer = document.getElementById('video-container');
         const winVideo = document.getElementById('win-video');
         const messageElement = document.getElementById('message');
+        const stageInfoElement = document.getElementById('stage-info');
+        const stageDinoNameElement = document.getElementById('stage-dino-name');
+        const topImageElement = document.getElementById('top-image');
+        const largeFossilImg = document.getElementById('large-fossil-img');
+        const closeVideoBtn = document.getElementById('close-video-btn');
 
-        function startGame() { showScreen('screen-game'); initGame(); }
+        function startGame(stageIndex) {
+            currentStageIndex = stageIndex;
+            showScreen('screen-game');
+            initGame();
+        }
 
         function initGame() {
-            board = []; revealedCount = 0; gameOver = false;
+            const stage = stages[currentStageIndex];
+            const targetSafeCells = (stage.rows * stage.cols) - stage.mines;
+
+            board = []; revealedCount = 0; gameOver = false; isFirstClick = true;
             videoContainer.style.display = 'none'; 
             winVideo.pause(); winVideo.currentTime = 0;
             
-            updateFossilVisuals();
-            messageElement.innerHTML = "<ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>危険<rt>きけん</rt></ruby>なマグマをよけろ！<br><ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ぜんぶほればクリアだ！";
+            // ステージごとのUIと画像をセット
+            stageInfoElement.textContent = `ステージ ${currentStageIndex + 1}`;
+            stageDinoNameElement.textContent = stage.name;
+            topImageElement.src = stage.bodyImg;
+            largeFossilImg.src = stage.fossilImg;
+            winVideo.src = stage.videoSrc;
+            winVideo.load();
+
+            // 最終ステージクリア時のボタンテキスト変更
+            if (currentStageIndex === stages.length - 1) {
+                closeVideoBtn.textContent = "タイトルにもどる";
+            } else {
+                closeVideoBtn.textContent = "つぎのステージへ！";
+            }
+
+            messageElement.innerHTML = "<ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ほろう！<br>ヒビが入ったら もうさわらないでね！";
+            
+            // CSS変数（マスの数）を更新して盤面のレイアウトを自動調整
+            boardElement.style.setProperty('--cols', stage.cols);
+            boardElement.style.setProperty('--rows', stage.rows);
+            boardElement.style.gridTemplateColumns = `repeat(${stage.cols}, 1fr)`;
+            boardElement.style.gridTemplateRows = `repeat(${stage.rows}, 1fr)`;
             boardElement.innerHTML = '';
 
-            for (let r = 0; r < ROWS; r++) {
+            // 盤面のデータ枠組みを作る
+            for (let r = 0; r < stage.rows; r++) {
                 let row = [];
-                for (let c = 0; c < COLS; c++) { row.push({ isMine: false, revealed: false, neighborMines: 0 }); }
+                for (let c = 0; c < stage.cols; c++) { row.push({ isMine: false, revealed: false, cracked: false, neighborMines: 0 }); }
                 board.push(row);
             }
-
-            let placedMines = 0;
-            while (placedMines < MINES_COUNT) {
-                let r = Math.floor(Math.random() * ROWS); let c = Math.floor(Math.random() * COLS);
-                if (!board[r][c].isMine) { board[r][c].isMine = true; placedMines++; }
+            
+            // HTML要素を生成
+            for (let r = 0; r < stage.rows; r++) {
+                for (let c = 0; c < stage.cols; c++) {
+                    let cellDiv = document.createElement('div'); cellDiv.classList.add('cell');
+                    cellDiv.dataset.r = r; cellDiv.dataset.c = c;
+                    cellDiv.addEventListener('click', () => handleCellClick(r, c, stage));
+                    boardElement.appendChild(cellDiv);
+                }
             }
 
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
+            // パズルブロックのシャッフル
+            puzzleRevealOrder = [];
+            for (let i = 0; i < TOTAL_PIECES; i++) puzzleRevealOrder.push(i);
+            for (let i = puzzleRevealOrder.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [puzzleRevealOrder[i], puzzleRevealOrder[j]] = [puzzleRevealOrder[j], puzzleRevealOrder[i]];
+            }
+
+            coverGrid.innerHTML = '';
+            for (let i = 0; i < TOTAL_PIECES; i++) {
+                let block = document.createElement('div');
+                block.classList.add('cover-block');
+                block.id = 'cover-block-' + i;
+                coverGrid.appendChild(block);
+            }
+            updateFossilVisuals(stage);
+        }
+
+        // 初回クリック時にマグマを生成
+        function generateMines(firstR, firstC, stage) {
+            let placedMines = 0;
+            while (placedMines < stage.mines) {
+                let r = Math.floor(Math.random() * stage.rows); let c = Math.floor(Math.random() * stage.cols);
+                if (!board[r][c].isMine && !(r === firstR && c === firstC)) {
+                    board[r][c].isMine = true; placedMines++;
+                }
+            }
+            for (let r = 0; r < stage.rows; r++) {
+                for (let c = 0; c < stage.cols; c++) {
                     if (!board[r][c].isMine) {
                         let count = 0;
                         for (let dr = -1; dr <= 1; dr++) {
                             for (let dc = -1; dc <= 1; dc++) {
                                 let nr = r + dr; let nc = c + dc;
-                                if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS && board[nr][nc].isMine) { count++; }
+                                if (nr >= 0 && nr < stage.rows && nc >= 0 && nc < stage.cols && board[nr][nc].isMine) { count++; }
                             }
                         }
                         board[r][c].neighborMines = count;
                     }
                 }
             }
-
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
-                    let cellDiv = document.createElement('div'); cellDiv.classList.add('cell');
-                    cellDiv.dataset.r = r; cellDiv.dataset.c = c;
-                    cellDiv.addEventListener('click', () => handleCellClick(r, c));
-                    boardElement.appendChild(cellDiv);
-                }
-            }
         }
 
-        function handleCellClick(r, c) {
-            if (gameOver || board[r][c].revealed) return;
-
+        function handleCellClick(r, c, stage) {
             let cellData = board[r][c];
-            cellData.revealed = true;
-            revealedCount++;
+            if (gameOver || cellData.revealed) return;
 
-            let cellDiv = boardElement.children[r * COLS + c];
-            cellDiv.classList.add('revealed');
+            if (isFirstClick) {
+                generateMines(r, c, stage);
+                isFirstClick = false;
+            }
+
+            let cellDiv = boardElement.children[r * stage.cols + c];
 
             if (cellData.isMine) {
-                gameOver = true;
-                cellDiv.innerHTML = '<span class="magma">🌋</span>';
-                cellDiv.style.backgroundColor = '#ffcdd2';
-                messageElement.innerHTML = "<span style='color:red;'>あ！マグマが ふきだした！<br>「やりなおす」をおしてね。</span>";
-                
-                largeFossilImg.style.filter = "brightness(0) grayscale(1)";
-                progressText.innerHTML = "<span style='color:red;'>しっぱい...</span>";
-                progressText.style.color = "red";
-                
-                revealAllMines();
+                if (!cellData.cracked) {
+                    cellData.cracked = true;
+                    cellDiv.classList.add('cracked');
+                    cellDiv.innerHTML = '<span>🌋</span>';
+                    messageElement.innerHTML = "<span style='color:#d35400;'>あつッ！マグマが かくれているぞ！<br>もう１回 さわると バクハツだよ！</span>";
+                    return; 
+                } else {
+                    gameOver = true;
+                    cellData.revealed = true;
+                    cellDiv.classList.remove('cracked');
+                    cellDiv.classList.add('revealed');
+                    cellDiv.innerHTML = '<span class="magma">🌋</span>';
+                    cellDiv.style.backgroundColor = '#ffcdd2';
+                    messageElement.innerHTML = "<span style='color:red;'>ドッカーン！もえちゃった！<br>「やりなおす」をおしてね。</span>";
+                    progressText.innerHTML = "<span style='color:red;'>しっぱい...</span>";
+                    revealAllMines(stage);
+                }
             } else {
-                updateFossilVisuals();
+                cellData.revealed = true;
+                revealedCount++;
+                cellDiv.classList.add('revealed');
+                updateFossilVisuals(stage);
 
                 if (cellData.neighborMines > 0) {
                     const colors = ["", "#0000FF", "#008000", "#FF0000", "#800080", "#800000", "#40E0D0", "#000000", "#808080"];
                     cellDiv.style.color = colors[cellData.neighborMines];
                     cellDiv.textContent = cellData.neighborMines;
+                    messageElement.innerHTML = "<ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ほろう！";
                 } else {
-                    // 安全なマスが一気に開くとき、アニメーションさせず一瞬で処理（揺れ防止）
                     for (let dr = -1; dr <= 1; dr++) {
                         for (let dc = -1; dc <= 1; dc++) {
                             let nr = r + dr; let nc = c + dc;
-                            if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) {
-                                handleCellClick(nr, nc);
+                            if (nr >= 0 && nr < stage.rows && nc >= 0 && nc < stage.cols) {
+                                handleCellClick(nr, nc, stage);
                             }
                         }
                     }
                 }
-                checkWin();
+                checkWin(stage);
             }
         }
 
-        function revealAllMines() {
-            for (let r = 0; r < ROWS; r++) {
-                for (let c = 0; c < COLS; c++) {
+        function revealAllMines(stage) {
+            for (let r = 0; r < stage.rows; r++) {
+                for (let c = 0; c < stage.cols; c++) {
                     if (board[r][c].isMine) {
-                        let cellDiv = boardElement.children[r * COLS + c];
+                        let cellDiv = boardElement.children[r * stage.cols + c];
+                        cellDiv.classList.remove('cracked');
                         if (!cellDiv.classList.contains('revealed')) {
                             cellDiv.classList.add('revealed');
                             cellDiv.innerHTML = '<span class="magma">🌋</span>';
@@ -307,28 +419,38 @@
             }
         }
 
-        function updateFossilVisuals() {
+        function updateFossilVisuals(stage) {
             if(gameOver) return;
-            let progress = revealedCount / TARGET_SAFE_CELLS;
+            const targetSafeCells = (stage.rows * stage.cols) - stage.mines;
+            let progress = revealedCount / targetSafeCells;
             let percent = Math.floor(progress * 100);
             
             progressText.innerHTML = `<ruby>発掘<rt>はっくつ</rt></ruby>メーター: ${percent}%`;
             progressText.style.color = "#8d6e63";
 
-            let brightness = 0.2 + (0.8 * progress);
-            let grayscale = 0.8 - (0.8 * progress);
-            
-            largeFossilImg.style.filter = `brightness(${brightness}) grayscale(${grayscale})`;
+            let blocksToReveal = Math.floor(progress * TOTAL_PIECES);
+            for (let i = 0; i < TOTAL_PIECES; i++) {
+                let blockId = 'cover-block-' + puzzleRevealOrder[i];
+                let block = document.getElementById(blockId);
+                if (block) {
+                    if (i < blocksToReveal) { block.style.opacity = '0'; } 
+                    else { block.style.opacity = '1'; }
+                }
+            }
         }
 
-        function checkWin() {
-            if (revealedCount === TARGET_SAFE_CELLS) {
+        function checkWin(stage) {
+            const targetSafeCells = (stage.rows * stage.cols) - stage.mines;
+            if (revealedCount === targetSafeCells) {
                 gameOver = true;
                 messageElement.innerHTML = "<span style='color:#d35400; font-size:20px;'><ruby>発掘<rt>はっくつ</rt></ruby>コンプリート！！</span>";
-                largeFossilImg.style.filter = "brightness(1.2) drop-shadow(0 0 10px #f1c40f)";
                 progressText.innerHTML = "<span style='color:#d35400;'>コンプリート！</span>";
 
-                // クリア後、1.5秒だけ余韻を残してすぐに動画を再生
+                for (let i = 0; i < TOTAL_PIECES; i++) {
+                    let block = document.getElementById('cover-block-' + i);
+                    if(block) block.style.opacity = '0';
+                }
+
                 setTimeout(() => {
                     videoContainer.style.display = 'flex';
                     winVideo.muted = true;
@@ -337,7 +459,21 @@
             }
         }
 
-        function closeVideo() { winVideo.pause(); winVideo.muted = false; videoContainer.style.display = 'none'; initGame(); }
+        // 動画を閉じたあとの処理（次のステージへ、またはクリア）
+        function closeVideo() {
+            winVideo.pause(); 
+            winVideo.muted = false; 
+            videoContainer.style.display = 'none'; 
+            
+            if (currentStageIndex < stages.length - 1) {
+                // 次のステージへ
+                startGame(currentStageIndex + 1);
+            } else {
+                // 全ステージクリア！
+                alert("すごい！ぜんぶの きょうりゅうを 復活（ふっかつ）させたよ！");
+                showScreen('screen-title');
+            }
+        }
     </script>
 </body>
 </html>
