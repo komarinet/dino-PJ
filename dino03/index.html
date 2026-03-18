@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ちびっこティラノの大ぼうけん</title>
+    <style>
+        body { background: #333; color: white; font-family: sans-serif; margin: 0; overflow: hidden; touch-action: manipulation; }
+        #game-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        
+        /* バトルフィールド（サイドビュー） */
+        #battle-field { flex: 1; position: relative; background: linear-gradient(#87CEEB, #228B22); overflow: hidden; }
+        .char { position: absolute; font-size: 80px; transition: transform 0.2s; bottom: 20%; }
+        #enemy { left: 10%; }
+        #player { right: 10%; transform: scaleX(-1); } /* 右向き */
+        
+        /* 攻撃アニメーション用 */
+        .attack-anim-p { transform: translateX(-100px) scaleX(-1) !important; }
+        .attack-anim-e { transform: translateX(100px) !important; }
+
+        /* UIエリア */
+        #ui-area { height: 40%; background: #00008B; border-top: 4px border: #eee; padding: 10px; box-sizing: border-box; }
+        #message-window { height: 40%; border: 2px solid white; border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 1.2rem; background: rgba(0,0,0,0.5); }
+        #command-window { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 50%; }
+        
+        button { 
+            background: #eee; border: none; border-radius: 10px; font-size: 1.2rem; font-weight: bold;
+            box-shadow: 0 4px #999; active: transform: translateY(2px);
+        }
+        button:active { box-shadow: 0 0 #999; transform: translateY(4px); }
+    </style>
+</head>
+<body>
+
+<div id="game-container">
+    <div id="battle-field">
+        <div id="enemy" class="char">🦖</div>
+        <div id="player" class="char">🦖</div> </div>
+
+    <div id="ui-area">
+        <div id="message-window">
+            <ruby>野生<rt>やせい</rt></ruby>の ギガノトサウルスが あらわれた！
+        </div>
+        <div id="command-window">
+            <button onclick="playerAttack()"><ruby>攻撃<rt>こうげき</rt></ruby></button>
+            <button onclick="playerHeal()"><ruby>回復<rt>かいふく</rt></ruby></button>
+        </div>
+    </div>
+</div>
+
+<script>
+// --- オーディオ設定 ---
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSfx(freq, type, duration) {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + duration);
+    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
+    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + duration);
+}
+
+// --- ゲームロジック ---
+let playerHp = 30;
+let enemyHp = 50;
+const msg = document.getElementById('message-window');
+
+function updateMessage(text) {
+    msg.innerHTML = text; // rubyタグを含むためinnerHTML
+}
+
+async function playerAttack() {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    
+    // 攻撃アニメーション
+    const p = document.getElementById('player');
+    p.classList.add('attack-anim-p');
+    playSfx(440, 'sawtooth', 0.1);
+    updateMessage("<ruby>攻撃<rt>こうげき</rt></ruby>！ ギガノトサウルスに 10の ダメージ！");
+    
+    await new Promise(r => setTimeout(r, 500));
+    p.classList.remove('attack-anim-p');
+    enemyHp -= 10;
+
+    if (enemyHp <= 0) {
+        updateMessage("ギガノトサウルスを たおした！ ママを たすけだしたぞ！");
+        return;
+    }
+
+    // 敵のターン
+    setTimeout(enemyTurn, 1000);
+}
+
+function enemyTurn() {
+    const e = document.getElementById('enemy');
+    e.classList.add('attack-anim-e');
+    playSfx(110, 'square', 0.2);
+    updateMessage("ギガノトサウルスの 攻撃！ 5の ダメージ！");
+    
+    setTimeout(() => {
+        e.classList.remove('attack-anim-e');
+        playerHp -= 5;
+        if (playerHp <= 0) {
+            updateMessage("ちびっこティラノは たおれた… ママ…ごめんね。");
+        }
+    }, 500);
+}
+
+function playerHeal() {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    playSfx(880, 'sine', 0.5);
+    playerHp += 10;
+    updateMessage("きのみを たべた！ HPが 10 かいふく！");
+    setTimeout(enemyTurn, 1000);
+}
+</script>
+</body>
+</html>
