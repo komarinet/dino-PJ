@@ -3,19 +3,25 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>きょうりゅうはっくつゲーム - サウンド完全版</title>
+    <title>きょうりゅうはっくつゲーム - 背景＆ブロックカラー対応</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
+        /* 動的に変わるカラー用のCSS変数（初期値はデフォルト） */
         :root {
             --theme-accent: #d35400; 
+            --bg-color: #f4e8d3;     /* 画面の背景色 */
+            --cell-bg: #d7ccc8;      /* ブロック（土）の色 */
+            --cell-border: #a1887f;  /* ブロックの枠線の色 */
         }
 
         body {
             font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', sans-serif;
-            background-color: #f4e8d3; text-align: center; color: #333;
+            background-color: var(--bg-color); /* 変数を適用 */
+            text-align: center; color: #333;
             display: flex; flex-direction: column; align-items: center;
             min-height: 100vh; padding: 10px; overscroll-behavior: none;
+            transition: background-color 0.8s ease; /* 背景色が変わる時にフワッとさせる */
         }
         
         .screen {
@@ -46,11 +52,12 @@
 
         /* タイトル画面 */
         #screen-title {
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23a1887f'/%3E%3Cstop offset='1' stop-color='%235d4037'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23a)' width='1600' height='900'/%3E%3Cpath fill='%23a1887f' d='M0 900l1600-900V0H0z' opacity='.1'/%3E%3Cpath fill='%23795548' d='M0 120h400l400 400h400l400 400V0H0z' opacity='.1'/%3E%3Ccircle cx='800' cy='450' r='300' fill='%238d6e63' opacity='.05'/%3E%3Crect x='100' y='700' width='100' height='20' rx='5' fill='%23ccc' opacity='.2'/%3E%3Crect x='1400' y='600' width='80' height='30' rx='10' fill='%23ccc' opacity='.2'/%3E%3Crect x='600' y='800' width='30' height='100' rx='5' fill='%23ccc' opacity='.2'/%3E%3C/svg%3E");
-            background-size: cover; border-radius: 15px; box-shadow: 0 0 15px rgba(0,0,0,0.2); margin: 10px;
+            background-color: #fff;
+            border: 4px solid var(--theme-accent);
+            border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); margin: 10px; padding: 20px;
         }
-        #title-logo { width: 100%; max-width: 350px; height: auto; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); background-color: #ccc; }
-        h1 { color: #f4e8d3; font-size: 24px; margin-bottom: 20px; line-height: 1.5; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
+        #title-logo { width: 100%; max-width: 350px; height: auto; border-radius: 10px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.2); background-color: #ccc; }
+        h1 { color: var(--theme-accent); font-size: 24px; margin-bottom: 20px; line-height: 1.5; }
 
         #tutorial-text-box { background-color: #fff; border: 3px solid var(--theme-accent); border-radius: 10px; padding: 15px; margin-bottom: 20px; width: 90%; font-size: 16px; font-weight: bold; line-height: 1.8; min-height: 100px; display: flex; align-items: center; justify-content: center; }
         #tut-board { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 5px; width: 180px; height: 180px; background-color: #8d6e63; padding: 5px; border-radius: 10px; margin-bottom: 20px; }
@@ -79,7 +86,13 @@
         #game-board { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(var(--cols, 6), 1fr); grid-template-rows: repeat(var(--rows, 6), 1fr); gap: 2px; padding: 4px; box-sizing: border-box; z-index: 2; transition: opacity 1s ease; }
         #overlay-body { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; z-index: 3; padding: 10px; box-sizing: border-box; opacity: 0; transition: opacity 1.5s ease; pointer-events: none; }
 
-        .cell { background-color: #d7ccc8; border: 2px solid #a1887f; border-radius: 4px; font-size: calc(240px / var(--cols, 6)); font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; aspect-ratio: 1 / 1; overflow: hidden; transition: background-color 0.2s; }
+        /* ブロックの色もCSS変数化して動的に切り替え */
+        .cell {
+            background-color: var(--cell-bg);
+            border: 2px solid var(--cell-border);
+            border-radius: 4px; font-size: calc(240px / var(--cols, 6)); font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; aspect-ratio: 1 / 1; overflow: hidden; 
+            transition: background-color 0.2s, border-color 0.2s; 
+        }
         @media (min-width: 500px) { .cell { font-size: calc(300px / var(--cols, 6)); } }
         
         .cell.revealed { background-color: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.2); cursor: default; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0px 2px 4px rgba(0,0,0,0.8); }
@@ -104,8 +117,8 @@
     </div>
 
     <div id="screen-title" class="screen">
-        <img id="title-logo" src="img/title.png" alt="タイトル画像" onerror="this.style.display='none'">
-        <h1>きょうりゅう<ruby>発掘<rt>はっくつ</rt></ruby>ゲーム</h1>
+        <img id="title-logo" src="img/top02.jpeg" alt="タイトル画像" onerror="this.src='img/title.png'">
+        <h1>きょうりゅう<ruby>発掘<rt>はっくつ</rt></ruby>パズル</h1>
         <div style="display: flex; gap: 10px;">
             <button class="btn btn-secondary" onclick="startTutorial()">あそびかた</button>
             <button class="btn btn-primary" onclick="startGame(0)">すぐにあそぶ</button>
@@ -156,57 +169,40 @@
     </div>
 
     <script>
-        // ==========================================
-        // サウンド（Web Audio API & BGM）システム
-        // ==========================================
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         let audioCtx;
         
-        // BGM用のAudioオブジェクト
         const bgmPlayer = new Audio();
         bgmPlayer.loop = true;
 
         function initAudio() {
-            if (!audioCtx) {
-                audioCtx = new AudioContext();
-            }
-            if (audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (!audioCtx) { audioCtx = new AudioContext(); }
+            if (audioCtx.state === 'suspended') { audioCtx.resume(); }
         }
 
-        // BGMを再生
         function playBGM(src) {
-            if (bgmPlayer.src.includes(src)) return; // 既に同じ曲が鳴っていれば無視
+            if (bgmPlayer.src.includes(src)) return; 
             bgmPlayer.pause();
             bgmPlayer.src = src;
             bgmPlayer.play().catch(e => console.log("BGM Play Error:", e));
         }
         
-        // BGMを停止
-        function stopBGM() {
-            bgmPlayer.pause();
-        }
+        function stopBGM() { bgmPlayer.pause(); }
 
-        // --- JavaScriptで波形を生成して鳴らす（SFX） ---
         function playTone(freq, type, duration, startTime) {
             if (!audioCtx) return;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
             osc.type = type;
             osc.frequency.setValueAtTime(freq, startTime);
-            
-            // 音の減衰（エンベロープ）
             gain.gain.setValueAtTime(0.1, startTime);
             gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
-
             osc.connect(gain);
             gain.connect(audioCtx.destination);
             osc.start(startTime);
             osc.stop(startTime + duration);
         }
 
-        // ① 警告音（❗）: 短いブザー音
         function playWarningSE() {
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
@@ -214,7 +210,6 @@
             playTone(1108, 'square', 0.2, now + 0.1);
         }
 
-        // ② 爆発音（🌋）: 低音のノコギリ波を落とす
         function playExplosionSE() {
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
@@ -231,53 +226,46 @@
             osc.stop(now + 1);
         }
 
-        // ③ ゲームオーバー: 悲しいメロディ
         function playGameOverSE() {
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
-            playTone(392.00, 'triangle', 0.3, now);      // G4
-            playTone(311.13, 'triangle', 0.3, now + 0.3); // Eb4
-            playTone(261.63, 'triangle', 0.6, now + 0.6); // C4
+            playTone(392.00, 'triangle', 0.3, now);
+            playTone(311.13, 'triangle', 0.3, now + 0.3);
+            playTone(261.63, 'triangle', 0.6, now + 0.6);
         }
 
-        // ④ ステージクリア: ファンファーレ小
         function playClearSE() {
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
-            playTone(523.25, 'square', 0.1, now);       // C5
-            playTone(659.25, 'square', 0.1, now + 0.1); // E5
-            playTone(783.99, 'square', 0.2, now + 0.2); // G5
-            playTone(1046.50, 'square', 0.4, now + 0.3); // C6
+            playTone(523.25, 'square', 0.1, now);
+            playTone(659.25, 'square', 0.1, now + 0.1);
+            playTone(783.99, 'square', 0.2, now + 0.2);
+            playTone(1046.50, 'square', 0.4, now + 0.3);
         }
 
-        // ⑤ 全クリ: ファンファーレ大
         function playAllClearSE() {
             if (!audioCtx) return;
             const now = audioCtx.currentTime;
             const notes = [
-                {f: 523.25, d: 0.15, t: 0},     // C5
-                {f: 523.25, d: 0.15, t: 0.15},  // C5
-                {f: 523.25, d: 0.15, t: 0.3},   // C5
-                {f: 659.25, d: 0.4, t: 0.45},   // E5
-                {f: 587.33, d: 0.2, t: 0.85},   // D5
-                {f: 659.25, d: 0.6, t: 1.05}    // E5
+                {f: 523.25, d: 0.15, t: 0}, {f: 523.25, d: 0.15, t: 0.15}, {f: 523.25, d: 0.15, t: 0.3},
+                {f: 659.25, d: 0.4, t: 0.45}, {f: 587.33, d: 0.2, t: 0.85}, {f: 659.25, d: 0.6, t: 1.05}
             ];
             notes.forEach(n => playTone(n.f, 'square', n.d, now + n.t));
         }
 
-
-        // ==========================================
-        // ゲームシステム
-        // ==========================================
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
         }
 
-        // 最初の画面タップで音声を許可し、タイトル画面へ
         function unlockAudioAndStart() {
             initAudio();
             playBGM("music/opening.mp3");
+            
+            // タイトル画面のデフォルト色をセット
+            document.documentElement.style.setProperty('--theme-accent', '#d35400');
+            document.documentElement.style.setProperty('--bg-color', '#f4e8d3');
+            
             showScreen('screen-title');
         }
 
@@ -292,10 +280,8 @@
             modeFlag.style.backgroundColor = (mode === 'flag') ? '#e74c3c' : 'transparent';
         }
 
-        // --- チュートリアル ---
         let tutStep = 0;
         const tutTextElement = document.getElementById('tut-text');
-        
         const tutorialSteps = [
             { text: "まずは『⛏️ ほる』モードで<br>まん中の <ruby>土<rt>つち</rt></ruby>をほってみよう！", action: () => { resetTutBoard(); setMode('dig'); let c = document.getElementById('tut-cell-4'); c.classList.add('revealed'); c.style.color = '#0000FF'; c.textContent = '1'; } },
             { text: "『１』が でたね！まわりの どこか<br>１つだけに マグマが あるよ。", action: () => { for(let i=0; i<9; i++) { if(i !== 4) document.getElementById('tut-cell-'+i).style.borderColor = '#e74c3c'; } } },
@@ -304,27 +290,50 @@
             { text: "『🚩』や『❗』の場所を よけて<br>ほかの <ruby>土<rt>つち</rt></ruby>を ぜんぶほれば クリア！", action: () => { setMode('dig'); [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; playClearSE(); } }
         ];
 
-        function startTutorial() { playBGM("music/opening.mp3"); showScreen('screen-tutorial'); tutStep = 0; document.getElementById('tut-next-btn').textContent = "つぎへ"; playTutStep(tutStep); }
+        function startTutorial() { 
+            // チュートリアル用の色（デフォルトに戻す）
+            document.documentElement.style.setProperty('--theme-accent', '#d35400');
+            document.documentElement.style.setProperty('--bg-color', '#f4e8d3');
+            
+            playBGM("music/opening.mp3"); 
+            showScreen('screen-tutorial'); 
+            tutStep = 0; 
+            document.getElementById('tut-next-btn').textContent = "つぎへ"; 
+            playTutStep(tutStep); 
+        }
         function playTutStep(step) { tutTextElement.innerHTML = tutorialSteps[step].text; tutorialSteps[step].action(); }
         function nextTutorial() { tutStep++; if (tutStep >= tutorialSteps.length) { startGame(0); } else { playTutStep(tutStep); } }
         function resetTutBoard() { for(let i=0; i<9; i++) { let c = document.getElementById('tut-cell-'+i); c.className = 'cell'; c.innerHTML = ''; c.style.borderColor = '#a1887f'; c.style.backgroundColor = '#d7ccc8'; } }
 
         // --- ゲーム本編：ステージ管理 ---
+        // 各ステージにテーマカラー（背景、ブロック、枠線）を登録
         const stages = [
             {
                 rows: 6, cols: 6, mines: 6,
                 bodyImg: "img/tri.png", fossilImg: "img/tri_born.png", videoSrc: "img/tri.mp4",
-                themeColor: "#2E7D32", bgmSrc: "music/tri.mp3"
+                themeColor: "#2E7D32",   // グリーン（アクセント）
+                bgColor: "#e8f5e9",      // 薄い緑色（背景）
+                cellBg: "#c5e1a5",       // コケや草の混じった土（ブロック）
+                cellBorder: "#7cb342",   // 濃い緑の土（枠線）
+                bgmSrc: "music/tri.mp3"
             },
             {
                 rows: 7, cols: 7, mines: 9,
                 bodyImg: "img/mosa02.png", fossilImg: "img/mosa_born02.png", videoSrc: "img/mosa.mp4",
-                themeColor: "#1565C0", bgmSrc: "music/mosa.mp3"
+                themeColor: "#1565C0",   // ブルー（アクセント）
+                bgColor: "#e3f2fd",      // 薄い水色（背景）
+                cellBg: "#90caf9",       // 水底の砂色（ブロック）
+                cellBorder: "#42a5f5",   // 濃い水色（枠線）
+                bgmSrc: "music/mosa.mp3"
             },
             {
                 rows: 8, cols: 8, mines: 12,
                 bodyImg: "img/tyrano02.png", fossilImg: "img/tyrano_born02.png", videoSrc: "img/tyrano01.mp4",
-                themeColor: "#d35400", bgmSrc: "music/tyrano.mp3"
+                themeColor: "#d35400",   // オレンジ（アクセント）
+                bgColor: "#fbe9e7",      // 薄いオレンジ（背景）
+                cellBg: "#ffccbc",       // 赤茶色の粘土（ブロック）
+                cellBorder: "#ff8a65",   // 濃い赤茶色（枠線）
+                bgmSrc: "music/tyrano.mp3"
             }
         ];
 
@@ -354,8 +363,6 @@
 
         function initGame() {
             const stage = stages[currentStageIndex];
-
-            // ステージに応じたBGMを再生
             playBGM(stage.bgmSrc);
 
             board = []; revealedCount = 0; gameOver = false; isFirstClick = true;
@@ -364,7 +371,11 @@
             boardElement.style.opacity = '1';       
             overlayBodyImg.style.opacity = '0';     
             
+            // ★CSS変数を書き換えて画面の色をダイナミックに変更
             document.documentElement.style.setProperty('--theme-accent', stage.themeColor);
+            document.documentElement.style.setProperty('--bg-color', stage.bgColor);
+            document.documentElement.style.setProperty('--cell-bg', stage.cellBg);
+            document.documentElement.style.setProperty('--cell-border', stage.cellBorder);
             
             stageNameElement.textContent = `ステージ ${currentStageIndex + 1}`;
             bgFossilImg.src = stage.fossilImg;
@@ -444,7 +455,6 @@
 
             if (cellData.flagged || (cellData.cracked && cellData.isMine)) {
                 if (cellData.cracked && cellData.isMine) {
-                    // 意図的に警告マスを押した場合はバクハツへ進む
                 } else {
                     return; 
                 }
@@ -461,8 +471,6 @@
                     cellDiv.classList.add('cracked');
                     cellDiv.innerHTML = '<span>❗</span>';
                     messageElement.innerHTML = "<span style='color:#b71c1c;'>あつッ！マグマの サインだ！<br>もう１回 さわると バクハツだよ！</span>";
-                    
-                    // SFX: 警告音
                     playWarningSE();
                     return; 
                 } else {
@@ -475,7 +483,6 @@
                     progressText.innerHTML = "<span style='color:red;'>しっぱい...</span>";
                     revealAllMines(stage);
                     
-                    // SFX & BGM: BGM停止、爆発音からのゲームオーバーメロディ
                     stopBGM();
                     playExplosionSE();
                     setTimeout(playGameOverSE, 800);
@@ -539,7 +546,6 @@
 
                 boardElement.style.opacity = '0';
                 
-                // BGMを止めて、クリアSFXを鳴らす
                 stopBGM();
                 playClearSE();
 
@@ -548,7 +554,6 @@
 
                     setTimeout(() => {
                         videoContainer.style.display = 'flex';
-                        // 「タップしてスタート」を通しているのでミュート不要で再生可能！
                         winVideo.muted = false; 
                         winVideo.play().catch(e => { winVideo.controls = true; });
                     }, 2500);
@@ -564,10 +569,14 @@
             if (currentStageIndex < stages.length - 1) {
                 startGame(currentStageIndex + 1);
             } else {
-                // 全ステージクリア！
-                playAllClearSE(); // 全クリ用豪華ファンファーレ
+                playAllClearSE(); 
                 alert("すごい！ぜんぶの きょうりゅうを 復活（ふっかつ）させたよ！");
-                playBGM("music/opening.mp3"); // タイトルBGMに戻す
+                
+                // タイトル画面のデフォルト色に戻す
+                document.documentElement.style.setProperty('--theme-accent', '#d35400');
+                document.documentElement.style.setProperty('--bg-color', '#f4e8d3');
+                
+                playBGM("music/opening.mp3"); 
                 showScreen('screen-title');
             }
         }
