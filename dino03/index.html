@@ -42,15 +42,18 @@
         .front { background: var(--wall-color); transform: rotateX(-90deg) translateZ(calc(var(--tile-size) - var(--h))); height: var(--h); transform-origin: bottom; }
         .right { background: #6d4c41; transform: rotateY(90deg) translateZ(calc(var(--tile-size) - var(--h))); width: var(--h); transform-origin: right; }
 
-        /* ユニット（ティラノ） */
+        /* ユニット（ティラノ） - 修正ポイント */
         #unit {
             position: absolute;
             width: var(--tile-size); height: var(--tile-size);
             font-size: 40px; text-align: center; line-height: var(--tile-size);
             transform-style: preserve-3d;
-            transform: translateZ(calc(var(--z) + 10px)) rotateZ(-45deg) rotateX(-60deg);
+            /* タイルの天面(z座標)の上に配置、さらに全体が見えるようにカメラから見て中央寄りに調整 */
+            transform: translateZ(calc(var(--z))) rotateZ(-45deg) rotateX(-60deg) scale(0.8);
             transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             pointer-events: none;
+            /* カメラから見てキャラクターが手前に来るようにz-indexを調整 */
+            z-index: 100;
         }
 
         /* UI */
@@ -145,6 +148,7 @@ function moveUnit(x, y, z) {
         unitPos = { x, y, z };
         unit.style.left = `${x * 60}px`;
         unit.style.top = `${y * 60}px`;
+        // タイルの天面の上にキャラクターのz軸を合わせる
         unit.style.setProperty('--z', `${z}px`);
         document.getElementById('msg').innerHTML = `<ruby>座標<rt>ざひょう</rt></ruby> (${x}, ${y}) へ <ruby>移動<rt>いどう</rt></ruby>したよ！`;
     }
