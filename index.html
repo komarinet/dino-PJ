@@ -12,7 +12,7 @@
             --accent-orange: #ff8c00;
             --jungle-green: #2e7d32;
             --card-bg: #ffffff;
-            --special-blue: #00ffff;
+            --tyrano-red: #d32f2f;
         }
 
         body {
@@ -77,8 +77,8 @@
 
         /* 各カードの画像指定 */
         .thumb-dino01 { background-image: url('img/top01.jpg'); }
-        /* 2個目のゲーム用に拡張子をjpegにし、背景色を土色（ブラウン）に変更 */
-        .thumb-dino02 { background-image: url('img/top02.png'); background-color: #8d6e63; } 
+        .thumb-dino02 { background-image: url('img/top02.png'); background-color: #8d6e63; }
+        .thumb-dino03 { background-image: url('img/top03.jpg'); background-color: var(--tyrano-red); }
 
         .game-info {
             padding: 15px 20px 20px;
@@ -146,18 +146,19 @@
             </div>
         </a>
 
-        <div class="game-card" style="opacity: 0.6; border-style: dashed; filter: grayscale(1); box-shadow: none;">
-            <div class="game-thumbnail" style="background: #ccc; display: flex; align-items: center; justify-content: center; font-size: 40px; color: #999;">？</div>
+        <a href="./dino03/" class="game-card">
+            <div class="game-thumbnail thumb-dino03"></div>
             <div class="game-info">
                 <div>
-                    <div class="game-title">？？？</div>
+                    <div class="game-title">ちびっこティラノの<ruby>大<rt>だい</rt></ruby>ぼうけん！</div>
                     <div class="game-desc">
-                        <ruby>次<rt>つぎ</rt></ruby>の ゲームは なんだろう？<br>
-                        ただいま <ruby>準備中<rt>じゅんびじゅう</rt></ruby>だよ！
+                        お<ruby>母<rt>かあ</rt></ruby>さんを <ruby>助<rt>たす</rt></ruby>けに いこう！<br>
+                        <ruby>悪<rt>わる</rt></ruby>い ギガノトサウルスを たおす、はじめての ＲＰＧ！
                     </div>
                 </div>
+                <div class="play-btn"><ruby>遊<rt>あそ</rt></ruby>びにいく！</div>
             </div>
-        </div>
+        </a>
     </div>
 </div>
 
