@@ -3,121 +3,159 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノの大ぼうけん</title>
+    <title>ちびっこティラノ：タクティクス</title>
     <style>
-        body { background: #333; color: white; font-family: sans-serif; margin: 0; overflow: hidden; touch-action: manipulation; }
-        #game-container { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        :root { --tile-size: 60px; --wall-color: #8d6e63; --top-color: #4caf50; }
+        body { margin: 0; background: #222; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
         
-        /* バトルフィールド（サイドビュー） */
-        #battle-field { flex: 1; position: relative; background: linear-gradient(#87CEEB, #228B22); overflow: hidden; }
-        .char { position: absolute; font-size: 80px; transition: transform 0.2s; bottom: 20%; }
-        #enemy { left: 10%; }
-        #player { right: 10%; transform: scaleX(-1); } /* 右向き */
-        
-        /* 攻撃アニメーション用 */
-        .attack-anim-p { transform: translateX(-100px) scaleX(-1) !important; }
-        .attack-anim-e { transform: translateX(100px) !important; }
-
-        /* UIエリア */
-        #ui-area { height: 40%; background: #00008B; border-top: 4px border: #eee; padding: 10px; box-sizing: border-box; }
-        #message-window { height: 40%; border: 2px solid white; border-radius: 8px; padding: 10px; margin-bottom: 10px; font-size: 1.2rem; background: rgba(0,0,0,0.5); }
-        #command-window { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; height: 50%; }
-        
-        button { 
-            background: #eee; border: none; border-radius: 10px; font-size: 1.2rem; font-weight: bold;
-            box-shadow: 0 4px #999; active: transform: translateY(2px);
+        /* 3D表示のコンテナ */
+        #stage {
+            width: 100vw; height: 60vh;
+            perspective: 1000px;
+            display: flex; align-items: center; justify-content: center;
+            background: linear-gradient(#444, #111);
         }
-        button:active { box-shadow: 0 0 #999; transform: translateY(4px); }
+
+        #world {
+            position: relative;
+            width: 300px; height: 300px;
+            transform-style: preserve-3d;
+            transform: rotateX(60deg) rotateZ(45deg);
+            transition: transform 0.5s;
+        }
+
+        /* タイル（立方体）のスタイル */
+        .tile {
+            position: absolute;
+            width: var(--tile-size); height: var(--tile-size);
+            transform-style: preserve-3d;
+        }
+
+        .face {
+            position: absolute;
+            width: 100%; height: 100%;
+            border: 1px solid rgba(0,0,0,0.2);
+            box-sizing: border-box;
+        }
+
+        .top { background: var(--top-color); transform: translateZ(var(--h)); }
+        .front { background: var(--wall-color); transform: rotateX(-90deg) translateZ(calc(var(--tile-size) - var(--h))); height: var(--h); transform-origin: bottom; }
+        .right { background: #6d4c41; transform: rotateY(90deg) translateZ(calc(var(--tile-size) - var(--h))); width: var(--h); transform-origin: right; }
+
+        /* ユニット（ティラノ） */
+        #unit {
+            position: absolute;
+            width: var(--tile-size); height: var(--tile-size);
+            font-size: 40px; text-align: center; line-height: var(--tile-size);
+            transform-style: preserve-3d;
+            transform: translateZ(calc(var(--z) + 10px)) rotateZ(-45deg) rotateX(-60deg);
+            transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            pointer-events: none;
+        }
+
+        /* UI */
+        #ui { height: 40vh; background: #00008b; border-top: 4px solid #eee; padding: 15px; box-sizing: border-box; }
+        #msg { height: 50px; border: 2px solid white; padding: 10px; border-radius: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.5); }
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        button { padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; border: none; background: #eee; }
     </style>
 </head>
 <body>
 
-<div id="game-container">
-    <div id="battle-field">
-        <div id="enemy" class="char">🦖</div>
-        <div id="player" class="char">🦖</div> </div>
+<div id="stage">
+    <div id="world">
+        <div id="unit">🦖</div>
+    </div>
+</div>
 
-    <div id="ui-area">
-        <div id="message-window">
-            <ruby>野生<rt>やせい</rt></ruby>の ギガノトサウルスが あらわれた！
-        </div>
-        <div id="command-window">
-            <button onclick="playerAttack()"><ruby>攻撃<rt>こうげき</rt></ruby></button>
-            <button onclick="playerHeal()"><ruby>回復<rt>かいふく</rt></ruby></button>
-        </div>
+<div id="ui">
+    <div id="msg">
+        <ruby>地面<rt>じめん</rt></ruby>を タップして <ruby>移動<rt>いどう</rt></ruby>しよう！
+    </div>
+    <div class="controls">
+        <button onclick="rotateWorld(-45)">◀ <ruby>回<rt>まわ</rt></ruby>す</button>
+        <button onclick="rotateWorld(45)"><ruby>回<rt>まわ</rt></ruby>す ▶</button>
+        <button onclick="playSound('jump')">ＪＵＭＰ！</button>
     </div>
 </div>
 
 <script>
-// --- オーディオ設定 ---
+// マップデータ（[x][y] = 高さ）
+const mapData = [
+    [1, 1, 1, 1, 1],
+    [1, 2, 2, 2, 1],
+    [1, 2, 3, 2, 1],
+    [1, 2, 2, 2, 1],
+    [1, 1, 1, 1, 1]
+];
+
+const world = document.getElementById('world');
+const unit = document.getElementById('unit');
+let unitPos = { x: 0, y: 0, z: 0 };
+let currentRotation = 45;
+
+// Web Audio API
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSfx(freq, type, duration) {
+function playSound(type) {
     const osc = audioCtx.createOscillator();
     const gain = audioCtx.createGain();
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + duration);
-    gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, audioCtx.currentTime + duration);
-    osc.connect(gain);
-    gain.connect(audioCtx.destination);
-    osc.start();
-    osc.stop(audioCtx.currentTime + duration);
-}
-
-// --- ゲームロジック ---
-let playerHp = 30;
-let enemyHp = 50;
-const msg = document.getElementById('message-window');
-
-function updateMessage(text) {
-    msg.innerHTML = text; // rubyタグを含むためinnerHTML
-}
-
-async function playerAttack() {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    
-    // 攻撃アニメーション
-    const p = document.getElementById('player');
-    p.classList.add('attack-anim-p');
-    playSfx(440, 'sawtooth', 0.1);
-    updateMessage("<ruby>攻撃<rt>こうげき</rt></ruby>！ ギガノトサウルスに 10の ダメージ！");
-    
-    await new Promise(r => setTimeout(r, 500));
-    p.classList.remove('attack-anim-p');
-    enemyHp -= 10;
-
-    if (enemyHp <= 0) {
-        updateMessage("ギガノトサウルスを たおした！ ママを たすけだしたぞ！");
-        return;
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    if(type === 'move') {
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+        gain.gain.linearRampToValueAtTime(0, now + 0.1);
+        osc.start(); osc.stop(now + 0.1);
+    } else if(type === 'jump') {
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(660, now + 0.2);
+        gain.gain.linearRampToValueAtTime(0, now + 0.2);
+        osc.start(); osc.stop(now + 0.2);
     }
-
-    // 敵のターン
-    setTimeout(enemyTurn, 1000);
 }
 
-function enemyTurn() {
-    const e = document.getElementById('enemy');
-    e.classList.add('attack-anim-e');
-    playSfx(110, 'square', 0.2);
-    updateMessage("ギガノトサウルスの 攻撃！ 5の ダメージ！");
-    
-    setTimeout(() => {
-        e.classList.remove('attack-anim-e');
-        playerHp -= 5;
-        if (playerHp <= 0) {
-            updateMessage("ちびっこティラノは たおれた… ママ…ごめんね。");
+// マップ生成
+function createMap() {
+    for (let y = 0; y < 5; y++) {
+        for (let x = 0; x < 5; x++) {
+            const h = mapData[y][x] * 20; // 1段20px
+            const tile = document.createElement('div');
+            tile.className = 'tile';
+            tile.style.left = `${x * 60}px`;
+            tile.style.top = `${y * 60}px`;
+            tile.style.setProperty('--h', `${h}px`);
+            
+            tile.innerHTML = `
+                <div class="face top" onclick="moveUnit(${x}, ${y}, ${h})"></div>
+                <div class="face front"></div>
+                <div class="face right"></div>
+            `;
+            world.appendChild(tile);
         }
-    }, 500);
+    }
+    moveUnit(0, 0, mapData[0][0] * 20); // 初期位置
 }
 
-function playerHeal() {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    playSfx(880, 'sine', 0.5);
-    playerHp += 10;
-    updateMessage("きのみを たべた！ HPが 10 かいふく！");
-    setTimeout(enemyTurn, 1000);
+function moveUnit(x, y, z) {
+    // 6歳向け：隣接マスなら移動可能
+    const dist = Math.abs(x - unitPos.x) + Math.abs(y - unitPos.y);
+    if (dist > 0 && dist <= 1) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        playSound('move');
+        unitPos = { x, y, z };
+        unit.style.left = `${x * 60}px`;
+        unit.style.top = `${y * 60}px`;
+        unit.style.setProperty('--z', `${z}px`);
+        document.getElementById('msg').innerHTML = `<ruby>座標<rt>ざひょう</rt></ruby> (${x}, ${y}) へ <ruby>移動<rt>いどう</rt></ruby>したよ！`;
+    }
 }
+
+function rotateWorld(deg) {
+    currentRotation += deg;
+    world.style.transform = `rotateX(60deg) rotateZ(${currentRotation}deg)`;
+}
+
+createMap();
 </script>
 </body>
 </html>
