@@ -3,10 +3,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>きょうりゅうはっくつゲーム - 発掘一体型Ver.</title>
+    <title>きょうりゅうはっくつゲーム - 全3ステージ＆発掘テーマVer.</title>
     <style>
-        /* 基本設定 */
         * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        /* 動的に変わるテーマカラー用のCSS変数 */
+        :root {
+            --theme-accent: #d35400; /* デフォルトのオレンジ */
+        }
+
         body {
             font-family: 'Hiragino Maru Gothic ProN', 'Rounded M+ 1c', sans-serif;
             background-color: #f4e8d3; text-align: center; color: #333;
@@ -26,20 +31,26 @@
             transition: transform 0.1s, background-color 0.2s; margin: 5px; width: auto; min-width: 120px;
         }
         .btn:active { transform: translateY(2px); box-shadow: 0 2px 3px rgba(0,0,0,0.2); }
-        .btn-primary { background-color: #d35400; color: white; }
-        .btn-secondary { background-color: #f39c12; color: white; }
+        .btn-primary { background-color: var(--theme-accent); color: white; }
+        .btn-secondary { background-color: #bdc3c7; color: #333; }
         .btn-skip { background-color: #bdc3c7; color: #333; padding: 8px 15px; font-size: 14px; position: absolute; top: 10px; right: 10px; }
 
-        /* タイトル画面 */
+        /* タイトル画面（発掘現場風背景） */
+        #screen-title {
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23a1887f'/%3E%3Cstop offset='1' stop-color='%235d4037'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23a)' width='1600' height='900'/%3E%3Cpath fill='%23a1887f' d='M0 900l1600-900V0H0z' opacity='.1'/%3E%3Cpath fill='%23795548' d='M0 120h400l400 400h400l400 400V0H0z' opacity='.1'/%3E%3Ccircle cx='800' cy='450' r='300' fill='%238d6e63' opacity='.05'/%3E%3Crect x='100' y='700' width='100' height='20' rx='5' fill='%23ccc' opacity='.2'/%3E%3Crect x='1400' y='600' width='80' height='30' rx='10' fill='%23ccc' opacity='.2'/%3E%3Crect x='600' y='800' width='30' height='100' rx='5' fill='%23ccc' opacity='.2'/%3E%3C/svg%3E");
+            background-size: cover;
+            border-radius: 15px;
+            box-shadow: 0 0 15px rgba(0,0,0,0.2);
+            margin: 10px;
+        }
         #title-logo {
             width: 100%; max-width: 350px; height: auto; border-radius: 15px;
             margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); background-color: #ccc;
         }
-        h1 { color: #d35400; font-size: 24px; margin-bottom: 20px; line-height: 1.5; }
+        h1 { color: #f4e8d3; font-size: 24px; margin-bottom: 20px; line-height: 1.5; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
 
-        /* チュートリアル */
         #tutorial-text-box {
-            background-color: #fff; border: 3px solid #d35400; border-radius: 10px;
+            background-color: #fff; border: 3px solid var(--theme-accent); border-radius: 10px;
             padding: 15px; margin-bottom: 20px; width: 90%; font-size: 16px; font-weight: bold;
             line-height: 1.8; min-height: 100px; display: flex; align-items: center; justify-content: center;
         }
@@ -50,85 +61,77 @@
         }
 
         /* ゲーム本編 ヘッダー・コントロール */
-        header { width: 100%; margin-bottom: 10px; flex-shrink: 0; }
-        h2#stage-name { color: #d35400; font-size: 22px; margin: 5px 0; background: #fff; display: inline-block; padding: 5px 20px; border-radius: 20px; border: 2px solid #d35400; }
+        header { width: 100%; margin-bottom: 5px; flex-shrink: 0; }
+        h2#stage-name { color: #fff; font-size: 20px; margin: 5px 0; background: var(--theme-accent); display: inline-block; padding: 5px 20px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         p#message { font-size: 14px; font-weight: bold; line-height: 1.6; margin-bottom: 5px; height: 45px;}
         
         #controls { 
-            display: flex; gap: 15px; margin-bottom: 15px; width: 100%; 
+            display: flex; gap: 15px; margin-bottom: 10px; width: 100%; 
             justify-content: center; align-items: center; 
         }
-        #progress-text { font-size: 16px; font-weight: bold; color: #8d6e63; }
+        #progress-text { font-size: 16px; font-weight: bold; color: var(--theme-accent); }
+
+        /* モード切り替えスイッチ */
+        #mode-switch {
+            display: flex; background-color: #bdc3c7; border-radius: 30px; padding: 5px; margin-bottom: 15px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .mode-btn {
+            border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 25px;
+            background-color: transparent; color: #7f8c8d; cursor: pointer; transition: 0.3s;
+        }
+        .mode-btn.active.dig { background-color: #3498db; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .mode-btn.active.flag { background-color: #e74c3c; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 
         .game-main { display: flex; flex-direction: column; align-items: center; flex-grow: 1; width: 100%; }
         
-        /* 発掘ゲーム盤（背景画像と重ねるラッパー） */
         .board-wrapper {
-            position: relative;
-            width: 100%; max-width: 400px; aspect-ratio: 1 / 1;
-            background-color: #4e342e; /* 隙間が見えても土っぽく見える暗い茶色 */
-            border-radius: 10px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-            margin-bottom: 20px;
-            overflow: hidden; /* 角丸からはみ出ないように */
+            position: relative; width: 100%; max-width: 400px; aspect-ratio: 1 / 1;
+            /* より深い土の層の質感 */
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1600 1600'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%235d4037'/%3E%3Cstop offset='1' stop-color='%234e342e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23a)' width='1600' height='1600'/%3E%3Crect x='0' y='0' width='100' height='100' fill='%23422a25' opacity='.1'/%3E%3C/svg%3E");
+            background-size: cover;
+            border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.4);
+            margin-bottom: 20px; overflow: hidden;
         }
         
-        /* 1層目: 化石の背景画像 */
         #bg-fossil {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             object-fit: contain; z-index: 1; padding: 10px; box-sizing: border-box;
         }
-
-        /* 2層目: マインスイーパーのマス目 */
         #game-board { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            display: grid; 
-            grid-template-columns: repeat(var(--cols, 6), 1fr); 
-            grid-template-rows: repeat(var(--rows, 6), 1fr); 
-            gap: 2px; padding: 4px; box-sizing: border-box;
-            z-index: 2; 
-            transition: opacity 1s ease; /* クリア時にフワッと消える用 */
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; 
+            grid-template-columns: repeat(var(--cols, 6), 1fr); grid-template-rows: repeat(var(--rows, 6), 1fr); 
+            gap: 2px; padding: 4px; box-sizing: border-box; z-index: 2; transition: opacity 1s ease;
         }
-
-        /* 3層目: 本体画像（クリアするまで透明） */
         #overlay-body {
             position: absolute; top: 0; left: 0; width: 100%; height: 100%;
             object-fit: contain; z-index: 3; padding: 10px; box-sizing: border-box;
             opacity: 0; transition: opacity 1.5s ease; pointer-events: none;
         }
 
-        /* マスのデザイン */
         .cell {
             background-color: #d7ccc8; border: 2px solid #a1887f; border-radius: 4px;
-            font-size: calc(240px / var(--cols, 6)); 
-            font-weight: bold; display: flex; align-items: center; justify-content: center;
+            font-size: calc(240px / var(--cols, 6)); font-weight: bold; display: flex; align-items: center; justify-content: center;
             cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; 
-            aspect-ratio: 1 / 1; overflow: hidden;
-            transition: background-color 0.2s;
+            aspect-ratio: 1 / 1; overflow: hidden; transition: background-color 0.2s;
         }
         @media (min-width: 500px) { .cell { font-size: calc(300px / var(--cols, 6)); } }
         
-        /* 掘った後のマス（半透明になって化石が透ける） */
         .cell.revealed { 
-            background-color: rgba(255, 255, 255, 0.6); 
-            border: 1px solid rgba(255, 255, 255, 0.3);
-            cursor: default;
-            /* 数字を読みやすくするための強い白フチと影 */
-            text-shadow:
-                -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff,
-                0px 2px 4px rgba(0,0,0,0.8);
+            background-color: rgba(255, 255, 255, 0.4); /* より透けるように調整 */
+            border: 1px solid rgba(255, 255, 255, 0.2); cursor: default;
+            text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0px 2px 4px rgba(0,0,0,0.8);
         }
         
-        .cell.cracked { background-color: #ffccbc; border: 2px dashed #e64a19; }
-        .cell.cracked span { opacity: 0.6; font-size: 80%; }
+        .cell.cracked { background-color: #ff5252; border: 2px solid #b71c1c; }
+        .cell.cracked span { font-size: 80%; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
         
-        .cell.magma-revealed {
-            background-color: rgba(255, 205, 210, 0.9); border: 2px solid #e53935;
-        }
-
+        .cell.flagged { background-color: #ffecb3; }
+        .cell.flagged span { font-size: 80%; }
+        
+        .cell.magma-revealed { background-color: rgba(255, 205, 210, 0.9); border: 2px solid #e53935; }
         .magma { font-size: 100%; line-height: 1; }
         
-        /* 動画コンテナ */
         #video-container {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background-color: #000; z-index: 100; flex-direction: column; justify-content: center; align-items: center;
@@ -143,7 +146,7 @@
 
     <div id="screen-title" class="screen active">
         <img id="title-logo" src="img/title.png" alt="タイトル画像" onerror="this.style.display='none'">
-        <h1>きょうりゅう<br><ruby>発掘<rt>はっくつ</rt></ruby>ゲーム</h1>
+        <h1>きょうりゅう<ruby>発掘<rt>はっくつ</rt></ruby>ゲーム</h1>
         <div style="display: flex; gap: 10px;">
             <button class="btn btn-secondary" onclick="startTutorial()">あそびかた</button>
             <button class="btn btn-primary" onclick="startGame(0)">すぐにあそぶ</button>
@@ -168,6 +171,11 @@
                     <h2 id="stage-name">ステージ 1</h2>
                     <p id="message"><ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ほろう！</p>
                 </header>
+
+                <div id="mode-switch">
+                    <button id="mode-dig" class="mode-btn active dig" onclick="setMode('dig')">⛏️ ほる</button>
+                    <button id="mode-flag" class="mode-btn flag" onclick="setMode('flag')">🚩 しるし</button>
+                </div>
                 
                 <div id="controls">
                     <button id="reset-btn" class="btn btn-primary" onclick="initGame()">やりなおす</button>
@@ -194,16 +202,29 @@
             document.getElementById(screenId).classList.add('active');
         }
 
+        let currentMode = 'dig';
+        function setMode(mode) {
+            currentMode = mode;
+            const modeDig = document.getElementById('mode-dig');
+            const modeFlag = document.getElementById('mode-flag');
+            modeDig.classList.toggle('active', mode === 'dig');
+            modeFlag.classList.toggle('active', mode === 'flag');
+            
+            // CSS変数を更新して、テーマカラーに合わせる
+            modeDig.style.backgroundColor = (mode === 'dig') ? '#3498db' : 'transparent';
+            modeFlag.style.backgroundColor = (mode === 'flag') ? '#e74c3c' : 'transparent';
+        }
+
         // --- チュートリアル ---
         let tutStep = 0;
         const tutTextElement = document.getElementById('tut-text');
         
         const tutorialSteps = [
-            { text: "<ruby>土<rt>つち</rt></ruby>の 下(した)には <ruby>危険<rt>きけん</rt></ruby>なマグマが<br>かくれている ことがあるよ！", action: () => { resetTutBoard(); } },
-            { text: "まずは まん中の <ruby>土<rt>つち</rt></ruby>を<br>ほってみよう！", action: () => { let c = document.getElementById('tut-cell-4'); c.classList.add('revealed'); c.style.color = '#0000FF'; c.textContent = '1'; } },
+            { text: "まずは『⛏️ ほる』モードで<br>まん中の <ruby>土<rt>つち</rt></ruby>をほってみよう！", action: () => { resetTutBoard(); setMode('dig'); let c = document.getElementById('tut-cell-4'); c.classList.add('revealed'); c.style.color = '#0000FF'; c.textContent = '1'; } },
             { text: "『１』が でたね！まわりの どこか<br>１つだけに マグマが あるよ。", action: () => { for(let i=0; i<9; i++) { if(i !== 4) document.getElementById('tut-cell-'+i).style.borderColor = '#e74c3c'; } } },
-            { text: "あ！マグマを ほってしまった！<br>でも１回目(かいめ)なら セーフ！", action: () => { for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; } let bomb = document.getElementById('tut-cell-0'); bomb.classList.add('cracked'); bomb.innerHTML = '<span>🌋</span>'; } },
-            { text: "ヒビが 入ったところを もう１度<br>ほると バクハツしちゃうよ！<br>よけて ほかの<ruby>土<rt>つち</rt></ruby>を ほろう！", action: () => { [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; } }
+            { text: "あ！マグマを ほってしまった！<br>でも１回目(かいめ)なら セーフ！<br>『❗』のサインが でるよ。", action: () => { for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; } let bomb = document.getElementById('tut-cell-0'); bomb.classList.add('cracked'); bomb.innerHTML = '<span>❗</span>'; } },
+            { text: "あぶない 場所(ばしょ)には スイッチを<br>きりかえて 『🚩 しるし』を<br>つけておこう！", action: () => { setMode('flag'); let bomb = document.getElementById('tut-cell-0'); bomb.className = 'cell flagged'; bomb.innerHTML = '<span>🚩</span>'; } },
+            { text: "『🚩』や『❗』の場所を よけて<br>ほかの <ruby>土<rt>つち</rt></ruby>を ぜんぶほれば クリア！", action: () => { setMode('dig'); [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; } }
         ];
 
         function startTutorial() { showScreen('screen-tutorial'); tutStep = 0; document.getElementById('tut-next-btn').textContent = "つぎへ"; playTutStep(tutStep); }
@@ -215,15 +236,24 @@
         const stages = [
             {
                 rows: 6, cols: 6, mines: 6,
+                bodyImg: "img/tri.png",
+                fossilImg: "img/tri_born.png",
+                videoSrc: "img/tri.mp4",
+                themeColor: "#2E7D32" // ステージ1：グリーン
+            },
+            {
+                rows: 7, cols: 7, mines: 9,
                 bodyImg: "img/mosa02.png",
                 fossilImg: "img/mosa_born02.png",
-                videoSrc: "img/mosa.mp4"
+                videoSrc: "img/mosa.mp4",
+                themeColor: "#1565C0" // ステージ2：ブルー
             },
             {
                 rows: 8, cols: 8, mines: 12,
                 bodyImg: "img/tyrano02.png",
                 fossilImg: "img/tyrano_born02.png",
-                videoSrc: "img/tyrano01.mp4"
+                videoSrc: "img/tyrano01.mp4",
+                themeColor: "#d35400" // ステージ3：オレンジ
             }
         ];
 
@@ -247,6 +277,7 @@
         function startGame(stageIndex) {
             currentStageIndex = stageIndex;
             showScreen('screen-game');
+            setMode('dig');
             initGame();
         }
 
@@ -254,12 +285,13 @@
             const stage = stages[currentStageIndex];
 
             board = []; revealedCount = 0; gameOver = false; isFirstClick = true;
-            
-            // 状態リセット
             videoContainer.style.display = 'none'; 
             winVideo.pause(); winVideo.currentTime = 0;
-            boardElement.style.opacity = '1';       // グリッドを表示
-            overlayBodyImg.style.opacity = '0';     // 肉付け画像を隠す
+            boardElement.style.opacity = '1';       
+            overlayBodyImg.style.opacity = '0';     
+            
+            // ステージのテーマカラーをCSS変数にセット
+            document.documentElement.style.setProperty('--theme-accent', stage.themeColor);
             
             stageNameElement.textContent = `ステージ ${currentStageIndex + 1}`;
             bgFossilImg.src = stage.fossilImg;
@@ -273,7 +305,7 @@
                 closeVideoBtn.textContent = "つぎのステージへ！";
             }
 
-            messageElement.innerHTML = "<ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ほろう！<br>ヒビが入ったら もうさわらないでね！";
+            messageElement.innerHTML = "<ruby>数字<rt>すうじ</rt></ruby>をヒントに <ruby>安全<rt>あんぜん</rt></ruby>な<ruby>土<rt>つち</rt></ruby>を ほろう！";
             updateProgressText(stage);
             
             boardElement.style.setProperty('--cols', stage.cols);
@@ -284,7 +316,7 @@
 
             for (let r = 0; r < stage.rows; r++) {
                 let row = [];
-                for (let c = 0; c < stage.cols; c++) { row.push({ isMine: false, revealed: false, cracked: false, neighborMines: 0 }); }
+                for (let c = 0; c < stage.cols; c++) { row.push({ isMine: false, revealed: false, cracked: false, flagged: false, neighborMines: 0 }); }
                 board.push(row);
             }
             
@@ -326,19 +358,35 @@
             let cellData = board[r][c];
             if (gameOver || cellData.revealed) return;
 
+            let cellDiv = boardElement.children[r * stage.cols + c];
+
+            if (currentMode === 'flag') {
+                if (!cellData.cracked) { 
+                    cellData.flagged = !cellData.flagged;
+                    cellDiv.classList.toggle('flagged', cellData.flagged);
+                    cellDiv.innerHTML = cellData.flagged ? '<span>🚩</span>' : '';
+                }
+                return;
+            }
+
+            if (cellData.flagged || (cellData.cracked && cellData.isMine)) {
+                if (cellData.cracked && cellData.isMine) {
+                } else {
+                    return; 
+                }
+            }
+
             if (isFirstClick) {
                 generateMines(r, c, stage);
                 isFirstClick = false;
             }
 
-            let cellDiv = boardElement.children[r * stage.cols + c];
-
             if (cellData.isMine) {
                 if (!cellData.cracked) {
                     cellData.cracked = true;
                     cellDiv.classList.add('cracked');
-                    cellDiv.innerHTML = '<span>🌋</span>';
-                    messageElement.innerHTML = "<span style='color:#d35400;'>あつッ！マグマが かくれているぞ！<br>もう１回 さわると バクハツだよ！</span>";
+                    cellDiv.innerHTML = '<span>❗</span>';
+                    messageElement.innerHTML = "<span style='color:#b71c1c;'>あつッ！マグマの サインだ！<br>もう１回 さわると バクハツだよ！</span>";
                     return; 
                 } else {
                     gameOver = true;
@@ -354,6 +402,8 @@
                 cellData.revealed = true;
                 revealedCount++;
                 cellDiv.classList.add('revealed');
+                cellDiv.classList.remove('flagged');
+                
                 updateProgressText(stage);
 
                 if (cellData.neighborMines > 0) {
@@ -366,7 +416,7 @@
                         for (let dc = -1; dc <= 1; dc++) {
                             let nr = r + dr; let nc = c + dc;
                             if (nr >= 0 && nr < stage.rows && nc >= 0 && nc < stage.cols) {
-                                handleCellClick(nr, nc, stage);
+                                if(!board[nr][nc].flagged) handleCellClick(nr, nc, stage);
                             }
                         }
                     }
@@ -380,7 +430,7 @@
                 for (let c = 0; c < stage.cols; c++) {
                     if (board[r][c].isMine) {
                         let cellDiv = boardElement.children[r * stage.cols + c];
-                        cellDiv.classList.remove('cracked');
+                        cellDiv.classList.remove('cracked', 'flagged');
                         if (!cellDiv.classList.contains('revealed') && !cellDiv.classList.contains('magma-revealed')) {
                             cellDiv.classList.add('magma-revealed');
                             cellDiv.innerHTML = '<span class="magma">🌋</span>';
@@ -402,17 +452,14 @@
             const targetSafeCells = (stage.rows * stage.cols) - stage.mines;
             if (revealedCount === targetSafeCells) {
                 gameOver = true;
-                messageElement.innerHTML = "<span style='color:#d35400; font-size:20px;'><ruby>発掘<rt>はっくつ</rt></ruby>コンプリート！！</span>";
-                progressText.innerHTML = "<span style='color:#d35400;'>100% コンプリート！</span>";
+                messageElement.innerHTML = "<span style='color:var(--theme-accent); font-size:20px;'><ruby>発掘<rt>はっくつ</rt></ruby>コンプリート！！</span>";
+                progressText.innerHTML = `<span style='color:var(--theme-accent);'>100% コンプリート！</span>`;
 
-                // 演出1: グリッド（マス目）を透明にして、化石を完全に見せる
                 boardElement.style.opacity = '0';
 
-                // 演出2: 1秒後に本体画像をフワッと重ねる
                 setTimeout(() => {
                     overlayBodyImg.style.opacity = '1';
 
-                    // 演出3: 本体画像が現れた後（さらに2.5秒後）、動画を再生
                     setTimeout(() => {
                         videoContainer.style.display = 'flex';
                         winVideo.muted = true;
