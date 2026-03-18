@@ -3,13 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>きょうりゅうはっくつゲーム - 全3ステージ＆発掘テーマVer.</title>
+    <title>きょうりゅうはっくつゲーム - サウンド完全版</title>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         
-        /* 動的に変わるテーマカラー用のCSS変数 */
         :root {
-            --theme-accent: #d35400; /* デフォルトのオレンジ */
+            --theme-accent: #d35400; 
         }
 
         body {
@@ -25,6 +24,16 @@
         }
         .screen.active { display: flex; }
 
+        /* 音声ロック解除用の最初の画面 */
+        #screen-start-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.8); z-index: 999;
+            color: white; font-size: 24px; font-weight: bold;
+            flex-direction: column; justify-content: center; align-items: center; cursor: pointer;
+        }
+        .pulse-text { animation: pulse 1.5s infinite; }
+        @keyframes pulse { 0% { opacity: 1; transform: scale(1); } 50% { opacity: 0.5; transform: scale(1.05); } 100% { opacity: 1; transform: scale(1); } }
+
         .btn {
             border: none; padding: 12px 20px; font-size: 16px; border-radius: 25px;
             cursor: pointer; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.2);
@@ -35,51 +44,26 @@
         .btn-secondary { background-color: #bdc3c7; color: #333; }
         .btn-skip { background-color: #bdc3c7; color: #333; padding: 8px 15px; font-size: 14px; position: absolute; top: 10px; right: 10px; }
 
-        /* タイトル画面（発掘現場風背景） */
+        /* タイトル画面 */
         #screen-title {
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1600 900'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23a1887f'/%3E%3Cstop offset='1' stop-color='%235d4037'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23a)' width='1600' height='900'/%3E%3Cpath fill='%23a1887f' d='M0 900l1600-900V0H0z' opacity='.1'/%3E%3Cpath fill='%23795548' d='M0 120h400l400 400h400l400 400V0H0z' opacity='.1'/%3E%3Ccircle cx='800' cy='450' r='300' fill='%238d6e63' opacity='.05'/%3E%3Crect x='100' y='700' width='100' height='20' rx='5' fill='%23ccc' opacity='.2'/%3E%3Crect x='1400' y='600' width='80' height='30' rx='10' fill='%23ccc' opacity='.2'/%3E%3Crect x='600' y='800' width='30' height='100' rx='5' fill='%23ccc' opacity='.2'/%3E%3C/svg%3E");
-            background-size: cover;
-            border-radius: 15px;
-            box-shadow: 0 0 15px rgba(0,0,0,0.2);
-            margin: 10px;
+            background-size: cover; border-radius: 15px; box-shadow: 0 0 15px rgba(0,0,0,0.2); margin: 10px;
         }
-        #title-logo {
-            width: 100%; max-width: 350px; height: auto; border-radius: 15px;
-            margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); background-color: #ccc;
-        }
+        #title-logo { width: 100%; max-width: 350px; height: auto; border-radius: 15px; margin-bottom: 20px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); background-color: #ccc; }
         h1 { color: #f4e8d3; font-size: 24px; margin-bottom: 20px; line-height: 1.5; text-shadow: 2px 2px 4px rgba(0,0,0,0.5); }
 
-        #tutorial-text-box {
-            background-color: #fff; border: 3px solid var(--theme-accent); border-radius: 10px;
-            padding: 15px; margin-bottom: 20px; width: 90%; font-size: 16px; font-weight: bold;
-            line-height: 1.8; min-height: 100px; display: flex; align-items: center; justify-content: center;
-        }
-        #tut-board {
-            display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 5px;
-            width: 180px; height: 180px; background-color: #8d6e63; padding: 5px;
-            border-radius: 10px; margin-bottom: 20px;
-        }
+        #tutorial-text-box { background-color: #fff; border: 3px solid var(--theme-accent); border-radius: 10px; padding: 15px; margin-bottom: 20px; width: 90%; font-size: 16px; font-weight: bold; line-height: 1.8; min-height: 100px; display: flex; align-items: center; justify-content: center; }
+        #tut-board { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr); gap: 5px; width: 180px; height: 180px; background-color: #8d6e63; padding: 5px; border-radius: 10px; margin-bottom: 20px; }
 
-        /* ゲーム本編 ヘッダー・コントロール */
         header { width: 100%; margin-bottom: 5px; flex-shrink: 0; }
         h2#stage-name { color: #fff; font-size: 20px; margin: 5px 0; background: var(--theme-accent); display: inline-block; padding: 5px 20px; border-radius: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         p#message { font-size: 14px; font-weight: bold; line-height: 1.6; margin-bottom: 5px; height: 45px;}
         
-        #controls { 
-            display: flex; gap: 15px; margin-bottom: 10px; width: 100%; 
-            justify-content: center; align-items: center; 
-        }
+        #controls { display: flex; gap: 15px; margin-bottom: 10px; width: 100%; justify-content: center; align-items: center; }
         #progress-text { font-size: 16px; font-weight: bold; color: var(--theme-accent); }
 
-        /* モード切り替えスイッチ */
-        #mode-switch {
-            display: flex; background-color: #bdc3c7; border-radius: 30px; padding: 5px; margin-bottom: 15px;
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
-        }
-        .mode-btn {
-            border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 25px;
-            background-color: transparent; color: #7f8c8d; cursor: pointer; transition: 0.3s;
-        }
+        #mode-switch { display: flex; background-color: #bdc3c7; border-radius: 30px; padding: 5px; margin-bottom: 15px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.2); }
+        .mode-btn { border: none; padding: 10px 20px; font-size: 16px; font-weight: bold; border-radius: 25px; background-color: transparent; color: #7f8c8d; cursor: pointer; transition: 0.3s; }
         .mode-btn.active.dig { background-color: #3498db; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
         .mode-btn.active.flag { background-color: #e74c3c; color: white; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
 
@@ -87,55 +71,26 @@
         
         .board-wrapper {
             position: relative; width: 100%; max-width: 400px; aspect-ratio: 1 / 1;
-            /* より深い土の層の質感 */
             background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='100%25' height='100%25' viewBox='0 0 1600 1600'%3E%3Cdefs%3E%3ClinearGradient id='a' x1='0' x2='0' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%235d4037'/%3E%3Cstop offset='1' stop-color='%234e342e'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect fill='url(%23a)' width='1600' height='1600'/%3E%3Crect x='0' y='0' width='100' height='100' fill='%23422a25' opacity='.1'/%3E%3C/svg%3E");
-            background-size: cover;
-            border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.4);
-            margin-bottom: 20px; overflow: hidden;
+            background-size: cover; border-radius: 10px; box-shadow: 0 4px 10px rgba(0,0,0,0.4); margin-bottom: 20px; overflow: hidden;
         }
         
-        #bg-fossil {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: contain; z-index: 1; padding: 10px; box-sizing: border-box;
-        }
-        #game-board { 
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; 
-            grid-template-columns: repeat(var(--cols, 6), 1fr); grid-template-rows: repeat(var(--rows, 6), 1fr); 
-            gap: 2px; padding: 4px; box-sizing: border-box; z-index: 2; transition: opacity 1s ease;
-        }
-        #overlay-body {
-            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
-            object-fit: contain; z-index: 3; padding: 10px; box-sizing: border-box;
-            opacity: 0; transition: opacity 1.5s ease; pointer-events: none;
-        }
+        #bg-fossil { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; z-index: 1; padding: 10px; box-sizing: border-box; }
+        #game-board { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: grid; grid-template-columns: repeat(var(--cols, 6), 1fr); grid-template-rows: repeat(var(--rows, 6), 1fr); gap: 2px; padding: 4px; box-sizing: border-box; z-index: 2; transition: opacity 1s ease; }
+        #overlay-body { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; z-index: 3; padding: 10px; box-sizing: border-box; opacity: 0; transition: opacity 1.5s ease; pointer-events: none; }
 
-        .cell {
-            background-color: #d7ccc8; border: 2px solid #a1887f; border-radius: 4px;
-            font-size: calc(240px / var(--cols, 6)); font-weight: bold; display: flex; align-items: center; justify-content: center;
-            cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; 
-            aspect-ratio: 1 / 1; overflow: hidden; transition: background-color 0.2s;
-        }
+        .cell { background-color: #d7ccc8; border: 2px solid #a1887f; border-radius: 4px; font-size: calc(240px / var(--cols, 6)); font-weight: bold; display: flex; align-items: center; justify-content: center; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; aspect-ratio: 1 / 1; overflow: hidden; transition: background-color 0.2s; }
         @media (min-width: 500px) { .cell { font-size: calc(300px / var(--cols, 6)); } }
         
-        .cell.revealed { 
-            background-color: rgba(255, 255, 255, 0.4); /* より透けるように調整 */
-            border: 1px solid rgba(255, 255, 255, 0.2); cursor: default;
-            text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0px 2px 4px rgba(0,0,0,0.8);
-        }
-        
+        .cell.revealed { background-color: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.2); cursor: default; text-shadow: -1px -1px 0 #fff, 1px -1px 0 #fff, -1px 1px 0 #fff, 1px 1px 0 #fff, 0px 2px 4px rgba(0,0,0,0.8); }
         .cell.cracked { background-color: #ff5252; border: 2px solid #b71c1c; }
         .cell.cracked span { font-size: 80%; color: white; text-shadow: 1px 1px 2px rgba(0,0,0,0.5); }
-        
         .cell.flagged { background-color: #ffecb3; }
         .cell.flagged span { font-size: 80%; }
-        
         .cell.magma-revealed { background-color: rgba(255, 205, 210, 0.9); border: 2px solid #e53935; }
         .magma { font-size: 100%; line-height: 1; }
         
-        #video-container {
-            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background-color: #000; z-index: 100; flex-direction: column; justify-content: center; align-items: center;
-        }
+        #video-container { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: #000; z-index: 100; flex-direction: column; justify-content: center; align-items: center; }
         video { width: 100%; height: auto; max-height: 85vh; object-fit: contain; }
         #close-video-btn { margin-top: 20px; }
         
@@ -144,7 +99,11 @@
 </head>
 <body>
 
-    <div id="screen-title" class="screen active">
+    <div id="screen-start-overlay" class="screen active" onclick="unlockAudioAndStart()">
+        <span class="pulse-text">タップしてスタート！</span>
+    </div>
+
+    <div id="screen-title" class="screen">
         <img id="title-logo" src="img/title.png" alt="タイトル画像" onerror="this.style.display='none'">
         <h1>きょうりゅう<ruby>発掘<rt>はっくつ</rt></ruby>ゲーム</h1>
         <div style="display: flex; gap: 10px;">
@@ -197,9 +156,129 @@
     </div>
 
     <script>
+        // ==========================================
+        // サウンド（Web Audio API & BGM）システム
+        // ==========================================
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        let audioCtx;
+        
+        // BGM用のAudioオブジェクト
+        const bgmPlayer = new Audio();
+        bgmPlayer.loop = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        // BGMを再生
+        function playBGM(src) {
+            if (bgmPlayer.src.includes(src)) return; // 既に同じ曲が鳴っていれば無視
+            bgmPlayer.pause();
+            bgmPlayer.src = src;
+            bgmPlayer.play().catch(e => console.log("BGM Play Error:", e));
+        }
+        
+        // BGMを停止
+        function stopBGM() {
+            bgmPlayer.pause();
+        }
+
+        // --- JavaScriptで波形を生成して鳴らす（SFX） ---
+        function playTone(freq, type, duration, startTime) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, startTime);
+            
+            // 音の減衰（エンベロープ）
+            gain.gain.setValueAtTime(0.1, startTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(startTime);
+            osc.stop(startTime + duration);
+        }
+
+        // ① 警告音（❗）: 短いブザー音
+        function playWarningSE() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            playTone(880, 'square', 0.1, now);
+            playTone(1108, 'square', 0.2, now + 0.1);
+        }
+
+        // ② 爆発音（🌋）: 低音のノコギリ波を落とす
+        function playExplosionSE() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = 'sawtooth';
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(10, now + 1);
+            gain.gain.setValueAtTime(0.3, now);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 1);
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.start(now);
+            osc.stop(now + 1);
+        }
+
+        // ③ ゲームオーバー: 悲しいメロディ
+        function playGameOverSE() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            playTone(392.00, 'triangle', 0.3, now);      // G4
+            playTone(311.13, 'triangle', 0.3, now + 0.3); // Eb4
+            playTone(261.63, 'triangle', 0.6, now + 0.6); // C4
+        }
+
+        // ④ ステージクリア: ファンファーレ小
+        function playClearSE() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            playTone(523.25, 'square', 0.1, now);       // C5
+            playTone(659.25, 'square', 0.1, now + 0.1); // E5
+            playTone(783.99, 'square', 0.2, now + 0.2); // G5
+            playTone(1046.50, 'square', 0.4, now + 0.3); // C6
+        }
+
+        // ⑤ 全クリ: ファンファーレ大
+        function playAllClearSE() {
+            if (!audioCtx) return;
+            const now = audioCtx.currentTime;
+            const notes = [
+                {f: 523.25, d: 0.15, t: 0},     // C5
+                {f: 523.25, d: 0.15, t: 0.15},  // C5
+                {f: 523.25, d: 0.15, t: 0.3},   // C5
+                {f: 659.25, d: 0.4, t: 0.45},   // E5
+                {f: 587.33, d: 0.2, t: 0.85},   // D5
+                {f: 659.25, d: 0.6, t: 1.05}    // E5
+            ];
+            notes.forEach(n => playTone(n.f, 'square', n.d, now + n.t));
+        }
+
+
+        // ==========================================
+        // ゲームシステム
+        // ==========================================
         function showScreen(screenId) {
             document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
             document.getElementById(screenId).classList.add('active');
+        }
+
+        // 最初の画面タップで音声を許可し、タイトル画面へ
+        function unlockAudioAndStart() {
+            initAudio();
+            playBGM("music/opening.mp3");
+            showScreen('screen-title');
         }
 
         let currentMode = 'dig';
@@ -209,8 +288,6 @@
             const modeFlag = document.getElementById('mode-flag');
             modeDig.classList.toggle('active', mode === 'dig');
             modeFlag.classList.toggle('active', mode === 'flag');
-            
-            // CSS変数を更新して、テーマカラーに合わせる
             modeDig.style.backgroundColor = (mode === 'dig') ? '#3498db' : 'transparent';
             modeFlag.style.backgroundColor = (mode === 'flag') ? '#e74c3c' : 'transparent';
         }
@@ -222,12 +299,12 @@
         const tutorialSteps = [
             { text: "まずは『⛏️ ほる』モードで<br>まん中の <ruby>土<rt>つち</rt></ruby>をほってみよう！", action: () => { resetTutBoard(); setMode('dig'); let c = document.getElementById('tut-cell-4'); c.classList.add('revealed'); c.style.color = '#0000FF'; c.textContent = '1'; } },
             { text: "『１』が でたね！まわりの どこか<br>１つだけに マグマが あるよ。", action: () => { for(let i=0; i<9; i++) { if(i !== 4) document.getElementById('tut-cell-'+i).style.borderColor = '#e74c3c'; } } },
-            { text: "あ！マグマを ほってしまった！<br>でも１回目(かいめ)なら セーフ！<br>『❗』のサインが でるよ。", action: () => { for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; } let bomb = document.getElementById('tut-cell-0'); bomb.classList.add('cracked'); bomb.innerHTML = '<span>❗</span>'; } },
+            { text: "あ！マグマを ほってしまった！<br>でも１回目(かいめ)なら セーフ！<br>『❗』のサインが でるよ。", action: () => { for(let i=0; i<9; i++) { document.getElementById('tut-cell-'+i).style.borderColor = '#a1887f'; } let bomb = document.getElementById('tut-cell-0'); bomb.classList.add('cracked'); bomb.innerHTML = '<span>❗</span>'; playWarningSE(); } },
             { text: "あぶない 場所(ばしょ)には スイッチを<br>きりかえて 『🚩 しるし』を<br>つけておこう！", action: () => { setMode('flag'); let bomb = document.getElementById('tut-cell-0'); bomb.className = 'cell flagged'; bomb.innerHTML = '<span>🚩</span>'; } },
-            { text: "『🚩』や『❗』の場所を よけて<br>ほかの <ruby>土<rt>つち</rt></ruby>を ぜんぶほれば クリア！", action: () => { setMode('dig'); [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; } }
+            { text: "『🚩』や『❗』の場所を よけて<br>ほかの <ruby>土<rt>つち</rt></ruby>を ぜんぶほれば クリア！", action: () => { setMode('dig'); [1,2,3,5,6,7,8].forEach(i => { let c = document.getElementById('tut-cell-'+i); c.classList.add('revealed'); }); document.getElementById('tut-next-btn').textContent = "あそぶ！"; playClearSE(); } }
         ];
 
-        function startTutorial() { showScreen('screen-tutorial'); tutStep = 0; document.getElementById('tut-next-btn').textContent = "つぎへ"; playTutStep(tutStep); }
+        function startTutorial() { playBGM("music/opening.mp3"); showScreen('screen-tutorial'); tutStep = 0; document.getElementById('tut-next-btn').textContent = "つぎへ"; playTutStep(tutStep); }
         function playTutStep(step) { tutTextElement.innerHTML = tutorialSteps[step].text; tutorialSteps[step].action(); }
         function nextTutorial() { tutStep++; if (tutStep >= tutorialSteps.length) { startGame(0); } else { playTutStep(tutStep); } }
         function resetTutBoard() { for(let i=0; i<9; i++) { let c = document.getElementById('tut-cell-'+i); c.className = 'cell'; c.innerHTML = ''; c.style.borderColor = '#a1887f'; c.style.backgroundColor = '#d7ccc8'; } }
@@ -236,24 +313,18 @@
         const stages = [
             {
                 rows: 6, cols: 6, mines: 6,
-                bodyImg: "img/tri.png",
-                fossilImg: "img/tri_born.png",
-                videoSrc: "img/tri.mp4",
-                themeColor: "#2E7D32" // ステージ1：グリーン
+                bodyImg: "img/tri.png", fossilImg: "img/tri_born.png", videoSrc: "img/tri.mp4",
+                themeColor: "#2E7D32", bgmSrc: "music/tri.mp3"
             },
             {
                 rows: 7, cols: 7, mines: 9,
-                bodyImg: "img/mosa02.png",
-                fossilImg: "img/mosa_born02.png",
-                videoSrc: "img/mosa.mp4",
-                themeColor: "#1565C0" // ステージ2：ブルー
+                bodyImg: "img/mosa02.png", fossilImg: "img/mosa_born02.png", videoSrc: "img/mosa.mp4",
+                themeColor: "#1565C0", bgmSrc: "music/mosa.mp3"
             },
             {
                 rows: 8, cols: 8, mines: 12,
-                bodyImg: "img/tyrano02.png",
-                fossilImg: "img/tyrano_born02.png",
-                videoSrc: "img/tyrano01.mp4",
-                themeColor: "#d35400" // ステージ3：オレンジ
+                bodyImg: "img/tyrano02.png", fossilImg: "img/tyrano_born02.png", videoSrc: "img/tyrano01.mp4",
+                themeColor: "#d35400", bgmSrc: "music/tyrano.mp3"
             }
         ];
 
@@ -284,13 +355,15 @@
         function initGame() {
             const stage = stages[currentStageIndex];
 
+            // ステージに応じたBGMを再生
+            playBGM(stage.bgmSrc);
+
             board = []; revealedCount = 0; gameOver = false; isFirstClick = true;
             videoContainer.style.display = 'none'; 
             winVideo.pause(); winVideo.currentTime = 0;
             boardElement.style.opacity = '1';       
             overlayBodyImg.style.opacity = '0';     
             
-            // ステージのテーマカラーをCSS変数にセット
             document.documentElement.style.setProperty('--theme-accent', stage.themeColor);
             
             stageNameElement.textContent = `ステージ ${currentStageIndex + 1}`;
@@ -371,6 +444,7 @@
 
             if (cellData.flagged || (cellData.cracked && cellData.isMine)) {
                 if (cellData.cracked && cellData.isMine) {
+                    // 意図的に警告マスを押した場合はバクハツへ進む
                 } else {
                     return; 
                 }
@@ -387,6 +461,9 @@
                     cellDiv.classList.add('cracked');
                     cellDiv.innerHTML = '<span>❗</span>';
                     messageElement.innerHTML = "<span style='color:#b71c1c;'>あつッ！マグマの サインだ！<br>もう１回 さわると バクハツだよ！</span>";
+                    
+                    // SFX: 警告音
+                    playWarningSE();
                     return; 
                 } else {
                     gameOver = true;
@@ -397,6 +474,11 @@
                     messageElement.innerHTML = "<span style='color:red;'>ドッカーン！もえちゃった！<br>「やりなおす」をおしてね。</span>";
                     progressText.innerHTML = "<span style='color:red;'>しっぱい...</span>";
                     revealAllMines(stage);
+                    
+                    // SFX & BGM: BGM停止、爆発音からのゲームオーバーメロディ
+                    stopBGM();
+                    playExplosionSE();
+                    setTimeout(playGameOverSE, 800);
                 }
             } else {
                 cellData.revealed = true;
@@ -456,14 +538,19 @@
                 progressText.innerHTML = `<span style='color:var(--theme-accent);'>100% コンプリート！</span>`;
 
                 boardElement.style.opacity = '0';
+                
+                // BGMを止めて、クリアSFXを鳴らす
+                stopBGM();
+                playClearSE();
 
                 setTimeout(() => {
                     overlayBodyImg.style.opacity = '1';
 
                     setTimeout(() => {
                         videoContainer.style.display = 'flex';
-                        winVideo.muted = true;
-                        winVideo.play().then(() => winVideo.muted = false).catch(e => { winVideo.muted = false; winVideo.controls = true; });
+                        // 「タップしてスタート」を通しているのでミュート不要で再生可能！
+                        winVideo.muted = false; 
+                        winVideo.play().catch(e => { winVideo.controls = true; });
                     }, 2500);
 
                 }, 1000);
@@ -472,13 +559,15 @@
 
         function closeVideo() {
             winVideo.pause(); 
-            winVideo.muted = false; 
             videoContainer.style.display = 'none'; 
             
             if (currentStageIndex < stages.length - 1) {
                 startGame(currentStageIndex + 1);
             } else {
+                // 全ステージクリア！
+                playAllClearSE(); // 全クリ用豪華ファンファーレ
                 alert("すごい！ぜんぶの きょうりゅうを 復活（ふっかつ）させたよ！");
+                playBGM("music/opening.mp3"); // タイトルBGMに戻す
                 showScreen('screen-title');
             }
         }
