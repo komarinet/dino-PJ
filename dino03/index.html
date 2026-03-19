@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (Three.js版)</title>
+    <title>ちびっこティラノ：タクティクス (Three.js ヌルヌル版)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; }
         #canvas-container { width: 100vw; height: 60vh; }
@@ -21,7 +21,7 @@
 
 <div id="ui">
     <div id="msg">
-        Three.jsエンジン起動！<br>マスをタップして<ruby>移動<rt>いどう</rt></ruby>しよう！
+        カメラもジャンプもヌルヌル動くぞ！<br>マスをタップして移動しよう！
     </div>
     <div class="controls">
         <button onclick="rotateCamera(-45)">◀ 回す</button>
@@ -31,7 +31,7 @@
 </div>
 
 <script>
-// --- 1. マップデータ [高さ(1-8), 種類(0:草, 1:土, 2:苔, 3:岩)] ---
+// --- 1. マップデータ ---
 const mapData = [
     [[1,0], [2,0], [3,0], [4,0], [5,0], [6,0], [7,0]],
     [[2,0], [3,1], [4,1], [5,1], [6,1], [7,1], [6,0]],
@@ -43,26 +43,31 @@ const mapData = [
 ];
 
 const TILE_SIZE = 60;
-const H_STEP = 30; // 1段の高さ
+const H_STEP = 30;
 
 let scene, camera, renderer, dinoSprite;
-let currentAngle = 45; // カメラの回転角度
+
+// ★アニメーション用変数★
+let currentAngle = 45;
+let targetAngle = 45; // 目標のカメラ角度
 let dinoPos = { gridX: 3, gridZ: 3, h: 8 };
 
-// --- 2. 画像の読み込みと分割（超堅牢なCanvasアプローチ） ---
-// スプライトシートをメモリ上のCanvasで切り抜き、ズレのないテクスチャマテリアルを生成します。
+// ジャンプ物理演算用
+let isJumping = false;
+let jumpVelocity = 0;
+let dinoBaseY = 0; // 着地する本来の高さ
+
 const sheetImg = new Image();
 sheetImg.src = 'img/plate01.png';
-sheetImg.onload = init; // 画像が読み込まれてから3D初期化
+sheetImg.onload = init;
 
 function createMaterial(sx, sy, sw, sh) {
     const canvas = document.createElement('canvas');
-    canvas.width = 64; canvas.height = 64; // Three.js用に2の累乗サイズに正規化
+    canvas.width = 64; canvas.height = 64;
     const ctx = canvas.getContext('2d');
     ctx.drawImage(sheetImg, sx, sy, sw, sh, 0, 0, 64, 64);
-    
     const texture = new THREE.CanvasTexture(canvas);
-    texture.magFilter = THREE.NearestFilter; // ドット絵をくっきりさせる
+    texture.magFilter = THREE.NearestFilter;
     return new THREE.MeshLambertMaterial({ map: texture });
 }
 
@@ -78,7 +83,6 @@ function createDinoTexture() {
     return new THREE.SpriteMaterial({ map: texture });
 }
 
-// --- 3. Three.js 初期化 ---
 function init() {
     const container = document.getElementById('canvas-container');
     const w = container.clientWidth;
@@ -86,18 +90,16 @@ function init() {
 
     scene = new THREE.Scene();
 
-    // タクティクスオウガ風の「平行投影カメラ」
     const aspect = w / h;
-    const d = 350; // 表示範囲の広さ
+    const d = 350;
     camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 2000);
-    updateCameraPosition();
+    updateCameraPosition(); // 初回位置設定
 
-    renderer = new THREE.WebGLRenderer({ antialias: false }); // ドット絵のシャープさを優先
+    renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(w, h);
     renderer.setClearColor(0x222222);
     container.appendChild(renderer.domElement);
 
-    // 照明
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
@@ -106,25 +108,19 @@ function init() {
 
     buildMap();
 
-    // 恐竜スプライトの追加
     dinoSprite = new THREE.Sprite(createDinoTexture());
     dinoSprite.scale.set(TILE_SIZE * 1.5, TILE_SIZE * 1.5, 1);
     updateDinoPosition(dinoPos.gridX, dinoPos.gridZ, dinoPos.h);
     scene.add(dinoSprite);
 
-    // クリック（タップ）イベントの登録
     renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
-    animate();
+    animate(); // ★描画ループ開始★
 }
 
-// --- 4. マップの構築（レゴブロック方式） ---
-const interactableTiles = []; // クリック判定用の配列
-
+const interactableTiles = [];
 function buildMap() {
     const geometry = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
-
-    // マテリアルセットの事前生成 [Top, SideTop, SideBottom]
     const matSets = [];
     for(let type=0; type<4; type++) {
         const tx = type * 256;
@@ -143,17 +139,10 @@ function buildMap() {
             const [h, type] = mapData[z][x];
             const mats = matSets[type];
 
-            // 高さがhなら、h個のブロックを積み上げる
             for (let i = 0; i < h; i++) {
-                // Three.jsのマテリアル順: 右, 左, 上, 下, 手前, 奥
-                let blockMats;
-                if (i === h - 1) {
-                    // 一番上のブロック（天面と、最上部の側面）
-                    blockMats = [mats.sideTop, mats.sideTop, mats.top, mats.sideBottom, mats.sideTop, mats.sideTop];
-                } else {
-                    // 下のブロック（すべて土）
-                    blockMats = [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
-                }
+                let blockMats = (i === h - 1) 
+                    ? [mats.sideTop, mats.sideTop, mats.top, mats.sideBottom, mats.sideTop, mats.sideTop]
+                    : [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
 
                 const cube = new THREE.Mesh(geometry, blockMats);
                 cube.position.set(
@@ -164,7 +153,6 @@ function buildMap() {
 
                 scene.add(cube);
 
-                // 一番上のブロックだけ、クリック判定の対象にする
                 if (i === h - 1) {
                     cube.userData = { gridX: x, gridZ: z, h: h };
                     interactableTiles.push(cube);
@@ -174,7 +162,6 @@ function buildMap() {
     }
 }
 
-// --- 5. インタラクションとアニメーション ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
@@ -190,9 +177,10 @@ function onPointerDown(event) {
         const target = intersects[0].object.userData;
         const dist = Math.abs(target.gridX - dinoPos.gridX) + Math.abs(target.gridZ - dinoPos.gridZ);
         
-        // 隣接マスなら移動
         if (dist === 1) {
             dinoPos = target;
+            // 移動と同時に小さくジャンプさせる演出
+            jumpDino(12);
             updateDinoPosition(target.gridX, target.gridZ, target.h);
         }
     }
@@ -202,37 +190,60 @@ function updateDinoPosition(gridX, gridZ, h) {
     const offsetX = (7 * TILE_SIZE) / 2 - (TILE_SIZE / 2);
     const offsetZ = (7 * TILE_SIZE) / 2 - (TILE_SIZE / 2);
     
-    // スプライトがブロックに埋もれないようにYを少し上げる
-    dinoSprite.position.set(
-        (gridX * TILE_SIZE) - offsetX,
-        (h * H_STEP) + (TILE_SIZE * 0.5),
-        (gridZ * TILE_SIZE) - offsetZ
-    );
+    dinoSprite.position.x = (gridX * TILE_SIZE) - offsetX;
+    dinoSprite.position.z = (gridZ * TILE_SIZE) - offsetZ;
+    // 着地地点の高さを更新（ジャンプ中でなければ即適用）
+    dinoBaseY = (h * H_STEP) + (TILE_SIZE * 0.5);
+    if (!isJumping) {
+        dinoSprite.position.y = dinoBaseY;
+    }
 }
 
 function updateCameraPosition() {
     const radius = 600;
     const rad = currentAngle * (Math.PI / 180);
-    // カメラを斜め上から見下ろす（アイソメトリックの黄金角に近い設定）
     camera.position.x = Math.sin(rad) * radius;
     camera.position.z = Math.cos(rad) * radius;
     camera.position.y = 500; 
     camera.lookAt(0, 0, 0);
 }
 
+// ★ボタンを押したときは「目標の角度」だけを変更する
 window.rotateCamera = function(deg) {
-    currentAngle += deg;
-    updateCameraPosition();
+    targetAngle += deg;
 }
 
-window.jumpDino = function() {
-    const baseY = dinoSprite.position.y;
-    dinoSprite.position.y += 50;
-    setTimeout(() => { dinoSprite.position.y = baseY; }, 200);
+// ★ジャンプの初速を設定する関数
+window.jumpDino = function(power = 20) {
+    if (!isJumping) {
+        isJumping = true;
+        jumpVelocity = power; 
+    }
 }
 
+// ★最重要：毎フレーム実行される描画ループ★
 function animate() {
     requestAnimationFrame(animate);
+
+    // 1. カメラのヌルヌル追従処理（イージング）
+    // 現在の角度が目標の角度に少しずつ近づいていく
+    if (Math.abs(targetAngle - currentAngle) > 0.1) {
+        currentAngle += (targetAngle - currentAngle) * 0.1; // 0.1が追従速度
+        updateCameraPosition();
+    }
+
+    // 2. 恐竜のヌルヌルジャンプ処理（重力演算）
+    if (isJumping) {
+        dinoSprite.position.y += jumpVelocity; // 上へ移動
+        jumpVelocity -= 2.0; // 重力をかけて減速・落下させる
+
+        // 着地判定
+        if (dinoSprite.position.y <= dinoBaseY) {
+            dinoSprite.position.y = dinoBaseY; // 地面にめり込まないように固定
+            isJumping = false;
+        }
+    }
+
     renderer.render(scene, camera);
 }
 </script>
