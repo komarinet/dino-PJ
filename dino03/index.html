@@ -3,18 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v3.1.0)</title>
+    <title>ちびっこティラノ：タクティクス (v3.2.0)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; }
         #canvas-container { width: 100vw; height: 100vh; }
         
-        /* カメラ操作UI */
         #camera-ui {
             position: absolute; bottom: 20px; right: 20px;
             background: rgba(0, 0, 139, 0.85); border: 2px solid white; border-radius: 10px;
             color: white; padding: 10px; width: 220px;
-            transition: transform 0.3s ease;
-            z-index: 1000;
+            transition: transform 0.3s ease; z-index: 1000;
         }
         #camera-ui.collapsed { transform: translateY(calc(100% - 40px)); }
         #ui-header { font-weight: bold; text-align: center; cursor: pointer; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); margin-bottom: 10px;}
@@ -22,17 +20,14 @@
         .ui-btn { background: #eee; border: none; border-radius: 5px; padding: 10px 5px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #999; }
         .ui-btn:active { transform: translateY(2px); box-shadow: 0 0 #999; }
         
-        /* メッセージUI */
         #msg-ui {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
             background: rgba(0,0,0,0.7); color: white; padding: 10px 20px;
-            border-radius: 10px; border: 2px solid white; font-size: 1.1rem; pointer-events: none;
-            z-index: 1000;
+            border-radius: 10px; border: 2px solid white; font-size: 1.1rem; pointer-events: none; z-index: 1000;
         }
 
-        /* 確認ダイアログ */
         #confirm-ui {
-            display: none; /* 初期非表示 */
+            display: none;
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
             background: rgba(0, 0, 0, 0.9); color: white; padding: 20px;
             border-radius: 10px; border: 2px solid #ffcc00; text-align: center;
@@ -43,7 +38,6 @@
         .btn-yes { background: #4caf50; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
         .btn-no { background: #f44336; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
     </style>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -51,8 +45,7 @@
 <body>
 
 <div id="canvas-container"></div>
-
-<div id="msg-ui">緑のマスをタップしてね</div>
+<div id="msg-ui">緑のマス（4歩以内）をタップ！</div>
 
 <div id="confirm-ui">
     <p>ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？</p>
@@ -65,9 +58,9 @@
 <div id="camera-ui">
     <div id="ui-header" onclick="toggleUI()">📷 カメラ操作 (開閉)</div>
     <div class="ui-grid">
-        <button class="ui-btn" onclick="rotateCam(-45)">◀ 回す</button>
+        <button class="ui-btn" onclick="rotateCam(-90)">◀ 回す</button>
         <button class="ui-btn" onclick="panCamera(0, -1)">上</button>
-        <button class="ui-btn" onclick="rotateCam(45)">回す ▶</button>
+        <button class="ui-btn" onclick="rotateCam(90)">回す ▶</button>
 
         <button class="ui-btn" onclick="panCamera(-1, 0)">左</button>
         <button class="ui-btn" onclick="centerCamera()">中心</button>
@@ -80,13 +73,10 @@
 </div>
 
 <script>
-// --- 設定・グローバル変数 ---
-const MAP_W = 20;
-const MAP_D = 40;
-const TILE_SIZE = 60;
-const H_STEP = 30;
-const MAX_MOVE = 4;  // 画面が緑になりすぎないよう4歩に設定
-const MAX_JUMP = 2;
+// --- 基本設定 ---
+const MAP_W = 20; const MAP_D = 40;
+const TILE_SIZE = 60; const H_STEP = 30;
+const MAX_MOVE = 4; const MAX_JUMP = 2;
 
 let scene, camera, renderer, controls, dinoSprite;
 let mapData = []; 
@@ -94,7 +84,6 @@ let tilesMeshMap = {};
 let walkableTiles = [];
 let dinoPos = { x: 10, z: 20, h: 0 }; 
 
-// ステート管理 (IDLE, CONFIRMING, MOVING)
 let gameState = 'IDLE'; 
 let pendingPath = null;
 let selectedTileKey = null;
@@ -121,11 +110,10 @@ function generateMapData() {
 
 function init() {
     const container = document.getElementById('canvas-container');
-    const w = container.clientWidth; const h = container.clientHeight;
-
     scene = new THREE.Scene();
     generateMapData();
 
+    const w = container.clientWidth; const h = container.clientHeight;
     const aspect = w / h; const d = 400;
     camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 4000);
     
@@ -146,12 +134,48 @@ function init() {
     scene.add(dinoSprite);
     updateDinoPosInstantly();
 
+    // カメラコントローラ設定
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableRotate = true; controls.enableZoom = true; controls.enablePan = true;
-    
-    centerCameraInstantly(); // 初期カメラ位置
+    // カメラが地中に潜らないよう制限
+    controls.maxPolarAngle = Math.PI / 2.2; 
+    controls.minPolarAngle = Math.PI / 6;
 
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    // ★オートスナップカメラの実装★
+    // 指を離した時、最も見やすい斜め45度（タクティクスビュー）に自動補正する
+    controls.addEventListener('end', () => {
+        if (gameState === 'MOVING') return;
+        
+        const az = controls.getAzimuthalAngle();
+        const snapInterval = Math.PI / 2; // 90度ごと
+        const offset = Math.PI / 4;       // 45度のオフセット
+        const snappedAz = Math.round((az - offset) / snapInterval) * snapInterval + offset;
+        
+        const targetPolar = Math.PI / 3; // 見下ろす角度（約60度）
+        const radius = controls.getDistance();
+        
+        const tgt = controls.target;
+        const camX = tgt.x + radius * Math.sin(snappedAz) * Math.sin(targetPolar);
+        const camY = tgt.y + radius * Math.cos(targetPolar);
+        const camZ = tgt.z + radius * Math.cos(snappedAz) * Math.sin(targetPolar);
+        
+        gsap.to(camera.position, {
+            x: camX, y: camY, z: camZ, duration: 0.3, ease: "power2.out",
+            onUpdate: () => controls.update()
+        });
+    });
+    
+    centerCameraInstantly(); 
+
+    // ★誤作動防止：タップとスワイプを区別★
+    let ptrDownPos = { x: 0, y: 0 };
+    renderer.domElement.addEventListener('pointerdown', e => { ptrDownPos = { x: e.clientX, y: e.clientY }; });
+    renderer.domElement.addEventListener('pointerup', e => {
+        // 指が動いた距離が5ピクセル未満なら「タップ」と判定
+        const dist = Math.hypot(e.clientX - ptrDownPos.x, e.clientY - ptrDownPos.y);
+        if (dist < 5) onPointerClick(e);
+    });
+
     highlightWalkable();
     animate();
 }
@@ -181,9 +205,13 @@ function buildMapMeshes() {
             const h = tileData.h;
 
             for (let i = Math.max(0, h - 2); i < h; i++) {
-                let blockMats = (i === h - 1) 
-                    ? [mats.sideTop, mats.sideTop, mats.top, mats.sideBottom, mats.sideTop, mats.sideTop]
-                    : [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
+                let blockMats;
+                if (i === h - 1) {
+                    // ★バグ修正：天面のマテリアルを独立させる（clone）★
+                    blockMats = [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop];
+                } else {
+                    blockMats = [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
+                }
 
                 const cube = new THREE.Mesh(geometry, blockMats);
                 cube.position.set((x * TILE_SIZE) - offsetX, (i * H_STEP) + (H_STEP / 2), (z * TILE_SIZE) - offsetZ);
@@ -199,6 +227,7 @@ function buildMapMeshes() {
     }
 }
 
+// --- 経路探索＆ハイライト ---
 function getWalkableNodes(startX, startZ) {
     let queue = [{ x: startX, z: startZ, dist: 0, path: [] }];
     let visited = new Set([`${startX},${startZ}`]);
@@ -232,7 +261,7 @@ function highlightWalkable() {
     walkableTiles = getWalkableNodes(dinoPos.x, dinoPos.z);
     walkableTiles.forEach(node => {
         let mesh = tilesMeshMap[`${node.x},${node.z}`];
-        if(mesh) mesh.material[2].color.setHex(0x88ff88); // 緑
+        if(mesh) mesh.material[2].color.setHex(0x88ff88); // 移動可能範囲を緑に
     });
 }
 
@@ -240,11 +269,11 @@ function clearHighlights() {
     interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff));
 }
 
-// --- インタラクション ---
+// --- タップ処理 ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
 
-function onPointerDown(event) {
+function onPointerClick(event) {
     if (gameState !== 'IDLE') return;
     if(event.target.closest('#camera-ui') || event.target.closest('#confirm-ui')) return;
 
@@ -258,32 +287,29 @@ function onPointerDown(event) {
         const route = walkableTiles.find(n => n.x === target.x && n.z === target.z);
         
         if (route) {
-            // 確認フェーズへ移行
+            // ★完璧なフロー：緑を残したまま、選んだ1マスだけを黄色にする★
             gameState = 'CONFIRMING';
             pendingPath = route.path;
             selectedTileKey = `${target.x},${target.z}`;
             
-            // 選択したマスを黄色く光らせる
             tilesMeshMap[selectedTileKey].material[2].color.setHex(0xffff00);
             
-            // UI表示
             document.getElementById('msg-ui').style.display = 'none';
             document.getElementById('confirm-ui').style.display = 'block';
         }
     }
 }
 
-// 確認ダイアログのボタン処理
+// 確認ダイアログ
 window.answerConfirm = function(isYes) {
     document.getElementById('confirm-ui').style.display = 'none';
     
     if (isYes) {
-        // 移動実行
         gameState = 'MOVING';
-        clearHighlights(); // 緑色をすべて消す
+        clearHighlights(); // 移動開始時に色をリセット
         executeMovement(pendingPath);
     } else {
-        // キャンセル：色を戻して待機状態へ
+        // いいえ：黄色にしたマスを緑に戻して待機
         tilesMeshMap[selectedTileKey].material[2].color.setHex(0x88ff88);
         document.getElementById('msg-ui').style.display = 'block';
         gameState = 'IDLE';
@@ -298,10 +324,7 @@ function executeMovement(path) {
     const offsetZ = (MAP_D * TILE_SIZE) / 2;
     
     const tl = gsap.timeline({
-        onComplete: () => {
-            // 移動が完全に終わってからカメラを追従させる
-            moveCameraToDino();
-        }
+        onComplete: () => { moveCameraToDino(); }
     });
 
     path.forEach((step) => {
@@ -318,7 +341,6 @@ function executeMovement(path) {
     dinoPos = { x: finalStep.x, z: finalStep.z, h: finalStep.h };
 }
 
-// 移動終了後のカメラ追従
 function moveCameraToDino() {
     const dx = dinoSprite.position.x - controls.target.x;
     const dz = dinoSprite.position.z - controls.target.z;
@@ -326,7 +348,6 @@ function moveCameraToDino() {
     gsap.to(controls.target, { x: controls.target.x + dx, z: controls.target.z + dz, duration: 1.0, ease: "power2.inOut" });
     gsap.to(camera.position, { x: camera.position.x + dx, z: camera.position.z + dz, duration: 1.0, ease: "power2.inOut",
         onComplete: () => {
-            // カメラ追従が終わってから次の操作を受け付ける
             gameState = 'IDLE';
             document.getElementById('msg-ui').style.display = 'block';
             highlightWalkable();
@@ -339,7 +360,7 @@ function updateDinoPosInstantly() {
     dinoSprite.position.set((dinoPos.x * TILE_SIZE) - offsetX, (dinoPos.h * H_STEP) + (TILE_SIZE * 0.5), (dinoPos.z * TILE_SIZE) - offsetZ);
 }
 
-// --- 滑らかなカメラ操作 ---
+// --- カメラ操作 ---
 function centerCameraInstantly() {
     const rad = 45 * (Math.PI / 180); const radius = 800;
     controls.target.copy(dinoSprite.position);
@@ -347,30 +368,27 @@ function centerCameraInstantly() {
     camera.lookAt(controls.target);
 }
 
-window.centerCamera = function() {
-    moveCameraToDino(); // 中心に戻すアニメーションは移動終了時と同じ処理を流用
-}
+window.centerCamera = function() { moveCameraToDino(); }
 
 window.rotateCam = function(deg) {
-    // ターゲット（ティラノ）を中心にカメラを回す
-    const r = camera.position.distanceTo(controls.target);
-    const currentTheta = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
-    const newTheta = currentTheta + (deg * Math.PI / 180);
+    const az = controls.getAzimuthalAngle();
+    const newAz = az + (deg * Math.PI / 180);
+    const radius = controls.getDistance();
+    const polar = controls.getPolarAngle();
     
     gsap.to(camera.position, {
-        x: controls.target.x + Math.sin(newTheta) * r,
-        z: controls.target.z + Math.cos(newTheta) * r,
-        duration: 0.5, ease: "power2.out"
+        x: controls.target.x + radius * Math.sin(newAz) * Math.sin(polar),
+        z: controls.target.z + radius * Math.cos(newAz) * Math.sin(polar),
+        duration: 0.4, ease: "power2.out",
+        onUpdate: () => controls.update()
     });
 }
 
 window.panCamera = function(dx, dy) {
     const panAmount = 150;
-    // 現在のカメラの向きに合わせて上下左右を調整
-    const angle = Math.atan2(camera.position.x - controls.target.x, camera.position.z - controls.target.z);
+    const angle = controls.getAzimuthalAngle();
     const s = Math.sin(angle); const c = Math.cos(angle);
     
-    // カメラの視界に基づく相対的な移動量
     const moveX = (dx * c + dy * s) * panAmount;
     const moveZ = (-dx * s + dy * c) * panAmount;
 
