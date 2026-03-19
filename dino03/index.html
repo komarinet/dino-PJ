@@ -14,9 +14,10 @@
         }
         body { margin: 0; background: #222; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
         
+        /* 3D表示のコンテナ */
         #stage {
             width: 100vw; height: 60vh;
-            perspective: 1200px;
+            perspective: 1500px;
             display: flex; align-items: center; justify-content: center;
             background: radial-gradient(#444, #111);
         }
@@ -25,10 +26,12 @@
             position: relative;
             width: 300px; height: 300px;
             transform-style: preserve-3d;
+            /* 初期回転角度を見やすく調整 */
             transform: rotateX(60deg) rotateZ(45deg);
             transition: transform 0.5s;
         }
 
+        /* タイル（立方体）のスタイル */
         .tile {
             position: absolute;
             width: var(--tile-size); height: var(--tile-size);
@@ -41,20 +44,23 @@
             background-image: url('img/plate01.png');
             background-size: var(--sheet-w) var(--sheet-h);
             box-sizing: border-box;
+            /* わずかに位置をずらして z-fighting を防ぐ */
+            backface-visibility: hidden;
         }
 
         /* 天面の設定 (Row 1: 0px ~ 60px) */
         .top { 
-            transform: translateZ(var(--h)); 
+            transform: translateZ(calc(var(--h))); 
             background-position: var(--tx) 0px;
             z-index: 10;
         }
 
-        /* 側面共通設定 */
-        .face.front, .face.right {
-            display: flex;
+        /* --- 修正箇所：側面テクスチャ向きズレへの対策 --- */
+        /* すべての側面（前後左右）のCSS */
+        .face.front, .face.back, .face.left, .face.right {
+            display: flex; /* 縦並びにする */
             flex-direction: column;
-            overflow: hidden;
+            overflow: hidden; /* 土がはみ出さないようにする */
             background-image: none; /* 親は背景なし */
         }
 
@@ -64,41 +70,59 @@
             background-size: var(--sheet-w) var(--sheet-h);
         }
 
-        /* 側面最上部 (Row 2: 60px ~ 75px) */
+        /* 側面最上部（草と土の混合）(Row 2: 60px ~ 75px) */
         .top-side {
             background-position: var(--tx) -60px;
         }
 
-        /* 側面リピート部 (Row 3: 75px ~ 90px) */
+        /* それ以降の土（リピート）(Row 3: 75px ~ 90px) */
         .bottom-side {
-            flex: 1;
+            flex: 1; /* 残りの高さを埋める */
             background-position: var(--tx) -75px;
             background-repeat: repeat-y;
             background-size: var(--sheet-w) auto; /* 縦リピート用に調整 */
         }
 
+        /* 正面 (translateZ で手前に、わずかにずらす) */
         .front { 
-            transform: rotateX(-90deg) translateZ(calc(var(--tile-size) - var(--h))); 
+            transform: rotateX(-90deg) translateZ(calc(var(--tile-size) + 0.1px)); 
             transform-origin: bottom; 
+            filter: brightness(0.9);
         }
+        /* 背面 (わずかに奥に) */
+        .back { 
+            transform: rotateX(90deg) translateZ(0.1px); 
+            transform-origin: top; 
+            filter: brightness(0.9);
+        }
+        /* 左面 (わずかに左に) */
+        .left { 
+            transform: rotateY(-90deg) translateZ(0.1px); 
+            transform-origin: left; 
+            filter: brightness(0.8);
+        }
+        /* 右面 (translateZ で右に、わずかにずらす) */
         .right { 
-            transform: rotateY(90deg) translateZ(calc(var(--tile-size) - var(--h))); 
-            width: var(--h); 
+            transform: rotateY(90deg) translateZ(calc(var(--tile-size) + 0.1px)); 
             transform-origin: right; 
-            filter: brightness(0.8); /* 少し暗くして立体感を出す */
+            filter: brightness(0.8);
         }
 
+        /* --- 修正箇所：ティラノサウルスの位置 --- */
         #unit {
             position: absolute;
             width: var(--tile-size); height: var(--tile-size);
             font-size: 45px; text-align: center; line-height: var(--tile-size);
             transform-style: preserve-3d;
-            transform: translateZ(calc(var(--z))) rotateZ(-45deg) rotateX(-60deg);
+            /* タイルの天面(z座標)の上に1pxだけ浮かせて配置、スケールもZ軸はそのままに */
+            transform: translateZ(calc(var(--z) + 1px)) rotateZ(-45deg) rotateX(-60deg) scale3d(0.8, 0.8, 1);
             transition: all 0.3s ease-out;
             pointer-events: none;
+            /* カメラから見てキャラクターが手前に来るようにz-indexを調整 */
             z-index: 100;
         }
 
+        /* UI */
         #ui { height: 40vh; background: #00008b; border-top: 4px solid #eee; padding: 15px; box-sizing: border-box; }
         #msg { height: 60px; border: 2px solid white; padding: 10px; border-radius: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.5); font-size: 1.1rem;}
         .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
@@ -140,6 +164,7 @@ const unit = document.getElementById('unit');
 let unitPos = { x: 0, y: 0, z: 0 };
 let currentRotation = 45;
 
+// Web Audio API
 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
 function playSound(type) {
     if (audioCtx.state === 'suspended') audioCtx.resume();
@@ -160,25 +185,39 @@ function playSound(type) {
     }
 }
 
+// マップ生成
 function createMap() {
     for (let y = 0; y < 5; y++) {
         for (let x = 0; x < 5; x++) {
             const [h, type] = mapData[y][x];
-            const hPx = h * 20;
-            const tx = -(type * 60); // スプライトのXオフセット
+            const hPx = h * 20; // 1段20px、天面のZ軸位置
+            const tx = -(type * 60); // スプライトのXオフセット (草原:0, 土:-60, 苔:-120, 岩:-180)
 
             const tile = document.createElement('div');
             tile.className = 'tile';
             tile.style.left = `${x * 60}px`;
             tile.style.top = `${y * 60}px`;
+            // 天面の高さ (--h)
             tile.style.setProperty('--h', `${hPx}px`);
+            // タイルの種類 (--tx)
             tile.style.setProperty('--tx', `${tx}px`);
             
+            // 側面の高さをタイルの高さに合わせる
+            // 最上部（草土）の高さを計算（タイルの高さと15pxの小さい方）
             const actualTopSideH = Math.min(hPx, 15); // 15pxが1段分の高さ
 
             tile.innerHTML = `
                 <div class="face top" onclick="moveUnit(${x}, ${y}, ${hPx})"></div>
+                
                 <div class="face front" style="height: ${hPx}px;">
+                    <div class="side-part top-side" style="height: ${actualTopSideH}px;"></div>
+                    <div class="side-part bottom-side"></div>
+                </div>
+                <div class="face back" style="height: ${hPx}px;">
+                    <div class="side-part top-side" style="height: ${actualTopSideH}px;"></div>
+                    <div class="side-part bottom-side"></div>
+                </div>
+                <div class="face left" style="height: ${hPx}px;">
                     <div class="side-part top-side" style="height: ${actualTopSideH}px;"></div>
                     <div class="side-part bottom-side"></div>
                 </div>
@@ -190,17 +229,20 @@ function createMap() {
             world.appendChild(tile);
         }
     }
-    moveUnit(0, 0, mapData[0][0][0] * 20);
+    moveUnit(0, 0, mapData[0][0][0] * 20); // 初期位置
 }
 
 function moveUnit(x, y, z) {
+    // 6歳向け：隣接マスなら移動可能
     const dist = Math.abs(x - unitPos.x) + Math.abs(y - unitPos.y);
     if (dist > 0 && dist <= 1) {
         playSound('move');
         unitPos = { x, y, z };
         unit.style.left = `${x * 60}px`;
         unit.style.top = `${y * 60}px`;
+        // タイルの天面の上にキャラクターのz軸を合わせる
         unit.style.setProperty('--z', `${z}px`);
+        // document.getElementById('msg').innerHTML = `<ruby>座標<rt>ざひょう</rt></ruby> (${x}, ${y}) へ <ruby>移動<rt>いどう</rt></ruby>したよ！`;
     }
 }
 
