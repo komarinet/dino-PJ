@@ -2,8 +2,6 @@ let scene, camera, renderer, controls;
 window.gameState = 'IDLE'; 
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
-
-// タップ判定用の配列（床＋キャラクター画像）
 window.raycastTargets = []; 
 
 window.addEventListener('load', () => {
@@ -145,6 +143,35 @@ window.answerConfirm = function(isYes) {
     if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
+// ★新規追加：ポップアップテキスト（ダメージ・回復）表示機能★
+window.showFloatingText = function(unit, text, type) {
+    // 3D空間のキャラの頭上座標を計算
+    const vector = unit.sprite.position.clone();
+    vector.y += 60; // 少し上に浮かせる
+    vector.project(camera); // 2Dスクリーン座標に変換
+
+    const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
+    const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
+
+    // HTML要素を作成して配置
+    const el = document.createElement('div');
+    el.className = 'floating-text';
+    el.innerText = text;
+    el.style.color = (type === 'heal') ? '#00ffff' : '#ffffff'; // 青か白
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+    document.body.appendChild(el);
+
+    // GSAPで上にフワッと消えるアニメーション
+    gsap.to(el, {
+        y: y - 80,
+        opacity: 0,
+        duration: 1.0,
+        ease: "power2.out",
+        onComplete: () => { el.remove(); } // アニメが終わったら消す
+    });
+}
+
 window.executeMovement = function(unit, path, onComplete) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const tl = gsap.timeline({ onComplete });
@@ -170,14 +197,19 @@ window.executeAttack = function(attacker, defender, onComplete) {
 
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
+        // ★ダメージポップアップを表示★
+        window.showFloatingText(defender, damage, 'damage');
+        
         if(defender.hp <= 0) {
             window.setMsg(`${defender.id}を倒した！`, "#ffcc00");
             gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
         } else { onComplete(); }
     }});
     
-    tl.to(attacker.sprite.position, { x: origX + dx*0.5, z: origZ + dz*0.5, duration: 0.1, ease: "power2.in" });
-    tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" });
+    // ★攻撃モーションを大幅強化：後ろにタメてから突進★
+    tl.to(attacker.sprite.position, { x: origX - dx*0.2, z: origZ - dz*0.2, duration: 0.15, ease: "power1.out" }); // タメ
+    tl.to(attacker.sprite.position, { x: origX + dx*0.6, z: origZ + dz*0.6, duration: 0.1, ease: "power2.in" });  // 突進
+    tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" }); // 元に戻る
 }
 
 window.endPlayerTurn = function() {
@@ -333,10 +365,8 @@ window.centerCameraInstantly = function(u) {
 
 window.centerCamera = function() { gsap.to(controls.target, { x: window.player.sprite.position.x, z: window.player.sprite.position.z, duration: 0.8, ease: "power2.inOut" }); }
 
-// ★直線的な移動による破綻を防ぐ「円弧」の回転アニメーションに修正★
 window.rotateCam = function(deg) {
     if (window.gameState === 'ANIMATING') return;
-    
     const r = controls.getDistance();
     const polar = controls.getPolarAngle();
     const startAz = controls.getAzimuthalAngle();
