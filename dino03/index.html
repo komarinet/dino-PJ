@@ -7,64 +7,54 @@
     <style>
         :root { 
             --tile-size: 60px;
-            /* スプライトシートのスケール計算 */
-            --sheet-w: 240px; /* 1024 * 0.234375 */
-            --sheet-h: 90px;  /* 384 * 0.234375 */
+            --sheet-w: 240px; 
+            --sheet-h: 90px;
         }
-        body { margin: 0; background: #222; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
+        body { margin: 0; background: #1a1a1a; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
         
-        /* 3D表示のコンテナ */
         #stage {
             width: 100vw; height: 60vh;
-            perspective: 1500px; /* 段差をより強調するために視点を遠く */
+            perspective: 1200px;
             display: flex; align-items: center; justify-content: center;
-            background: radial-gradient(#444, #111);
+            background: radial-gradient(#333, #000);
         }
 
         #world {
             position: relative;
-            width: 300px; height: 300px;
+            width: 420px; height: 420px; /* 7x7分 */
             transform-style: preserve-3d;
-            /* 初期回転角度を見やすく調整 */
             transform: rotateX(60deg) rotateZ(45deg);
             transition: transform 0.5s;
         }
 
-        /* タイルのコンテナ（位置決め用） */
+        /* タイルコンテナ：ここにも preserve-3d が必須 */
         .tile {
             position: absolute;
-            width: var(--tile-size); height: var(--tile-size);
+            width: var(--tile-size);
+            height: var(--tile-size);
             transform-style: preserve-3d;
         }
 
-        /* 共通の面スタイル */
         .face {
             position: absolute;
             background-image: url('img/plate01.png');
             background-size: var(--sheet-w) var(--sheet-h);
             backface-visibility: hidden;
-            box-sizing: border-box;
         }
 
-        /* 天面の設定 (Row 1: 0px ~ 60px) */
+        /* 天面：JSから直接 translateZ(Npx) を注入する */
         .top { 
             width: var(--tile-size); height: var(--tile-size);
-            /* タイルの高さ(h)分だけ上に持ち上げる */
-            transform: translateZ(var(--h)); 
             background-position: var(--tx) 0px;
-            z-index: 10;
+            cursor: pointer;
         }
 
-        /* 側面共通：天面の端から地面(Z=0)まで垂直に垂らす */
+        /* 側面：天面の縁から地面に垂れ下がる板 */
         .side {
             width: var(--tile-size);
-            /* 側面の高さは天面の高さと同じ */
-            height: var(--h);
-            display: flex; /* 縦並びにする */
-            flex-direction: column;
-            overflow: hidden; /* 土がはみ出さないようにする */
-            background-image: none; /* 親は背景なし */
+            /* heightはJSで設定 */
             transform-style: preserve-3d;
+            background-image: none;
         }
 
         .side-part {
@@ -73,205 +63,118 @@
             background-size: var(--sheet-w) var(--sheet-h);
             background-position-x: var(--tx);
         }
+        .top-side { height: 15px; background-position-y: -60px; }
+        .bottom-side { flex: 1; background-position-y: -75px; background-repeat: repeat-y; background-size: var(--sheet-w) auto; }
 
-        /* 側面最上部（草と土の混合）(Row 2: 60px ~ 75px) */
-        .top-side {
-            height: 15px;
-            background-position-y: -60px;
-        }
+        /* 側面の方位設定：天面の各辺にくっつけて90度曲げる */
+        .south { transform-origin: top; transform: rotateX(-90deg); filter: brightness(0.9); }
+        .north { transform-origin: top; transform: rotateX(-90deg) rotateY(180deg) translateZ(var(--tile-size)); filter: brightness(0.7); }
+        .east  { transform-origin: top left; transform: translateX(var(--tile-size)) rotateX(-90deg) rotateY(90deg); filter: brightness(0.8); }
+        .west  { transform-origin: top left; transform: rotateX(-90deg) rotateY(-90deg); filter: brightness(0.8); }
 
-        /* それ以降の土（リピート）(Row 3: 75px ~ 90px) */
-        .bottom-side {
-            flex: 1; /* 残りの高さを埋める */
-            background-position-y: -75px;
-            background-repeat: repeat-y;
-            background-size: var(--sheet-w) auto; /* 縦リピート用に調整 */
-        }
-
-        /* 東西南北の設定：天面の各辺から中心(30px)押し出す */
-        /* 南 (Front) */
-        .south { 
-            transform: translateZ(var(--h)) translateY(30px) rotateX(-90deg); 
-            transform-origin: top; 
-            filter: brightness(0.9);
-        }
-        /* 北 (Back) */
-        .north { 
-            transform: translateZ(var(--h)) translateY(-30px) rotateX(90deg) rotateY(180deg); 
-            transform-origin: bottom; 
-            filter: brightness(0.7);
-        }
-        /* 東 (Right) */
-        .east  { 
-            transform: translateZ(var(--h)) translateX(30px) rotateY(90deg) rotateX(90deg); 
-            transform-origin: left; 
-            filter: brightness(0.8);
-        }
-        /* 西 (Left) */
-        .west  { 
-            transform: translateZ(var(--h)) translateX(-30px) rotateY(-90deg) rotateX(90deg); 
-            transform-origin: right; 
-            filter: brightness(0.8);
-        }
-
-        /* キャラクター：タイルの直上に配置 */
         #unit {
             position: absolute;
             width: var(--tile-size); height: var(--tile-size);
             font-size: 50px; text-align: center; line-height: var(--tile-size);
             transform-style: preserve-3d;
-            /* translate3dで位置を制御。zはタイルの高さに合わせる */
-            transform: translate3d(var(--ux), var(--uy), var(--uz)) rotateZ(-45deg) rotateX(-60deg);
+            /* キャラクターをタイルの少し上に浮かせる */
             transition: all 0.3s ease-out;
             pointer-events: none;
-            /* カメラから見てキャラクターが手前に来るようにz-indexを調整 */
             z-index: 999;
         }
 
         #ui { height: 40vh; background: #00008b; border-top: 4px solid #eee; padding: 15px; box-sizing: border-box; }
-        #msg { height: 60px; border: 2px solid white; padding: 10px; border-radius: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.5); font-size: 1.1rem; color: white;}
         .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
         button { padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; border: none; background: #eee; box-shadow: 0 4px #999; }
-        button:active { transform: translateY(2px); box-shadow: 0 2px #999; }
     </style>
 </head>
 <body>
 
 <div id="stage">
     <div id="world">
-        <div id="tiles-container"></div>
+        <div id="tiles-container" style="transform-style: preserve-3d;"></div>
         <div id="unit">🦖</div>
     </div>
 </div>
 
 <div id="ui">
-    <div id="msg">
-        <ruby>地面<rt>じめん</rt></ruby>を タップして <ruby>移動<rt>いどう</rt></ruby>しよう！
+    <div id="msg" style="color:white; margin-bottom:10px;">
+        <ruby>高低差<rt>こうていさ</rt></ruby>のある <ruby>戦場<rt>せんじょう</rt></ruby>を <ruby>進<rt>すす</rt></ruby>め！
     </div>
     <div class="controls">
-        <button onclick="rotateWorld(-45)">◀ <ruby>回<rt>まわ</rt></ruby>す</button>
-        <button onclick="rotateWorld(45)"><ruby>回<rt>まわ</rt></ruby>す ▶</button>
-        <button onclick="playSound('jump')">ＪＵＭＰ！</button>
+        <button onclick="rotateWorld(-45)">◀ 回す</button>
+        <button onclick="rotateWorld(45)">回す ▶</button>
+        <button onclick="jump()">JUMP!</button>
     </div>
 </div>
 
 <script>
-// マップデータ [高さ(0-7), 種類(0:草原, 1:土, 2:苔, 3:岩)]
-// 段差がわかりやすいように明確な数値にしています
+// [高さ(0-7), 種類(0:草, 1:土, 2:苔, 3:石)]
 const mapData = [
-    [[1,0], [2,0], [3,0], [4,0], [5,0], [6,0], [7,0]],
-    [[2,0], [3,1], [4,1], [5,1], [6,1], [7,1], [6,0]],
-    [[3,0], [4,1], [5,2], [6,2], [7,2], [6,1], [5,0]],
-    [[4,0], [5,1], [6,2], [7,3], [6,2], [5,1], [4,0]],
-    [[5,0], [6,1], [7,2], [6,2], [5,2], [4,1], [3,0]],
-    [[6,0], [7,1], [6,1], [5,1], [4,1], [3,1], [2,0]],
-    [[7,0], [6,0], [5,0], [4,0], [3,0], [2,0], [1,0]]
+    [[0,0], [0,0], [0,0], [1,0], [0,0], [0,0], [0,0]],
+    [[0,0], [1,1], [2,1], [3,1], [2,1], [1,1], [0,0]],
+    [[1,0], [2,1], [4,2], [5,2], [4,2], [2,1], [1,0]],
+    [[2,0], [3,1], [5,2], [7,3], [5,2], [3,1], [2,0]],
+    [[1,0], [2,1], [4,2], [5,2], [4,2], [2,1], [1,0]],
+    [[0,0], [1,1], [2,1], [3,1], [2,1], [1,1], [0,0]],
+    [[0,0], [0,0], [0,0], [1,0], [0,0], [0,0], [0,0]]
 ];
-// 7x7に変更
 
 const world = document.getElementById('world');
 const unit = document.getElementById('unit');
-let unitPos = { x: 0, y: 0, z: 20 }; // 初期位置のzを1段分に変更
+const hStep = 30; // 1段30px
+let unitPos = { x: 3, y: 3, z: 210 }; // 真ん中の高い所に配置
 let currentRotation = 45;
 
-// Web Audio API
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSound(type) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    const now = audioCtx.currentTime;
-    if(type === 'move') {
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
-        gain.gain.linearRampToValueAtTime(0, now + 0.1);
-        osc.start(); osc.stop(now + 0.1);
-    } else if(type === 'jump') {
-        osc.frequency.setValueAtTime(330, now);
-        osc.frequency.exponentialRampToValueAtTime(660, now + 0.2);
-        gain.gain.linearRampToValueAtTime(0, now + 0.2);
-        osc.start(); osc.stop(now + 0.2);
-    }
-}
-
-// マップ生成
 function createMap() {
     const container = document.getElementById('tiles-container');
-    const tileSize = 60; // 1マスの大きさ
-    const hStep = 40; // 1段の高さ (前回の20pxから40pxに倍増)
-
     for (let y = 0; y < 7; y++) {
         for (let x = 0; x < 7; x++) {
             const [h, type] = mapData[y][x];
-            const hPx = h * hStep; // Z軸位置
-            const tx = -(type * tileSize); // スプライトのXオフセット
+            const hPx = h * hStep;
+            const tx = -(type * 60);
 
             const tile = document.createElement('div');
             tile.className = 'tile';
-            tile.style.left = `${x * tileSize}px`;
-            tile.style.top = `${y * tileSize}px`;
-            // 天面の高さ (--h)
-            tile.style.setProperty('--h', `${hPx}px`);
-            // タイルの種類 (--tx)
+            tile.style.left = `${x * 60}px`;
+            tile.style.top = `${y * 60}px`;
             tile.style.setProperty('--tx', `${tx}px`);
             
-            // 側面の高さをタイルの高さに合わせる
-            // 最上部（草土）の高さを計算（タイルの高さと15pxの小さい方）
-            const actualTopSideH = Math.min(hPx, 15); // 15pxが1段分の高さ
-
+            // 重要：天面を translateZ で持ち上げ、側面をその天面から垂らす
             tile.innerHTML = `
-                <div class="face top" onclick="moveUnit(${x}, ${y}, ${hPx})"></div>
-                
-                <div class="face side south" style="height: ${hPx}px;">
-                    <div class="side-part top-side" style="height: ${actualTopSideH}px;"></div>
-                    <div class="side-part bottom-side"></div>
+                <div class="face top" 
+                     style="transform: translateZ(${hPx}px);" 
+                     onclick="moveUnit(${x}, ${y}, ${hPx})"></div>
+                <div class="face side south" style="height:${hPx}px; transform: translateZ(${hPx}px) translateY(60px) rotateX(-90deg);">
+                    <div class="side-part top-side"></div><div class="side-part bottom-side" style="display:${hPx > 15 ? 'block' : 'none'}"></div>
                 </div>
-                <div class="face side north" style="height: ${hPx}px;">
-                    <div class="side-part top-side" style="height: ${actualTopSideH}px;"></div>
-                    <div class="side-part bottom-side"></div>
+                <div class="face side east" style="height:${hPx}px; transform: translateZ(${hPx}px) translateX(60px) rotateX(-90deg) rotateY(90deg);">
+                    <div class="side-part top-side"></div><div class="side-part bottom-side" style="display:${hPx > 15 ? 'block' : 'none'}"></div>
                 </div>
-                <div class="face side west" style="height: ${hPx}px;">
-                    <div class="side-part top-side" style="height: ${actualTopSideH}px;"></div>
-                    <div class="side-part bottom-side"></div>
+                <div class="face side west" style="height:${hPx}px; transform: translateZ(${hPx}px) rotateX(-90deg) rotateY(-90deg);">
+                    <div class="side-part top-side"></div><div class="side-part bottom-side" style="display:${hPx > 15 ? 'block' : 'none'}"></div>
                 </div>
-                <div class="face side east" style="height: ${hPx}px;">
-                    <div class="side-part top-side" style="height: ${actualTopSideH}px;"></div>
-                    <div class="side-part bottom-side"></div>
+                <div class="face side north" style="height:${hPx}px; transform: translateZ(${hPx}px) rotateX(-90deg) rotateY(180deg);">
+                    <div class="side-part top-side"></div><div class="side-part bottom-side" style="display:${hPx > 15 ? 'block' : 'none'}"></div>
                 </div>
             `;
             container.appendChild(tile);
         }
     }
-    moveUnit(0, 0, mapData[0][0][0] * hStep); // 初期位置
+    updateUnitTransform(3 * 60, 3 * 60, 7 * hStep);
 }
 
 function moveUnit(x, y, z) {
-    // 6歳向け：隣接マスなら移動可能
     const dist = Math.abs(x - unitPos.x) + Math.abs(y - unitPos.y);
-    if (dist > 0 && dist <= 1) {
-        // 段差移動の演出
-        playSound('move');
-        
-        // Z軸方向の移動距離を計算
-        const diffZ = z - unitPos.z;
-        const jumpHeight = 60; // 段差に合わせて高くする
-
-        unit.style.transition = "all 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275)";
-        // ジャンプして移動
-        unit.style.setProperty('--uz', `${unitPos.z + jumpHeight}px`);
-        
-        setTimeout(() => {
-            unit.style.transition = "all 0.3s ease-out";
-            unitPos = { x, y, z };
-            unit.style.left = `${x * 60}px`;
-            unit.style.top = `${y * 60}px`;
-            // タイルの天面の上にキャラクターのz軸を合わせる
-            unit.style.setProperty('--uz', `${z}px`);
-        }, 150);
-        
-        // document.getElementById('msg').innerHTML = `<ruby>座標<rt>ざひょう</rt></ruby> (${x}, ${y}) へ <ruby>移動<rt>いどう</rt></ruby>したよ！`;
+    if (dist <= 1) {
+        unitPos = { x, y, z };
+        updateUnitTransform(x * 60, y * 60, z);
     }
+}
+
+function updateUnitTransform(px, py, pz) {
+    // キャラクターの向きとカメラ角度を考慮
+    unit.style.transform = `translate3d(${px}px, ${py}px, ${pz + 5}px) rotateZ(-45deg) rotateX(-60deg)`;
 }
 
 function rotateWorld(deg) {
@@ -279,8 +182,17 @@ function rotateWorld(deg) {
     world.style.transform = `rotateX(60deg) rotateZ(${currentRotation}deg)`;
 }
 
+function jump() {
+    const baseZ = unitPos.z;
+    unit.style.transition = "transform 0.2s ease-out";
+    updateUnitTransform(unitPos.x * 60, unitPos.y * 60, baseZ + 40);
+    setTimeout(() => {
+        unit.style.transition = "transform 0.2s ease-in";
+        updateUnitTransform(unitPos.x * 60, unitPos.y * 60, baseZ);
+    }, 200);
+}
+
 createMap();
 </script>
 </body>
 </html>
-
