@@ -2,152 +2,239 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>ちびっこティラノ：Three.js版</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ちびっこティラノ：タクティクス (Three.js版)</title>
     <style>
-        body { margin: 0; overflow: hidden; background: #1a1a1a; }
-        canvas { display: block; }
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; }
+        #canvas-container { width: 100vw; height: 60vh; }
+        #ui { height: 40vh; background: #00008b; border-top: 4px solid #eee; padding: 15px; box-sizing: border-box; color: white; }
+        #msg { height: 60px; border: 2px solid white; padding: 10px; border-radius: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.5); font-size: 1.1rem; }
+        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+        button { padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; border: none; background: #eee; box-shadow: 0 4px #999; cursor: pointer; }
+        button:active { transform: translateY(2px); box-shadow: 0 2px #999; }
     </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
 
-<script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
-<script type="importmap">
-{
-  "imports": {
-    "three": "https://unpkg.com/three@0.156.1/build/three.module.js",
-    "three/addons/": "https://unpkg.com/three@0.156.1/examples/jsm/"
-  }
-}
-</script>
+<div id="canvas-container"></div>
 
-<script type="module">
-import * as THREE from 'three';
-// マウスでカメラを回せるようにするライブラリ
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+<div id="ui">
+    <div id="msg">
+        Three.jsエンジン起動！<br>マスをタップして<ruby>移動<rt>いどう</rt></ruby>しよう！
+    </div>
+    <div class="controls">
+        <button onclick="rotateCamera(-45)">◀ 回す</button>
+        <button onclick="rotateCamera(45)">回す ▶</button>
+        <button onclick="jumpDino()">JUMP!</button>
+    </div>
+</div>
 
-// ==========================================
-// 1. 基礎設定（シーン、カメラ、レンダラー）
-// ==========================================
-
-// 1.1 シーン（舞台）
-const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x1a1a1a);
-
-// 1.2 カメラ（平行投影：タクティクスオウガ風）
-const aspect = window.innerWidth / window.innerHeight;
-const d = 5; // カメラの表示範囲の広さ
-const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
-
-// カメラの位置と向き（斜め上から見下ろす）
-camera.position.set(20, 20, 20); 
-camera.lookAt(0, 0, 0); // 中心を見る
-
-// 1.3 レンダラー（描画実行）
-const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.shadowMap.enabled = true; // 影を有効にする
-document.body.appendChild(renderer.domElement);
-
-// マウス操作を有効にする
-const controls = new OrbitControls(camera, renderer.domElement);
-
-// ==========================================
-// 2. 照明（ライト）
-// ==========================================
-const ambientLight = new THREE.AmbientLight(0xffxffx, 0.6); // 全体を明るく
-scene.add(ambientLight);
-
-const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // 太陽光のような光
-directionalLight.position.set(10, 20, 10);
-directionalLight.castShadow = true; // 影を落とす
-scene.add(directionalLight);
-
-// ==========================================
-// 3. マップ生成 (mapData から)
-// ==========================================
-
-// 元の mapData
+<script>
+// --- 1. マップデータ [高さ(1-8), 種類(0:草, 1:土, 2:苔, 3:岩)] ---
 const mapData = [
-    [1, 2, 3, 4, 5, 6, 7],
-    [2, 3, 4, 5, 6, 7, 6],
-    [3, 4, 5, 6, 7, 6, 5],
-    [4, 5, 6, 8, 6, 5, 4],
-    [5, 6, 7, 6, 5, 4, 3],
-    [6, 7, 6, 5, 4, 3, 2],
-    [7, 6, 5, 4, 3, 2, 1]
+    [[1,0], [2,0], [3,0], [4,0], [5,0], [6,0], [7,0]],
+    [[2,0], [3,1], [4,1], [5,1], [6,1], [7,1], [6,0]],
+    [[3,0], [4,1], [5,2], [6,2], [7,2], [6,1], [5,0]],
+    [[4,0], [5,1], [6,2], [8,3], [6,2], [5,1], [4,0]],
+    [[5,0], [6,1], [7,2], [6,2], [5,2], [4,1], [3,0]],
+    [[6,0], [7,1], [6,1], [5,1], [4,1], [3,1], [2,0]],
+    [[7,0], [6,0], [5,0], [4,0], [3,0], [2,0], [1,0]]
 ];
 
-const tileSize = 1;
-const heightStep = 0.5; // 1段の高さ
+const TILE_SIZE = 60;
+const H_STEP = 30; // 1段の高さ
 
-// テクスチャ読み込み（今回は仮の色。画像があればここを書き換える）
-// const textureLoader = new THREE.TextureLoader();
-// const mapTexture = textureLoader.load('img/plate01.png');
+let scene, camera, renderer, dinoSprite;
+let currentAngle = 45; // カメラの回転角度
+let dinoPos = { gridX: 3, gridZ: 3, h: 8 };
 
-for (let y = 0; y < mapData.length; y++) {
-    for (let x = 0; x < mapData[y].length; x++) {
-        const height = mapData[y][x] * heightStep;
+// --- 2. 画像の読み込みと分割（超堅牢なCanvasアプローチ） ---
+// スプライトシートをメモリ上のCanvasで切り抜き、ズレのないテクスチャマテリアルを生成します。
+const sheetImg = new Image();
+sheetImg.src = 'img/plate01.png';
+sheetImg.onload = init; // 画像が読み込まれてから3D初期化
 
-        // 【Three.js のポイント】
-        // 幾何学（形）と材質（テクスチャ）を定義する
+function createMaterial(sx, sy, sw, sh) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 64; canvas.height = 64; // Three.js用に2の累乗サイズに正規化
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(sheetImg, sx, sy, sw, sh, 0, 0, 64, 64);
+    
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.magFilter = THREE.NearestFilter; // ドット絵をくっきりさせる
+    return new THREE.MeshLambertMaterial({ map: texture });
+}
 
-        // 立方体の形を作る (幅, 高さ, 奥行き)
-        const geometry = new THREE.BoxGeometry(tileSize, height, tileSize);
+function createDinoTexture() {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    ctx.font = '100px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🦖', 64, 64);
+    const texture = new THREE.CanvasTexture(canvas);
+    return new THREE.SpriteMaterial({ map: texture });
+}
 
-        // 材質を作る（色や影の設定）
-        const material = new THREE.MeshStandardMaterial({
-            color: new THREE.Color(`hsl(120, 40%, ${30 + mapData[y][x] * 5}%)`), // 高さで色を変える
-            // map: mapTexture, // 画像を使う場合はここをコメント解除
+// --- 3. Three.js 初期化 ---
+function init() {
+    const container = document.getElementById('canvas-container');
+    const w = container.clientWidth;
+    const h = container.clientHeight;
+
+    scene = new THREE.Scene();
+
+    // タクティクスオウガ風の「平行投影カメラ」
+    const aspect = w / h;
+    const d = 350; // 表示範囲の広さ
+    camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 2000);
+    updateCameraPosition();
+
+    renderer = new THREE.WebGLRenderer({ antialias: false }); // ドット絵のシャープさを優先
+    renderer.setSize(w, h);
+    renderer.setClearColor(0x222222);
+    container.appendChild(renderer.domElement);
+
+    // 照明
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
+    scene.add(ambientLight);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
+    dirLight.position.set(500, 1000, 500);
+    scene.add(dirLight);
+
+    buildMap();
+
+    // 恐竜スプライトの追加
+    dinoSprite = new THREE.Sprite(createDinoTexture());
+    dinoSprite.scale.set(TILE_SIZE * 1.5, TILE_SIZE * 1.5, 1);
+    updateDinoPosition(dinoPos.gridX, dinoPos.gridZ, dinoPos.h);
+    scene.add(dinoSprite);
+
+    // クリック（タップ）イベントの登録
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+
+    animate();
+}
+
+// --- 4. マップの構築（レゴブロック方式） ---
+const interactableTiles = []; // クリック判定用の配列
+
+function buildMap() {
+    const geometry = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
+
+    // マテリアルセットの事前生成 [Top, SideTop, SideBottom]
+    const matSets = [];
+    for(let type=0; type<4; type++) {
+        const tx = type * 256;
+        matSets.push({
+            top: createMaterial(tx, 0, 256, 256),
+            sideTop: createMaterial(tx, 256, 256, 64),
+            sideBottom: createMaterial(tx, 320, 256, 64)
         });
+    }
 
-        // 3Dオブジェクト（メッシュ）を作成
-        const box = new THREE.Mesh(geometry, material);
+    const offsetX = (7 * TILE_SIZE) / 2 - (TILE_SIZE / 2);
+    const offsetZ = (7 * TILE_SIZE) / 2 - (TILE_SIZE / 2);
 
-        // 位置を設定（デフォルトの中心が(0,0,0)なので、地面に接するように調整）
-        box.position.x = x * tileSize - (mapData[y].length * tileSize) / 2;
-        box.position.y = height / 2; // 地面から浮かせる
-        box.position.z = y * tileSize - (mapData.length * tileSize) / 2;
+    for (let z = 0; z < 7; z++) {
+        for (let x = 0; x < 7; x++) {
+            const [h, type] = mapData[z][x];
+            const mats = matSets[type];
 
-        box.castShadow = true; // 影を落とす
-        box.receiveShadow = true; // 影を受け止める
+            // 高さがhなら、h個のブロックを積み上げる
+            for (let i = 0; i < h; i++) {
+                // Three.jsのマテリアル順: 右, 左, 上, 下, 手前, 奥
+                let blockMats;
+                if (i === h - 1) {
+                    // 一番上のブロック（天面と、最上部の側面）
+                    blockMats = [mats.sideTop, mats.sideTop, mats.top, mats.sideBottom, mats.sideTop, mats.sideTop];
+                } else {
+                    // 下のブロック（すべて土）
+                    blockMats = [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
+                }
 
-        scene.add(box); // シーンに追加
+                const cube = new THREE.Mesh(geometry, blockMats);
+                cube.position.set(
+                    (x * TILE_SIZE) - offsetX, 
+                    (i * H_STEP) + (H_STEP / 2), 
+                    (z * TILE_SIZE) - offsetZ
+                );
+
+                scene.add(cube);
+
+                // 一番上のブロックだけ、クリック判定の対象にする
+                if (i === h - 1) {
+                    cube.userData = { gridX: x, gridZ: z, h: h };
+                    interactableTiles.push(cube);
+                }
+            }
+        }
     }
 }
 
-// ==========================================
-// 4. キャラクター（仮）
-// ==========================================
-const unitGeometry = new THREE.SphereGeometry(0.4, 32, 32);
-const unitMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-const unit = new THREE.Mesh(unitGeometry, unitMaterial);
-unit.position.set(0, mapData[3][3] * heightStep + 0.4, 0); // マップ中央の高さに配置
-unit.castShadow = true;
-scene.add(unit);
+// --- 5. インタラクションとアニメーション ---
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
 
+function onPointerDown(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
 
-// ==========================================
-// 5. アニメーション（描画ループ）
-// ==========================================
+    raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects(interactableTiles);
+
+    if (intersects.length > 0) {
+        const target = intersects[0].object.userData;
+        const dist = Math.abs(target.gridX - dinoPos.gridX) + Math.abs(target.gridZ - dinoPos.gridZ);
+        
+        // 隣接マスなら移動
+        if (dist === 1) {
+            dinoPos = target;
+            updateDinoPosition(target.gridX, target.gridZ, target.h);
+        }
+    }
+}
+
+function updateDinoPosition(gridX, gridZ, h) {
+    const offsetX = (7 * TILE_SIZE) / 2 - (TILE_SIZE / 2);
+    const offsetZ = (7 * TILE_SIZE) / 2 - (TILE_SIZE / 2);
+    
+    // スプライトがブロックに埋もれないようにYを少し上げる
+    dinoSprite.position.set(
+        (gridX * TILE_SIZE) - offsetX,
+        (h * H_STEP) + (TILE_SIZE * 0.5),
+        (gridZ * TILE_SIZE) - offsetZ
+    );
+}
+
+function updateCameraPosition() {
+    const radius = 600;
+    const rad = currentAngle * (Math.PI / 180);
+    // カメラを斜め上から見下ろす（アイソメトリックの黄金角に近い設定）
+    camera.position.x = Math.sin(rad) * radius;
+    camera.position.z = Math.cos(rad) * radius;
+    camera.position.y = 500; 
+    camera.lookAt(0, 0, 0);
+}
+
+window.rotateCamera = function(deg) {
+    currentAngle += deg;
+    updateCameraPosition();
+}
+
+window.jumpDino = function() {
+    const baseY = dinoSprite.position.y;
+    dinoSprite.position.y += 50;
+    setTimeout(() => { dinoSprite.position.y = baseY; }, 200);
+}
+
 function animate() {
     requestAnimationFrame(animate);
-    controls.update(); // マウス操作の更新
-    renderer.render(scene, camera); // 描画
+    renderer.render(scene, camera);
 }
-animate();
-
-// 画面サイズが変わったときの調整
-window.addEventListener('resize', onWindowResize, false);
-function onWindowResize() {
-    const aspect = window.innerWidth / window.innerHeight;
-    camera.left = -d * aspect;
-    camera.right = d * aspect;
-    camera.top = d;
-    camera.bottom = -d;
-    camera.updateProjectionMatrix();
-    renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
 </script>
 </body>
 </html>
