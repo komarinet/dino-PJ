@@ -3,11 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v3.2.0)</title>
+    <title>ちびっこティラノ：タクティクス (v4.0.0)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; }
         #canvas-container { width: 100vw; height: 100vh; }
         
+        /* ステータスUI */
+        #status-ui {
+            position: absolute; top: 10px; left: 10px;
+            background: rgba(0,0,0,0.8); color: white; padding: 10px;
+            border-radius: 8px; border: 2px solid #aaa; font-weight: bold; z-index: 1000;
+        }
+
+        /* カメラUI */
         #camera-ui {
             position: absolute; bottom: 20px; right: 20px;
             background: rgba(0, 0, 139, 0.85); border: 2px solid white; border-radius: 10px;
@@ -20,23 +28,26 @@
         .ui-btn { background: #eee; border: none; border-radius: 5px; padding: 10px 5px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #999; }
         .ui-btn:active { transform: translateY(2px); box-shadow: 0 0 #999; }
         
+        /* メッセージUI */
         #msg-ui {
             position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.7); color: white; padding: 10px 20px;
-            border-radius: 10px; border: 2px solid white; font-size: 1.1rem; pointer-events: none; z-index: 1000;
+            background: rgba(0,0,0,0.8); color: #00ff00; padding: 10px 20px;
+            border-radius: 10px; border: 2px solid white; font-size: 1.1rem; font-weight: bold;
+            pointer-events: none; z-index: 1000; text-align: center;
         }
 
+        /* 確認ダイアログ（被らないように上部へ移動） */
         #confirm-ui {
             display: none;
-            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.9); color: white; padding: 20px;
+            position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95); color: white; padding: 20px;
             border-radius: 10px; border: 2px solid #ffcc00; text-align: center;
             z-index: 2000; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
         }
         #confirm-ui p { margin: 0 0 20px 0; font-size: 1.2rem; font-weight: bold; }
         .confirm-btns { display: flex; justify-content: center; gap: 20px; }
-        .btn-yes { background: #4caf50; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
-        .btn-no { background: #f44336; color: white; border: none; padding: 10px 20px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
+        .btn-yes { background: #4caf50; color: white; border: none; padding: 10px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
+        .btn-no { background: #f44336; color: white; border: none; padding: 10px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -45,10 +56,14 @@
 <body>
 
 <div id="canvas-container"></div>
-<div id="msg-ui">緑のマス（4歩以内）をタップ！</div>
+<div id="status-ui">
+    <div id="hp-player">🦖 ティラノ: 30 / 30</div>
+    <div id="hp-enemy" style="color:#ff6666; margin-top:5px;">🦕 トリケラ: 20 / 20</div>
+</div>
+<div id="msg-ui">プレイヤーのターン！<br>移動先を選んでね。</div>
 
 <div id="confirm-ui">
-    <p>ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？</p>
+    <p id="confirm-text">ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？</p>
     <div class="confirm-btns">
         <button class="btn-yes" onclick="answerConfirm(true)">はい</button>
         <button class="btn-no" onclick="answerConfirm(false)">いいえ</button>
@@ -73,19 +88,42 @@
 </div>
 
 <script>
-// --- 基本設定 ---
+// --- 基本設定とクラス設計 ---
 const MAP_W = 20; const MAP_D = 40;
 const TILE_SIZE = 60; const H_STEP = 30;
-const MAX_MOVE = 4; const MAX_JUMP = 2;
 
-let scene, camera, renderer, controls, dinoSprite;
+let scene, camera, renderer, controls;
 let mapData = []; 
 let tilesMeshMap = {}; 
 let walkableTiles = [];
-let dinoPos = { x: 10, z: 20, h: 0 }; 
+let attackableTiles = [];
 
-let gameState = 'IDLE'; 
-let pendingPath = null;
+// ★オブジェクト指向でユニットを管理★
+class Unit {
+    constructor(id, emoji, x, z, maxHp, move, jump, isPlayer) {
+        this.id = id;
+        this.emoji = emoji;
+        this.x = x; this.z = z; this.h = 0; // hはマップ生成後にセット
+        this.hp = maxHp; this.maxHp = maxHp;
+        this.move = move; this.jump = jump;
+        this.isPlayer = isPlayer;
+        this.sprite = null;
+    }
+    updateHPUI() {
+        const el = document.getElementById(this.isPlayer ? 'hp-player' : 'hp-enemy');
+        el.innerHTML = `${this.emoji} ${this.id}: ${this.hp} / ${this.maxHp}`;
+    }
+}
+
+// プレイヤー(MOVE:6) と 敵(MOVE:4)
+const player = new Unit("ティラノ", "🦖", 10, 25, 30, 6, 2, true);
+const enemy  = new Unit("トリケラ", "🦕", 10, 20, 20, 4, 2, false);
+const units = [player, enemy];
+
+// ステート: PLAYER_MOVE -> PLAYER_ACT -> ENEMY_TURN
+let gameState = 'PLAYER_MOVE'; 
+let confirmMode = ''; // 'MOVE' or 'ATTACK'
+let pendingData = null;
 let selectedTileKey = null;
 
 const sheetImg = new Image();
@@ -93,19 +131,24 @@ sheetImg.src = 'img/plate01.png';
 sheetImg.onload = init;
 
 function toggleUI() { document.getElementById('camera-ui').classList.toggle('collapsed'); }
+function setMsg(txt, color="#ffffff") { 
+    const el = document.getElementById('msg-ui');
+    el.innerHTML = txt; el.style.color = color;
+}
 
-// --- マップ生成 ---
+// --- マップ生成（20x40） ---
 function generateMapData() {
     for (let z = 0; z < MAP_D; z++) {
         mapData[z] = [];
         for (let x = 0; x < MAP_W; x++) {
+            // 中央付近が高い山になるアルゴリズム
             const dist = Math.sqrt(Math.pow(x - 10, 2) + Math.pow(z - 20, 2));
-            let h = Math.max(1, Math.floor(8 - (dist * 0.4) + (Math.random() * 2)));
-            let type = (h >= 6) ? 3 : (h >= 4) ? 2 : (h >= 2) ? 1 : 0; 
+            let h = Math.max(1, Math.floor(10 - (dist * 0.4) + (Math.random() * 1.5)));
+            let type = (h >= 7) ? 3 : (h >= 5) ? 2 : (h >= 3) ? 1 : 0; 
             mapData[z][x] = { h, type };
         }
     }
-    dinoPos.h = mapData[dinoPos.z][dinoPos.x].h;
+    units.forEach(u => { u.h = mapData[u.z][u.x].h; });
 }
 
 function init() {
@@ -114,8 +157,8 @@ function init() {
     generateMapData();
 
     const w = container.clientWidth; const h = container.clientHeight;
-    const aspect = w / h; const d = 400;
-    camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 4000);
+    camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000);
+    camera.zoom = 1.5; camera.updateProjectionMatrix();
     
     renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(w, h); renderer.setClearColor(0x1a1a1a);
@@ -127,56 +170,38 @@ function init() {
 
     buildMapMeshes();
 
-    const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
-    const ctx = canvas.getContext('2d'); ctx.font = '100px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🦖', 64, 64);
-    dinoSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
-    dinoSprite.scale.set(TILE_SIZE * 1.5, TILE_SIZE * 1.5, 1);
-    scene.add(dinoSprite);
-    updateDinoPosInstantly();
+    // ユニットのスプライト生成
+    units.forEach(u => {
+        const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+        const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(u.emoji, 64, 64);
+        u.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
+        u.sprite.scale.set(TILE_SIZE * 1.5, TILE_SIZE * 1.5, 1);
+        scene.add(u.sprite);
+        updateUnitPosInstantly(u);
+    });
 
-    // カメラコントローラ設定
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableRotate = true; controls.enableZoom = true; controls.enablePan = true;
-    // カメラが地中に潜らないよう制限
-    controls.maxPolarAngle = Math.PI / 2.2; 
-    controls.minPolarAngle = Math.PI / 6;
+    controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
 
-    // ★オートスナップカメラの実装★
-    // 指を離した時、最も見やすい斜め45度（タクティクスビュー）に自動補正する
     controls.addEventListener('end', () => {
         if (gameState === 'MOVING') return;
-        
         const az = controls.getAzimuthalAngle();
-        const snapInterval = Math.PI / 2; // 90度ごと
-        const offset = Math.PI / 4;       // 45度のオフセット
-        const snappedAz = Math.round((az - offset) / snapInterval) * snapInterval + offset;
-        
-        const targetPolar = Math.PI / 3; // 見下ろす角度（約60度）
-        const radius = controls.getDistance();
-        
-        const tgt = controls.target;
-        const camX = tgt.x + radius * Math.sin(snappedAz) * Math.sin(targetPolar);
-        const camY = tgt.y + radius * Math.cos(targetPolar);
-        const camZ = tgt.z + radius * Math.cos(snappedAz) * Math.sin(targetPolar);
-        
+        const snap = Math.PI / 2; const offset = Math.PI / 4;
+        const snappedAz = Math.round((az - offset) / snap) * snap + offset;
+        const polar = Math.PI / 3; const r = controls.getDistance();
         gsap.to(camera.position, {
-            x: camX, y: camY, z: camZ, duration: 0.3, ease: "power2.out",
-            onUpdate: () => controls.update()
+            x: controls.target.x + r * Math.sin(snappedAz) * Math.sin(polar),
+            y: controls.target.y + r * Math.cos(polar),
+            z: controls.target.z + r * Math.cos(snappedAz) * Math.sin(polar),
+            duration: 0.3, ease: "power2.out", onUpdate: () => controls.update()
         });
     });
     
-    centerCameraInstantly(); 
+    centerCameraInstantly(player); 
+    renderer.domElement.addEventListener('pointerdown', onPointerDown);
 
-    // ★誤作動防止：タップとスワイプを区別★
-    let ptrDownPos = { x: 0, y: 0 };
-    renderer.domElement.addEventListener('pointerdown', e => { ptrDownPos = { x: e.clientX, y: e.clientY }; });
-    renderer.domElement.addEventListener('pointerup', e => {
-        // 指が動いた距離が5ピクセル未満なら「タップ」と判定
-        const dist = Math.hypot(e.clientX - ptrDownPos.x, e.clientY - ptrDownPos.y);
-        if (dist < 5) onPointerClick(e);
-    });
-
-    highlightWalkable();
+    startPlayerMovePhase();
     animate();
 }
 
@@ -205,13 +230,9 @@ function buildMapMeshes() {
             const h = tileData.h;
 
             for (let i = Math.max(0, h - 2); i < h; i++) {
-                let blockMats;
-                if (i === h - 1) {
-                    // ★バグ修正：天面のマテリアルを独立させる（clone）★
-                    blockMats = [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop];
-                } else {
-                    blockMats = [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
-                }
+                let blockMats = (i === h - 1) 
+                    ? [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop]
+                    : [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
 
                 const cube = new THREE.Mesh(geometry, blockMats);
                 cube.position.set((x * TILE_SIZE) - offsetX, (i * H_STEP) + (H_STEP / 2), (z * TILE_SIZE) - offsetZ);
@@ -227,42 +248,78 @@ function buildMapMeshes() {
     }
 }
 
-// --- 経路探索＆ハイライト ---
-function getWalkableNodes(startX, startZ) {
-    let queue = [{ x: startX, z: startZ, dist: 0, path: [] }];
-    let visited = new Set([`${startX},${startZ}`]);
-    let walkable = [];
-    const dirs = [[0,1], [1,0], [0,-1], [-1,0]];
+function getUnitAt(x, z) { return units.find(u => u.x === x && u.z === z && u.hp > 0); }
+
+// ★ダイクストラ法による探索アルゴリズム★
+function getWalkableNodes(unit) {
+    let bestCost = {};
+    let queue = [{ x: unit.x, z: unit.z, cost: 0, path: [] }];
+    let resultMap = {};
+    bestCost[`${unit.x},${unit.z}`] = 0;
 
     while(queue.length > 0) {
+        queue.sort((a, b) => a.cost - b.cost); // コストが低い順に処理（優先度付きキューの代用）
         let curr = queue.shift();
-        if(curr.dist > 0) walkable.push(curr);
-        if(curr.dist >= MAX_MOVE) continue;
 
+        if (curr.cost > 0) resultMap[`${curr.x},${curr.z}`] = curr;
         let currH = mapData[curr.z][curr.x].h;
 
-        for(let d of dirs) {
+        for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
             let nx = curr.x + d[0]; let nz = curr.z + d[1];
-            let key = `${nx},${nz}`;
-            if(nx >= 0 && nx < MAP_W && nz >= 0 && nz < MAP_D && !visited.has(key)) {
+            if(nx >= 0 && nx < MAP_W && nz >= 0 && nz < MAP_D) {
+                if(getUnitAt(nx, nz)) continue; // ユニットがいる場所は止まれない
+
                 let nextH = mapData[nz][nx].h;
-                if(Math.abs(currH - nextH) <= MAX_JUMP) {
-                    visited.add(key);
-                    queue.push({ x: nx, z: nz, dist: curr.dist + 1, path: [...curr.path, {x: nx, z: nz, h: nextH}] });
+                let hDiff = nextH - currH;
+
+                if(Math.abs(hDiff) <= unit.jump) {
+                    // ★TO仕様コスト計算：登る時はコスト増（1段+1）★
+                    let stepCost = 1 + (hDiff > 0 ? hDiff : 0);
+                    let newCost = curr.cost + stepCost;
+
+                    if(newCost <= unit.move) {
+                        let key = `${nx},${nz}`;
+                        if(bestCost[key] === undefined || newCost < bestCost[key]) {
+                            bestCost[key] = newCost;
+                            queue.push({ x: nx, z: nz, cost: newCost, path: [...curr.path, {x: nx, z: nz, h: nextH}] });
+                        }
+                    }
                 }
             }
         }
     }
-    return walkable;
+    return Object.values(resultMap);
 }
 
-function highlightWalkable() {
+// --- フェーズ進行 ---
+function startPlayerMovePhase() {
+    gameState = 'PLAYER_MOVE';
+    setMsg("移動先を選んでね（段差に注意！）", "#00ff00");
     clearHighlights();
-    walkableTiles = getWalkableNodes(dinoPos.x, dinoPos.z);
-    walkableTiles.forEach(node => {
-        let mesh = tilesMeshMap[`${node.x},${node.z}`];
-        if(mesh) mesh.material[2].color.setHex(0x88ff88); // 移動可能範囲を緑に
-    });
+    walkableTiles = getWalkableNodes(player);
+    walkableTiles.forEach(node => { tilesMeshMap[`${node.x},${node.z}`].material[2].color.setHex(0x55ff55); });
+}
+
+function startPlayerActionPhase() {
+    gameState = 'PLAYER_ACT';
+    clearHighlights();
+    attackableTiles = [];
+    // 上下左右に敵がいるかチェック
+    for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
+        let nx = player.x + d[0]; let nz = player.z + d[1];
+        let u = getUnitAt(nx, nz);
+        if(u && !u.isPlayer) {
+            attackableTiles.push(u);
+            tilesMeshMap[`${nx},${nz}`].material[2].color.setHex(0xff5555); // 赤く光る
+        }
+    }
+    
+    if(attackableTiles.length > 0) {
+        setMsg("隣の敵をタップして攻撃！", "#ff5555");
+    } else {
+        setMsg("敵がいないのでターン終了", "#aaaaaa");
+        setTimeout(startEnemyTurn, 1000);
+    }
 }
 
 function clearHighlights() {
@@ -272,10 +329,19 @@ function clearHighlights() {
 // --- タップ処理 ---
 const raycaster = new THREE.Raycaster();
 const mouse = new THREE.Vector2();
+let ptrDownPos = {x:0, y:0};
 
-function onPointerClick(event) {
-    if (gameState !== 'IDLE') return;
+function onPointerDown(event) {
+    ptrDownPos = { x: event.clientX, y: event.clientY };
+    document.addEventListener('pointerup', onPointerUp, {once:true});
+}
+
+function onPointerUp(event) {
     if(event.target.closest('#camera-ui') || event.target.closest('#confirm-ui')) return;
+    const dist = Math.hypot(event.clientX - ptrDownPos.x, event.clientY - ptrDownPos.y);
+    if(dist > 5) return; // スワイプは無視
+
+    if (gameState !== 'PLAYER_MOVE' && gameState !== 'PLAYER_ACT') return;
 
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
     mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
@@ -284,122 +350,165 @@ function onPointerClick(event) {
     const intersects = raycaster.intersectObjects(interactableTiles);
     if (intersects.length > 0) {
         const target = intersects[0].object.userData;
-        const route = walkableTiles.find(n => n.x === target.x && n.z === target.z);
         
-        if (route) {
-            // ★完璧なフロー：緑を残したまま、選んだ1マスだけを黄色にする★
-            gameState = 'CONFIRMING';
-            pendingPath = route.path;
-            selectedTileKey = `${target.x},${target.z}`;
-            
-            tilesMeshMap[selectedTileKey].material[2].color.setHex(0xffff00);
-            
-            document.getElementById('msg-ui').style.display = 'none';
-            document.getElementById('confirm-ui').style.display = 'block';
+        if (gameState === 'PLAYER_MOVE') {
+            const route = walkableTiles.find(n => n.x === target.x && n.z === target.z);
+            if (route) {
+                gameState = 'CONFIRMING'; confirmMode = 'MOVE'; pendingData = route.path; selectedTileKey = `${target.x},${target.z}`;
+                tilesMeshMap[selectedTileKey].material[2].color.setHex(0xffff00);
+                document.getElementById('confirm-text').innerHTML = "ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？";
+                document.getElementById('confirm-ui').style.display = 'block';
+            }
+        } else if (gameState === 'PLAYER_ACT') {
+            const enemyUnit = attackableTiles.find(u => u.x === target.x && u.z === target.z);
+            if(enemyUnit) {
+                gameState = 'CONFIRMING'; confirmMode = 'ATTACK'; pendingData = enemyUnit; selectedTileKey = `${target.x},${target.z}`;
+                tilesMeshMap[selectedTileKey].material[2].color.setHex(0xffff00);
+                document.getElementById('confirm-text').innerHTML = "攻撃しますか？";
+                document.getElementById('confirm-ui').style.display = 'block';
+            }
         }
     }
 }
 
-// 確認ダイアログ
+// --- ダイアログ処理 ---
 window.answerConfirm = function(isYes) {
     document.getElementById('confirm-ui').style.display = 'none';
     
     if (isYes) {
-        gameState = 'MOVING';
-        clearHighlights(); // 移動開始時に色をリセット
-        executeMovement(pendingPath);
+        clearHighlights();
+        if(confirmMode === 'MOVE') {
+            gameState = 'MOVING';
+            executeMovement(player, pendingData, () => { startPlayerActionPhase(); });
+        } else if(confirmMode === 'ATTACK') {
+            gameState = 'ATTACKING';
+            executeAttack(player, pendingData, () => { startEnemyTurn(); });
+        }
     } else {
-        // いいえ：黄色にしたマスを緑に戻して待機
-        tilesMeshMap[selectedTileKey].material[2].color.setHex(0x88ff88);
-        document.getElementById('msg-ui').style.display = 'block';
-        gameState = 'IDLE';
+        if(confirmMode === 'MOVE') {
+            tilesMeshMap[selectedTileKey].material[2].color.setHex(0x55ff55);
+            gameState = 'PLAYER_MOVE';
+        } else {
+            tilesMeshMap[selectedTileKey].material[2].color.setHex(0xff5555);
+            gameState = 'PLAYER_ACT';
+        }
     }
-    pendingPath = null;
-    selectedTileKey = null;
+    pendingData = null; selectedTileKey = null;
 }
 
-// --- 移動とカメラ追従 ---
-function executeMovement(path) {
-    const offsetX = (MAP_W * TILE_SIZE) / 2;
-    const offsetZ = (MAP_D * TILE_SIZE) / 2;
-    
-    const tl = gsap.timeline({
-        onComplete: () => { moveCameraToDino(); }
-    });
+// --- 行動処理 ---
+function executeMovement(unit, path, onCompleteCallback) {
+    const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
+    const tl = gsap.timeline({ onComplete: () => {
+        // 移動終了後にカメラを寄せる
+        if(unit.isPlayer) {
+            moveCameraToTarget(unit.sprite.position, onCompleteCallback);
+        } else {
+            onCompleteCallback();
+        }
+    }});
 
     path.forEach((step) => {
-        const targetX = (step.x * TILE_SIZE) - offsetX;
-        const targetZ = (step.z * TILE_SIZE) - offsetZ;
-        const targetY = (step.h * H_STEP) + (TILE_SIZE * 0.5);
-
-        tl.to(dinoSprite.position, { x: targetX, z: targetZ, duration: 0.25, ease: "power1.inOut" }, "+=0");
-        tl.to(dinoSprite.position, { y: Math.max(dinoSprite.position.y, targetY) + 30, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
-        tl.set(dinoSprite.position, { y: targetY });
+        const tX = (step.x * TILE_SIZE) - offsetX; const tZ = (step.z * TILE_SIZE) - offsetZ;
+        const tY = (step.h * H_STEP) + (TILE_SIZE * 0.5);
+        tl.to(unit.sprite.position, { x: tX, z: tZ, duration: 0.25, ease: "power1.inOut" }, "+=0");
+        tl.to(unit.sprite.position, { y: Math.max(unit.sprite.position.y, tY) + 30, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
+        tl.set(unit.sprite.position, { y: tY });
     });
 
     const finalStep = path[path.length - 1];
-    dinoPos = { x: finalStep.x, z: finalStep.z, h: finalStep.h };
+    unit.x = finalStep.x; unit.z = finalStep.z; unit.h = finalStep.h;
 }
 
-function moveCameraToDino() {
-    const dx = dinoSprite.position.x - controls.target.x;
-    const dz = dinoSprite.position.z - controls.target.z;
-
-    gsap.to(controls.target, { x: controls.target.x + dx, z: controls.target.z + dz, duration: 1.0, ease: "power2.inOut" });
-    gsap.to(camera.position, { x: camera.position.x + dx, z: camera.position.z + dz, duration: 1.0, ease: "power2.inOut",
-        onComplete: () => {
-            gameState = 'IDLE';
-            document.getElementById('msg-ui').style.display = 'block';
-            highlightWalkable();
-        }
-    });
-}
-
-function updateDinoPosInstantly() {
+function executeAttack(attacker, defender, onCompleteCallback) {
     const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
-    dinoSprite.position.set((dinoPos.x * TILE_SIZE) - offsetX, (dinoPos.h * H_STEP) + (TILE_SIZE * 0.5), (dinoPos.z * TILE_SIZE) - offsetZ);
+    const dx = ((defender.x * TILE_SIZE) - offsetX) - attacker.sprite.position.x;
+    const dz = ((defender.z * TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
+
+    // 体当たりアニメーション
+    const tl = gsap.timeline({ onComplete: () => {
+        defender.hp -= 10;
+        defender.updateHPUI();
+        if(defender.hp <= 0) {
+            setMsg(`${defender.id}をたおした！`, "#ffff00");
+            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: onCompleteCallback});
+        } else {
+            onCompleteCallback();
+        }
+    }});
+    
+    // 突進して戻る
+    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x + dx*0.5, z: attacker.sprite.position.z + dz*0.5, duration: 0.1, ease: "power2.in" });
+    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x - dx*0.5, z: attacker.sprite.position.z - dz*0.5, duration: 0.2, ease: "power2.out" });
 }
 
-// --- カメラ操作 ---
-function centerCameraInstantly() {
+// --- 敵AIターン ---
+function startEnemyTurn() {
+    if(enemy.hp <= 0) return; // 敵が死んでいたら終了
+    gameState = 'ENEMY_TURN';
+    setMsg("敵のターン...", "#ff5555");
+    
+    setTimeout(() => {
+        // ダイクストラでプレイヤーに一番近いマスを探す
+        let routes = getWalkableNodes(enemy);
+        let bestRoute = null; let minD = 999;
+        
+        routes.forEach(r => {
+            let d = Math.abs(r.x - player.x) + Math.abs(r.z - player.z);
+            if(d < minD) { minD = d; bestRoute = r; }
+        });
+
+        if(bestRoute && bestRoute.path.length > 0) {
+            executeMovement(enemy, bestRoute.path, () => {
+                // 移動後、隣接していれば攻撃
+                if(Math.abs(enemy.x - player.x) + Math.abs(enemy.z - player.z) === 1) {
+                    executeAttack(enemy, player, () => { startPlayerMovePhase(); });
+                } else {
+                    startPlayerMovePhase();
+                }
+            });
+        } else {
+            // 動けなければ終了
+            startPlayerMovePhase();
+        }
+    }, 1000);
+}
+
+// --- ユーティリティ ---
+function updateUnitPosInstantly(unit) {
+    const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
+    unit.sprite.position.set((unit.x * TILE_SIZE) - offsetX, (unit.h * H_STEP) + (TILE_SIZE * 0.5), (unit.z * TILE_SIZE) - offsetZ);
+    unit.updateHPUI();
+}
+
+function moveCameraToTarget(targetPos, onCompleteCallback) {
+    const dx = targetPos.x - controls.target.x;
+    const dz = targetPos.z - controls.target.z;
+    gsap.to(controls.target, { x: controls.target.x + dx, z: controls.target.z + dz, duration: 0.8, ease: "power2.inOut" });
+    gsap.to(camera.position, { x: camera.position.x + dx, z: camera.position.z + dz, duration: 0.8, ease: "power2.inOut", onComplete: onCompleteCallback });
+}
+
+function centerCameraInstantly(unit) {
     const rad = 45 * (Math.PI / 180); const radius = 800;
-    controls.target.copy(dinoSprite.position);
-    camera.position.set(dinoSprite.position.x + Math.sin(rad) * radius, dinoSprite.position.y + 600, dinoSprite.position.z + Math.cos(rad) * radius);
+    controls.target.copy(unit.sprite.position);
+    camera.position.set(unit.sprite.position.x + Math.sin(rad) * radius, unit.sprite.position.y + 600, unit.sprite.position.z + Math.cos(rad) * radius);
     camera.lookAt(controls.target);
 }
 
-window.centerCamera = function() { moveCameraToDino(); }
-
+window.centerCamera = function() { moveCameraToTarget(player.sprite.position, ()=>{}); }
 window.rotateCam = function(deg) {
-    const az = controls.getAzimuthalAngle();
-    const newAz = az + (deg * Math.PI / 180);
-    const radius = controls.getDistance();
-    const polar = controls.getPolarAngle();
-    
-    gsap.to(camera.position, {
-        x: controls.target.x + radius * Math.sin(newAz) * Math.sin(polar),
-        z: controls.target.z + radius * Math.cos(newAz) * Math.sin(polar),
-        duration: 0.4, ease: "power2.out",
-        onUpdate: () => controls.update()
-    });
+    const az = controls.getAzimuthalAngle(); const newAz = az + (deg * Math.PI / 180);
+    const radius = controls.getDistance(); const polar = controls.getPolarAngle();
+    gsap.to(camera.position, { x: controls.target.x + radius * Math.sin(newAz) * Math.sin(polar), z: controls.target.z + radius * Math.cos(newAz) * Math.sin(polar), duration: 0.4, ease: "power2.out", onUpdate: () => controls.update() });
 }
-
 window.panCamera = function(dx, dy) {
-    const panAmount = 150;
-    const angle = controls.getAzimuthalAngle();
+    const panAmount = 150; const angle = controls.getAzimuthalAngle();
     const s = Math.sin(angle); const c = Math.cos(angle);
-    
-    const moveX = (dx * c + dy * s) * panAmount;
-    const moveZ = (-dx * s + dy * c) * panAmount;
-
+    const moveX = (dx * c + dy * s) * panAmount; const moveZ = (-dx * s + dy * c) * panAmount;
     gsap.to(camera.position, { x: camera.position.x + moveX, z: camera.position.z + moveZ, duration: 0.3 });
     gsap.to(controls.target, { x: controls.target.x + moveX, z: controls.target.z + moveZ, duration: 0.3 });
 }
-
-window.zoomCamera = function(amount) {
-    camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2));
-    camera.updateProjectionMatrix();
-}
+window.zoomCamera = function(amount) { camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2)); camera.updateProjectionMatrix(); }
 
 function animate() {
     requestAnimationFrame(animate);
