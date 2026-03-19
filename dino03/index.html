@@ -21,7 +21,7 @@
 
         #world {
             position: relative;
-            width: 420px; height: 420px;
+            width: 420px; height: 420px; /* 7x7マス */
             transform-style: preserve-3d;
             transform: rotateX(60deg) rotateZ(45deg);
             transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
@@ -32,13 +32,14 @@
             transform-style: preserve-3d;
         }
 
+        /* 個別のタイル */
         .tile {
             position: absolute;
             width: var(--tile-size); height: var(--tile-size);
             transform-style: preserve-3d;
         }
 
-        /* 共通設定（※ここに背景画像は絶対に入れない！） */
+        /* 面の共通設定 */
         .face {
             position: absolute;
             backface-visibility: hidden;
@@ -54,14 +55,16 @@
             cursor: pointer;
         }
 
-        /* 側面コンテナ（透明な枠） */
+        /* 側面（透明な枠） */
         .side {
             width: var(--tile-size);
-            background: transparent;
+            left: 0; top: 0;
+            /* 回転の軸を「上辺の中央」に固定 */
+            transform-origin: 30px 0;
             transform-style: preserve-3d;
         }
 
-        /* JSで敷き詰める側面パーツ */
+        /* 側面のテクスチャ実体 */
         .side-part {
             position: absolute;
             left: 0; width: 100%;
@@ -70,20 +73,22 @@
             background-position-x: var(--tx);
         }
 
-        /* 面ごとの明るさ調整で立体感を出す */
+        /* 光源処理（明るさ） */
         .south { filter: brightness(0.9); }
         .east  { filter: brightness(0.8); }
         .north { filter: brightness(0.6); }
         .west  { filter: brightness(0.7); }
 
+        /* キャラクター */
         #unit {
             position: absolute;
             width: var(--tile-size); height: var(--tile-size);
             font-size: 50px; text-align: center; line-height: var(--tile-size);
             transform-style: preserve-3d;
+            /* 修正の要：回転の軸を「足元」にする！ これで沈まない！ */
+            transform-origin: center bottom;
             transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
             pointer-events: none;
-            z-index: 9999;
         }
 
         #ui { height: 40vh; background: #00008b; border-top: 4px solid #eee; padding: 15px; box-sizing: border-box; }
@@ -114,7 +119,7 @@
 </div>
 
 <script>
-// Version: v1.2.0
+// Version: v1.3.0
 const mapData = [
     [[1,0], [2,0], [3,0], [4,0], [5,0], [6,0], [7,0]],
     [[2,0], [3,1], [4,1], [5,1], [6,1], [7,1], [6,0]],
@@ -128,9 +133,24 @@ const mapData = [
 const world = document.getElementById('world');
 const unit = document.getElementById('unit');
 const tileSize = 60;
-const hStep = 30; // 1段の高さ
+const hStep = 40; // 1段の高さ
 let unitPos = { x: 3, y: 3, z: 8 * hStep }; 
 let currentRotation = 45;
+
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+function playSound(type) {
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.connect(gain); gain.connect(audioCtx.destination);
+    const now = audioCtx.currentTime;
+    if(type === 'move') {
+        osc.frequency.setValueAtTime(440, now);
+        osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+        gain.gain.linearRampToValueAtTime(0, now + 0.1);
+        osc.start(); osc.stop(now + 0.1);
+    }
+}
 
 function createMap() {
     const container = document.getElementById('tiles-container');
@@ -142,34 +162,29 @@ function createMap() {
             const hPx = h * hStep;
             const tx = -(type * tileSize);
 
-            // 【アルゴリズム修正】側面のテクスチャを15pxずつ積み上げる
+            // 側面のテクスチャを必要な分だけ積み上げる
             let sidePartsHTML = '';
             if (hPx > 0) {
-                // 1枚目：草土混合 (Y:-60px)
                 sidePartsHTML += `<div class="side-part" style="top:0px; height:15px; background-position-y:-60px;"></div>`;
-                // 2枚目以降：土ループ (Y:-75px) を15pxごとに計算して敷き詰める
                 for (let i = 15; i < hPx; i += 15) {
-                    let ch = Math.min(15, hPx - i); // はみ出さないように高さを調整
+                    let ch = Math.min(15, hPx - i);
                     sidePartsHTML += `<div class="side-part" style="top:${i}px; height:${ch}px; background-position-y:-75px;"></div>`;
                 }
             }
 
+            // 【完全版アルゴリズム】中心からZ回転で方角を決め、Y方向に押し出し、X回転で垂らす
+            const tSouth = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(0deg) translateY(30px) rotateX(-90deg);`;
+            const tEast  = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(-90deg) translateY(30px) rotateX(-90deg);`;
+            const tNorth = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(180deg) translateY(30px) rotateX(-90deg);`;
+            const tWest  = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(90deg) translateY(30px) rotateX(-90deg);`;
+
             htmlStr += `
             <div class="tile" style="left: ${x * tileSize}px; top: ${y * tileSize}px; --tx: ${tx}px;">
                 <div class="face top" style="transform: translateZ(${hPx}px);" onclick="moveUnit(${x}, ${y}, ${hPx})"></div>
-                
-                <div class="face side south" style="height: ${hPx}px; transform-origin: top; transform: translateZ(${hPx}px) translateY(${tileSize}px) rotateX(-90deg);">
-                    ${sidePartsHTML}
-                </div>
-                <div class="face side east" style="height: ${hPx}px; transform-origin: top left; transform: translateZ(${hPx}px) translateX(${tileSize}px) rotateZ(-90deg) rotateX(-90deg);">
-                    ${sidePartsHTML}
-                </div>
-                <div class="face side north" style="height: ${hPx}px; transform-origin: top; transform: translateZ(${hPx}px) rotateZ(180deg) rotateX(-90deg);">
-                    ${sidePartsHTML}
-                </div>
-                <div class="face side west" style="height: ${hPx}px; transform-origin: top left; transform: translateZ(${hPx}px) rotateZ(90deg) rotateX(-90deg);">
-                    ${sidePartsHTML}
-                </div>
+                <div class="face side south" style="height: ${hPx}px; ${tSouth}">${sidePartsHTML}</div>
+                <div class="face side east"  style="height: ${hPx}px; ${tEast}">${sidePartsHTML}</div>
+                <div class="face side north" style="height: ${hPx}px; ${tNorth}">${sidePartsHTML}</div>
+                <div class="face side west"  style="height: ${hPx}px; ${tWest}">${sidePartsHTML}</div>
             </div>`;
         }
     }
@@ -180,7 +195,10 @@ function createMap() {
 function moveUnit(x, y, z) {
     const dist = Math.abs(x - unitPos.x) + Math.abs(y - unitPos.y);
     if (dist > 0 && dist <= 1) { 
+        playSound('move');
         unitPos = { x, y, z };
+        
+        // ジャンプ中も足元(z)の基準を保つ
         const maxZ = Math.max(parseFloat(unit.style.getPropertyValue('--uz') || 0), z);
         unit.style.transform = `translate3d(${x * tileSize}px, ${y * tileSize}px, ${maxZ + 50}px) rotateZ(-45deg) rotateX(-60deg)`;
         
@@ -191,6 +209,8 @@ function moveUnit(x, y, z) {
 }
 
 function updateUnitTransform(px, py, pz) {
+    // pz + 1px 浮かせることで、床との重なり（z-fighting）を防止
+    unit.style.setProperty('--uz', `${pz}`);
     unit.style.transform = `translate3d(${px}px, ${py}px, ${pz + 1}px) rotateZ(-45deg) rotateX(-60deg)`;
 }
 
