@@ -1,12 +1,23 @@
-// グローバルステート
+let scene, camera, renderer, controls;
 window.gameState = 'IDLE'; 
 window.walkableTiles = []; window.attackableTiles = [];
-window.pendingData = null; window.selectedTileKey = null;
-let scene, camera, renderer, controls;
+window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
 
-const sheetImg = new Image();
-sheetImg.src = 'img/plate01.png';
-sheetImg.onload = init;
+// ★ロード管理ロジック★
+window.addEventListener('load', () => {
+    // スクリプト群が読み込まれた後、画像のロードを待つ
+    const sheetImg = new Image();
+    sheetImg.src = 'img/plate01.png';
+    sheetImg.onload = () => {
+        // 画像も読み込まれたらロード画面をフェードアウト
+        const loader = document.getElementById('loading-screen');
+        loader.style.opacity = '0';
+        setTimeout(() => {
+            loader.style.display = 'none';
+            init(sheetImg); // ゲームスタート！
+        }, 500);
+    };
+});
 
 // --- UI制御 ---
 window.setMsg = function(txt, color="#ffffff") { 
@@ -66,8 +77,75 @@ window.execCommand = function(cmd) {
     }
 }
 
-// --- 初期化・Three.js ---
-function init() {
+window.answerConfirm = function(isYes) {
+    document.getElementById('confirm-ui').style.display = 'none';
+    if (isYes) {
+        window.gameState = 'ANIMATING'; window.clearHighlights(); window.setMsg("");
+        if(window.confirmMode === 'MOVE') {
+            window.player.hasMoved = true;
+            window.executeMovement(window.player, window.pendingData, () => { window.resetToIdle(); window.showStatus(window.player); window.showCommandMenu(); });
+        } else if(window.confirmMode === 'ATTACK') {
+            window.player.hasAttacked = true;
+            window.executeAttack(window.player, window.pendingData, () => { window.resetToIdle(); });
+        }
+    } else { window.resetToIdle(); }
+    window.pendingData = null; window.selectedTileKey = null;
+}
+
+// --- アニメーションとターン処理 ---
+window.executeMovement = function(unit, path, onComplete) {
+    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
+    const tl = gsap.timeline({ onComplete });
+    path.forEach(step => {
+        const tX = (step.x * window.TILE_SIZE) - offsetX; const tZ = (step.z * window.TILE_SIZE) - offsetZ;
+        const tY = (step.h * window.H_STEP) + (window.TILE_SIZE * 0.5);
+        tl.to(unit.sprite.position, { x: tX, z: tZ, duration: 0.25, ease: "power1.inOut" }, "+=0");
+        tl.to(unit.sprite.position, { y: Math.max(unit.sprite.position.y, tY) + 30, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
+        tl.set(unit.sprite.position, { y: tY });
+    });
+    const finalStep = path[path.length - 1];
+    unit.x = finalStep.x; unit.z = finalStep.z; unit.h = finalStep.h;
+}
+
+window.executeAttack = function(attacker, defender, onComplete) {
+    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
+    const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
+    const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
+    const damage = Math.max(1, attacker.str - defender.def);
+    
+    const tl = gsap.timeline({ onComplete: () => {
+        defender.hp -= damage;
+        if(defender.hp <= 0) {
+            window.setMsg(`${defender.id}を倒した！`, "#ffcc00");
+            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
+        } else { onComplete(); }
+    }});
+    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x + dx*0.5, z: attacker.sprite.position.z + dz*0.5, duration: 0.1, ease: "power2.in" });
+    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x - dx*0.5, z: attacker.sprite.position.z - dz*0.5, duration: 0.2, ease: "power2.out" });
+}
+
+window.endPlayerTurn = function() {
+    window.player.hasMoved = false; window.player.hasAttacked = false; window.hideAllUI();
+    if(window.enemy.hp <= 0) { window.setMsg("STAGE CLEAR!", "#ffff00"); return; }
+
+    window.gameState = 'ENEMY_TURN'; window.setMsg("敵のターン...", "#ff5555");
+    setTimeout(() => {
+        let routes = window.getWalkableNodes(window.enemy);
+        let bestRoute = null; let minD = 999;
+        routes.forEach(r => {
+            let d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z);
+            if(d < minD) { minD = d; bestRoute = r; }
+        });
+        if(bestRoute && bestRoute.path.length > 0) {
+            window.executeMovement(window.enemy, bestRoute.path, () => {
+                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { window.executeAttack(window.enemy, window.player, () => { window.resetToIdle(); }); } else { window.resetToIdle(); }
+            });
+        } else { window.resetToIdle(); }
+    }, 1000);
+}
+
+// --- 初期化 ---
+function init(sheetImg) {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene(); 
     window.generateMapData();
@@ -96,7 +174,6 @@ function init() {
     controls.enableRotate = true; controls.enableZoom = true; controls.enablePan = true;
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
 
-    // ★カメラのオートスナップ（自動補正）機能 復活！★
     controls.addEventListener('end', () => {
         if (window.gameState === 'MOVING' || window.gameState === 'ANIMATING') return;
         const az = controls.getAzimuthalAngle();
@@ -164,72 +241,7 @@ function onPointerClick(event) {
     }
 }
 
-window.answerConfirm = function(isYes) {
-    document.getElementById('confirm-ui').style.display = 'none';
-    if (isYes) {
-        window.gameState = 'ANIMATING'; window.clearHighlights(); window.setMsg("");
-        if(window.confirmMode === 'MOVE') {
-            window.player.hasMoved = true;
-            window.executeMovement(window.player, window.pendingData, () => { window.resetToIdle(); window.showStatus(window.player); window.showCommandMenu(); });
-        } else if(window.confirmMode === 'ATTACK') {
-            window.player.hasAttacked = true;
-            window.executeAttack(window.player, window.pendingData, () => { window.resetToIdle(); });
-        }
-    } else { window.resetToIdle(); }
-    window.pendingData = null; window.selectedTileKey = null;
-}
-
-window.executeMovement = function(unit, path, onComplete) {
-    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
-    const tl = gsap.timeline({ onComplete });
-    path.forEach(step => {
-        const tX = (step.x * window.TILE_SIZE) - offsetX; const tZ = (step.z * window.TILE_SIZE) - offsetZ;
-        const tY = (step.h * window.H_STEP) + (window.TILE_SIZE * 0.5);
-        tl.to(unit.sprite.position, { x: tX, z: tZ, duration: 0.25, ease: "power1.inOut" }, "+=0");
-        tl.to(unit.sprite.position, { y: Math.max(unit.sprite.position.y, tY) + 30, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
-        tl.set(unit.sprite.position, { y: tY });
-    });
-    const finalStep = path[path.length - 1];
-    unit.x = finalStep.x; unit.z = finalStep.z; unit.h = finalStep.h;
-}
-
-window.executeAttack = function(attacker, defender, onComplete) {
-    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
-    const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
-    const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
-    const damage = Math.max(1, attacker.str - defender.def);
-    
-    const tl = gsap.timeline({ onComplete: () => {
-        defender.hp -= damage;
-        if(defender.hp <= 0) {
-            window.setMsg(`${defender.id}を倒した！`, "#ffcc00");
-            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
-        } else { onComplete(); }
-    }});
-    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x + dx*0.5, z: attacker.sprite.position.z + dz*0.5, duration: 0.1, ease: "power2.in" });
-    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x - dx*0.5, z: attacker.sprite.position.z - dz*0.5, duration: 0.2, ease: "power2.out" });
-}
-
-window.endPlayerTurn = function() {
-    window.player.hasMoved = false; window.player.hasAttacked = false; window.hideAllUI();
-    if(window.enemy.hp <= 0) { window.setMsg("STAGE CLEAR!", "#ffff00"); return; }
-
-    window.gameState = 'ENEMY_TURN'; window.setMsg("敵のターン...", "#ff5555");
-    setTimeout(() => {
-        let routes = window.getWalkableNodes(window.enemy);
-        let bestRoute = null; let minD = 999;
-        routes.forEach(r => {
-            let d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z);
-            if(d < minD) { minD = d; bestRoute = r; }
-        });
-        if(bestRoute && bestRoute.path.length > 0) {
-            window.executeMovement(window.enemy, bestRoute.path, () => {
-                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { window.executeAttack(window.enemy, window.player, () => { window.resetToIdle(); }); } else { window.resetToIdle(); }
-            });
-        } else { window.resetToIdle(); }
-    }, 1000);
-}
-
+// カメラ操作
 window.updateUnitPosInstantly = function(u) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     u.sprite.position.set((u.x * window.TILE_SIZE) - offsetX, (u.h * window.H_STEP) + (window.TILE_SIZE * 0.5), (u.z * window.TILE_SIZE) - offsetZ);
@@ -240,15 +252,12 @@ window.centerCameraInstantly = function(u) {
     camera.position.set(u.sprite.position.x + Math.sin(rad)*r, u.sprite.position.y + 600, u.sprite.position.z + Math.cos(rad)*r);
     camera.lookAt(controls.target);
 }
-
 window.centerCamera = function() { gsap.to(controls.target, { x: window.player.sprite.position.x, z: window.player.sprite.position.z, duration: 0.8, ease: "power2.inOut" }); }
-
 window.rotateCam = function(deg) {
     const az = controls.getAzimuthalAngle(); const newAz = az + (deg * Math.PI / 180);
     const r = controls.getDistance(); const polar = controls.getPolarAngle();
     gsap.to(camera.position, { x: controls.target.x + r * Math.sin(newAz) * Math.sin(polar), z: controls.target.z + r * Math.cos(newAz) * Math.sin(polar), duration: 0.4, onUpdate: () => controls.update() });
 }
-
 window.panCamera = function(dx, dy) {
     const panAmount = 150; const angle = controls.getAzimuthalAngle();
     const s = Math.sin(angle); const c = Math.cos(angle);
@@ -256,7 +265,6 @@ window.panCamera = function(dx, dy) {
     gsap.to(camera.position, { x: camera.position.x + moveX, z: camera.position.z + moveZ, duration: 0.3 });
     gsap.to(controls.target, { x: controls.target.x + moveX, z: controls.target.z + moveZ, duration: 0.3 });
 }
-
 window.zoomCamera = function(amount) { camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2)); camera.updateProjectionMatrix(); }
 
 function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
