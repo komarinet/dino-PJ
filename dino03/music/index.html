@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="refresh" content="5;url=https://komarinet.github.io/dino-PJ/">
+    <title>迷子になったかな？</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #2e7d32; /* ジャングルグリーン */
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        .message {
+            font-size: 24px;
+            margin-bottom: 20px;
+        }
+
+        .countdown {
+            color: #ff8c00; /* アクセントオレンジ */
+            font-size: 18px;
+            margin-bottom: 30px;
+        }
+
+        pre {
+            font-size: 12px;
+            line-height: 1.2;
+            color: #ff8c00;
+            text-shadow: 0 0 5px rgba(255, 140, 0, 0.5);
+        }
+
+        ruby rt {
+            font-size: 0.6em;
+            color: #888;
+        }
+
+        a {
+            color: #2e7d32;
+            text-decoration: underline;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="message">
+        ここには <ruby>何<rt>なに</rt></ruby>も ないよ！
+    </div>
+
+    <div class="countdown">
+        <span id="timer">5</span><ruby>秒<rt>びょう</rt></ruby><ruby>後<rt>ご</rt></ruby>に <ruby>最初<rt>さいしょ</rt></ruby>の <ruby>画面<rt>がめん</rt></ruby>に <ruby>戻<rt>もど</rt></ruby>るよ。
+    </div>
+
+    <pre>
+                                    ██████████████                
+                                  ██            ██              
+                                ██    ██      ██                
+                              ██      ██      ██                
+                            ██          ██████                  
+                          ██          ██                        
+        ██████████████████          ██                          
+      ██                            ██                          
+    ██                              ██                          
+  ██          ██████████████████████                            
+  ██        ██                                                  
+  ██        ██                                                  
+  ██      ██                                                    
+  ██    ██                                                      
+  ██  ██                                                        
+  ████                                                          
+    </pre>
+
+    <a href="https://komarinet.github.io/dino-PJ/"><ruby>今<rt>いま</rt></ruby>すぐ <ruby>戻<rt>もど</rt></ruby>る</a>
+
+    <script>
+        // カウントダウン表示のスクリプト
+        let timeLeft = 5;
+        const timerElement = document.getElementById('timer');
+        
+        const countdown = setInterval(() => {
+            timeLeft--;
+            timerElement.textContent = timeLeft;
+            if (timeLeft <= 0) {
+                clearInterval(countdown);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>
