@@ -12,11 +12,14 @@
 </head>
 <body>
 
-<div id="version-display">v6.0.1</div>
+<div id="loading-screen">
+    <div class="loader-text">Now Loading...</div>
+</div>
 
+<div id="version-display">v6.1.0 (Module & Loader)</div>
 <div id="canvas-container"></div>
 
-<div id="msg-ui" class="rpg-window">マップを読み込み中...</div>
+<div id="msg-ui" class="rpg-window"></div>
 
 <div id="status-ui" class="rpg-window">
     <div id="st-name" class="unit-name">🦖 ティラノ</div>
@@ -64,9 +67,9 @@
     </div>
 </div>
 
-<script src="units.js"></script>
-<script src="map.js"></script>
-<script src="main.js"></script>
+<script src="units.js" defer></script>
+<script src="map.js" defer></script>
+<script src="main.js" defer></script>
 
 </body>
 </html>
