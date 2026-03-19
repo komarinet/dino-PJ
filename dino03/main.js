@@ -3,7 +3,7 @@ window.gameState = 'IDLE';
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
 
-// ★タップ判定用の配列（床＋キャラクター画像）★
+// タップ判定用の配列（床＋キャラクター画像）
 window.raycastTargets = []; 
 
 window.addEventListener('load', () => {
@@ -54,7 +54,6 @@ window.showCommandMenu = function() {
     document.getElementById('cmd-move').style.display = window.player.hasMoved ? 'none' : 'block';
 }
 
-// ターン開始用のメッセージ表示
 window.startPlayerTurn = function() {
     window.gameState = 'IDLE'; 
     window.clearHighlights(); 
@@ -69,7 +68,6 @@ window.resetToIdle = function() {
     window.setMsg(""); 
 }
 
-// コマンド実行
 window.execCommand = function(cmd) {
     document.getElementById('command-ui').style.display = 'none';
     
@@ -147,7 +145,6 @@ window.answerConfirm = function(isYes) {
     if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
-// アニメーション (座標バグ修正版)
 window.executeMovement = function(unit, path, onComplete) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const tl = gsap.timeline({ onComplete });
@@ -168,7 +165,6 @@ window.executeAttack = function(attacker, defender, onComplete) {
     const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
     const damage = Math.max(1, attacker.str - defender.def);
     
-    // ★マスが動くバグの修正：元の座標を記憶しておく★
     const origX = attacker.sprite.position.x;
     const origZ = attacker.sprite.position.z;
 
@@ -180,7 +176,6 @@ window.executeAttack = function(attacker, defender, onComplete) {
         } else { onComplete(); }
     }});
     
-    // 確実に行って、確実に元の場所へ戻る
     tl.to(attacker.sprite.position, { x: origX + dx*0.5, z: origZ + dz*0.5, duration: 0.1, ease: "power2.in" });
     tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" });
 }
@@ -207,7 +202,6 @@ window.endPlayerTurn = function() {
     }, 1000);
 }
 
-// --- 初期化 ---
 function init(sheetImg) {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene(); window.generateMapData();
@@ -223,15 +217,13 @@ function init(sheetImg) {
 
     window.buildMapMeshes(scene, sheetImg);
 
-    // ★白枠（選択カーソル）の生成★
     const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(window.TILE_SIZE, window.H_STEP, window.TILE_SIZE));
     const mat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
     window.selectorMesh = new THREE.LineSegments(geo, mat);
     window.selectorMesh.visible = false;
     scene.add(window.selectorMesh);
 
-    // キャラクターの生成とタップ判定への追加
-    window.raycastTargets = [...window.interactableTiles]; // 床ブロックを判定に追加
+    window.raycastTargets = [...window.interactableTiles]; 
     
     window.units.forEach(u => {
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
@@ -239,7 +231,6 @@ function init(sheetImg) {
         u.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
         u.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
         
-        // ★キャラ画像自体をタップ判定に追加★
         u.sprite.userData = { isUnit: true, unit: u };
         window.raycastTargets.push(u.sprite);
         
@@ -278,13 +269,10 @@ function init(sheetImg) {
     animate();
 }
 
-// ★見やすさ大改善：ハイライト管理★
 window.clearHighlights = function() { 
-    // 全マスの色をリセット
     window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff)); 
     if(window.selectorMesh) window.selectorMesh.visible = false;
     
-    // キャラクターの足元を常にハイライト（味方:水色, 敵:赤色）
     window.units.forEach(u => {
         if(u.hp > 0) {
             const tile = window.tilesMeshMap[`${u.x},${u.z}`];
@@ -301,12 +289,10 @@ function onPointerClick(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    // ★判定を拡張した配列（raycastTargets）でチェック★
     const intersects = raycaster.intersectObjects(window.raycastTargets);
     if (intersects.length > 0) {
         let targetData = intersects[0].object.userData;
         
-        // キャラをタップした場合は、その足元の座標に変換する
         if(targetData.isUnit) {
             targetData = { x: targetData.unit.x, z: targetData.unit.z, h: targetData.unit.h };
         }
@@ -319,10 +305,9 @@ function onPointerClick(event) {
         else if (window.gameState === 'SELECTING_MOVE') {
             const route = window.walkableTiles.find(n => n.x === targetData.x && n.z === targetData.z);
             if (route) {
-                window.clearHighlights(); // 他の緑を消す
+                window.clearHighlights(); 
                 window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${targetData.x},${targetData.z}`;
                 
-                // タップしたマスだけを黄色にして、白枠（カーソル）を表示
                 const tile = window.tilesMeshMap[window.selectedTileKey];
                 tile.material[2].color.setHex(0xffff00);
                 window.selectorMesh.position.copy(tile.position);
@@ -335,7 +320,6 @@ function onPointerClick(event) {
     }
 }
 
-// カメラ操作
 window.updateUnitPosInstantly = function(u) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     u.sprite.position.set((u.x * window.TILE_SIZE) - offsetX, (u.h * window.H_STEP) + (window.TILE_SIZE * 0.5), (u.z * window.TILE_SIZE) - offsetZ);
@@ -346,12 +330,32 @@ window.centerCameraInstantly = function(u) {
     camera.position.set(u.sprite.position.x + Math.sin(rad)*r, u.sprite.position.y + 600, u.sprite.position.z + Math.cos(rad)*r);
     camera.lookAt(controls.target);
 }
+
 window.centerCamera = function() { gsap.to(controls.target, { x: window.player.sprite.position.x, z: window.player.sprite.position.z, duration: 0.8, ease: "power2.inOut" }); }
+
+// ★直線的な移動による破綻を防ぐ「円弧」の回転アニメーションに修正★
 window.rotateCam = function(deg) {
-    const az = controls.getAzimuthalAngle(); const newAz = az + (deg * Math.PI / 180);
-    const r = controls.getDistance(); const polar = controls.getPolarAngle();
-    gsap.to(camera.position, { x: controls.target.x + r * Math.sin(newAz) * Math.sin(polar), z: controls.target.z + r * Math.cos(newAz) * Math.sin(polar), duration: 0.4, onUpdate: () => controls.update() });
+    if (window.gameState === 'ANIMATING') return;
+    
+    const r = controls.getDistance();
+    const polar = controls.getPolarAngle();
+    const startAz = controls.getAzimuthalAngle();
+    const targetAz = startAz + (Number(deg) * Math.PI / 180);
+
+    const proxy = { angle: startAz };
+    gsap.to(proxy, {
+        angle: targetAz,
+        duration: 0.4,
+        ease: "power2.out",
+        onUpdate: () => {
+            camera.position.x = controls.target.x + r * Math.sin(proxy.angle) * Math.sin(polar);
+            camera.position.z = controls.target.z + r * Math.cos(proxy.angle) * Math.sin(polar);
+            camera.lookAt(controls.target);
+            controls.update();
+        }
+    });
 }
+
 window.panCamera = function(dx, dy) {
     const panAmount = 150; const angle = controls.getAzimuthalAngle();
     const s = Math.sin(angle); const c = Math.cos(angle);
@@ -359,6 +363,7 @@ window.panCamera = function(dx, dy) {
     gsap.to(camera.position, { x: camera.position.x + moveX, z: camera.position.z + moveZ, duration: 0.3 });
     gsap.to(controls.target, { x: controls.target.x + moveX, z: controls.target.z + moveZ, duration: 0.3 });
 }
+
 window.zoomCamera = function(amount) { camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2)); camera.updateProjectionMatrix(); }
 
 function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
