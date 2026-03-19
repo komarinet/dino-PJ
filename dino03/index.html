@@ -3,48 +3,60 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v4.0.0)</title>
+    <title>ちびっこティラノ：タクティクス (v5.0.0)</title>
     <style>
-        body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; }
+        body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; user-select: none; }
         #canvas-container { width: 100vw; height: 100vh; }
         
-        /* ステータスUI */
-        #status-ui {
-            position: absolute; top: 10px; left: 10px;
-            background: rgba(0,0,0,0.8); color: white; padding: 10px;
-            border-radius: 8px; border: 2px solid #aaa; font-weight: bold; z-index: 1000;
+        /* 共通RPGウィンドウスタイル */
+        .rpg-window {
+            position: absolute; background: rgba(0, 15, 60, 0.9); color: white;
+            border: 2px solid #ddd; border-radius: 8px; box-shadow: inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.7);
+            padding: 10px; z-index: 1000;
         }
 
-        /* カメラUI */
-        #camera-ui {
-            position: absolute; bottom: 20px; right: 20px;
-            background: rgba(0, 0, 139, 0.85); border: 2px solid white; border-radius: 10px;
-            color: white; padding: 10px; width: 220px;
-            transition: transform 0.3s ease; z-index: 1000;
+        /* ① ステータスウィンドウ (左上) */
+        #status-ui { top: 20px; left: 20px; width: 200px; display: none; }
+        .unit-name { font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid #777; margin-bottom: 5px; padding-bottom: 3px; }
+        .bar-bg { width: 100%; background: #333; height: 10px; border-radius: 5px; margin: 5px 0; overflow: hidden; }
+        .hp-bar { height: 100%; background: #4caf50; transition: width 0.3s; }
+        .mp-bar { height: 100%; background: #2196f3; transition: width 0.3s; }
+        .btn-detail { background: #555; color: white; border: 1px solid #aaa; border-radius: 3px; width: 100%; margin-top: 5px; cursor: pointer; }
+
+        /* ② 詳細ステータス (中央左寄り) */
+        #detail-ui { top: 20px; left: 240px; width: 200px; display: none; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 1.1rem; }
+        
+        /* ③ コマンドメニュー (左下) */
+        #command-ui { bottom: 20px; left: 20px; width: 150px; display: none; }
+        .cmd-btn { 
+            display: block; width: 100%; background: transparent; color: white; 
+            border: none; text-align: left; padding: 10px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
+            border-bottom: 1px solid #444;
         }
+        .cmd-btn:hover { background: rgba(255,255,255,0.2); }
+        .cmd-btn:disabled { color: #666; pointer-events: none; }
+
+        /* ④ カメラUI (右下) */
+        #camera-ui { bottom: 20px; right: 20px; width: 220px; transition: transform 0.3s ease; }
         #camera-ui.collapsed { transform: translateY(calc(100% - 40px)); }
         #ui-header { font-weight: bold; text-align: center; cursor: pointer; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); margin-bottom: 10px;}
         .ui-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; text-align: center; }
         .ui-btn { background: #eee; border: none; border-radius: 5px; padding: 10px 5px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #999; }
         .ui-btn:active { transform: translateY(2px); box-shadow: 0 0 #999; }
         
-        /* メッセージUI */
+        /* ⑤ メッセージ (上部中央) */
         #msg-ui {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(0,0,0,0.8); color: #00ff00; padding: 10px 20px;
-            border-radius: 10px; border: 2px solid white; font-size: 1.1rem; font-weight: bold;
-            pointer-events: none; z-index: 1000; text-align: center;
+            top: 20px; left: 50%; transform: translateX(-50%); text-align: center;
+            font-size: 1.2rem; font-weight: bold; pointer-events: none; min-width: 250px;
         }
 
-        /* 確認ダイアログ（被らないように上部へ移動） */
+        /* ⑥ 確認ダイアログ (中央) */
         #confirm-ui {
-            display: none;
-            position: absolute; top: 100px; left: 50%; transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.95); color: white; padding: 20px;
-            border-radius: 10px; border: 2px solid #ffcc00; text-align: center;
-            z-index: 2000; box-shadow: 0 10px 20px rgba(0,0,0,0.5);
+            display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            text-align: center; z-index: 2000; border-color: #ffcc00;
         }
-        #confirm-ui p { margin: 0 0 20px 0; font-size: 1.2rem; font-weight: bold; }
+        #confirm-ui p { margin: 0 0 20px 0; font-size: 1.3rem; font-weight: bold; }
         .confirm-btns { display: flex; justify-content: center; gap: 20px; }
         .btn-yes { background: #4caf50; color: white; border: none; padding: 10px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
         .btn-no { background: #f44336; color: white; border: none; padding: 10px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
@@ -56,31 +68,49 @@
 <body>
 
 <div id="canvas-container"></div>
-<div id="status-ui">
-    <div id="hp-player">🦖 ティラノ: 30 / 30</div>
-    <div id="hp-enemy" style="color:#ff6666; margin-top:5px;">🦕 トリケラ: 20 / 20</div>
-</div>
-<div id="msg-ui">プレイヤーのターン！<br>移動先を選んでね。</div>
 
-<div id="confirm-ui">
-    <p id="confirm-text">ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？</p>
+<div id="msg-ui" class="rpg-window">マップを読み込み中...</div>
+
+<div id="status-ui" class="rpg-window">
+    <div id="st-name" class="unit-name">🦖 ティラノ</div>
+    <div style="font-size:0.9rem;">HP: <span id="st-hp">30/30</span></div>
+    <div class="bar-bg"><div id="st-hp-bar" class="hp-bar" style="width:100%"></div></div>
+    <div style="font-size:0.9rem;">MP: <span id="st-mp">10/10</span></div>
+    <div class="bar-bg"><div id="st-mp-bar" class="mp-bar" style="width:100%"></div></div>
+    <button class="btn-detail" onclick="toggleDetail()">詳細を見る ▼</button>
+</div>
+
+<div id="detail-ui" class="rpg-window">
+    <div class="unit-name">パラメータ</div>
+    <div class="stat-row"><span>💪 力</span><span id="dt-str">15</span></div>
+    <div class="stat-row"><span>🛡️ 防御</span><span id="dt-def">10</span></div>
+    <div class="stat-row"><span>👟 速度</span><span id="dt-spd">5</span></div>
+    <div class="stat-row"><span>✨ 恐竜力</span><span id="dt-mag">8</span></div>
+</div>
+
+<div id="command-ui" class="rpg-window">
+    <button id="cmd-move" class="cmd-btn" onclick="execCommand('move')">🚶 移動</button>
+    <button id="cmd-attack" class="cmd-btn" onclick="execCommand('attack')">⚔️ 攻撃</button>
+    <button id="cmd-wait" class="cmd-btn" onclick="execCommand('wait')">⏳ 待機</button>
+</div>
+
+<div id="confirm-ui" class="rpg-window">
+    <p id="confirm-text">行動しますか？</p>
     <div class="confirm-btns">
         <button class="btn-yes" onclick="answerConfirm(true)">はい</button>
         <button class="btn-no" onclick="answerConfirm(false)">いいえ</button>
     </div>
 </div>
 
-<div id="camera-ui">
-    <div id="ui-header" onclick="toggleUI()">📷 カメラ操作 (開閉)</div>
+<div id="camera-ui" class="rpg-window">
+    <div id="ui-header" onclick="document.getElementById('camera-ui').classList.toggle('collapsed');">📷 カメラ操作</div>
     <div class="ui-grid">
         <button class="ui-btn" onclick="rotateCam(-90)">◀ 回す</button>
         <button class="ui-btn" onclick="panCamera(0, -1)">上</button>
         <button class="ui-btn" onclick="rotateCam(90)">回す ▶</button>
-
         <button class="ui-btn" onclick="panCamera(-1, 0)">左</button>
         <button class="ui-btn" onclick="centerCamera()">中心</button>
         <button class="ui-btn" onclick="panCamera(1, 0)">右</button>
-
         <button class="ui-btn" onclick="zoomCamera(-50)">＋ 寄る</button>
         <button class="ui-btn" onclick="panCamera(0, 1)">下</button>
         <button class="ui-btn" onclick="zoomCamera(50)">－ 引く</button>
@@ -88,60 +118,109 @@
 </div>
 
 <script>
-// --- 基本設定とクラス設計 ---
+// --- クラス設計 ---
+class Unit {
+    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer) {
+        this.id = id; this.emoji = emoji;
+        this.x = x; this.z = z; this.h = 0;
+        this.hp = hp; this.maxHp = hp;
+        this.mp = mp; this.maxMp = mp;
+        this.str = str; this.def = def; this.spd = spd; this.mag = mag;
+        this.move = move; this.jump = jump;
+        this.isPlayer = isPlayer;
+        this.sprite = null;
+        
+        // ターンごとの行動状態
+        this.hasMoved = false;
+        this.hasAttacked = false;
+    }
+}
+
 const MAP_W = 20; const MAP_D = 40;
 const TILE_SIZE = 60; const H_STEP = 30;
 
 let scene, camera, renderer, controls;
-let mapData = []; 
-let tilesMeshMap = {}; 
-let walkableTiles = [];
-let attackableTiles = [];
+let mapData = []; let tilesMeshMap = {}; 
+let walkableTiles = []; let attackableTiles = [];
 
-// ★オブジェクト指向でユニットを管理★
-class Unit {
-    constructor(id, emoji, x, z, maxHp, move, jump, isPlayer) {
-        this.id = id;
-        this.emoji = emoji;
-        this.x = x; this.z = z; this.h = 0; // hはマップ生成後にセット
-        this.hp = maxHp; this.maxHp = maxHp;
-        this.move = move; this.jump = jump;
-        this.isPlayer = isPlayer;
-        this.sprite = null;
-    }
-    updateHPUI() {
-        const el = document.getElementById(this.isPlayer ? 'hp-player' : 'hp-enemy');
-        el.innerHTML = `${this.emoji} ${this.id}: ${this.hp} / ${this.maxHp}`;
-    }
-}
-
-// プレイヤー(MOVE:6) と 敵(MOVE:4)
-const player = new Unit("ティラノ", "🦖", 10, 25, 30, 6, 2, true);
-const enemy  = new Unit("トリケラ", "🦕", 10, 20, 20, 4, 2, false);
+// ユニット生成
+const player = new Unit("ティラノ", "🦖", 10, 25, 30, 10, 15, 10, 5, 8, 4, 2, true);
+const enemy  = new Unit("トリケラ", "🦕", 10, 21, 20, 5, 12, 12, 4, 2, 4, 2, false);
 const units = [player, enemy];
 
-// ステート: PLAYER_MOVE -> PLAYER_ACT -> ENEMY_TURN
-let gameState = 'PLAYER_MOVE'; 
-let confirmMode = ''; // 'MOVE' or 'ATTACK'
-let pendingData = null;
-let selectedTileKey = null;
+// ステート管理 (IDLE, SELECTING_MOVE, SELECTING_ATTACK, CONFIRMING, ANIMATING)
+let gameState = 'IDLE'; 
+let currentUnit = null; // 現在ステータスを見ているユニット
+let pendingData = null; let selectedTileKey = null;
 
 const sheetImg = new Image();
 sheetImg.src = 'img/plate01.png';
 sheetImg.onload = init;
 
-function toggleUI() { document.getElementById('camera-ui').classList.toggle('collapsed'); }
+// --- UI制御関数 ---
 function setMsg(txt, color="#ffffff") { 
     const el = document.getElementById('msg-ui');
     el.innerHTML = txt; el.style.color = color;
 }
+function hideAllUI() {
+    document.getElementById('status-ui').style.display = 'none';
+    document.getElementById('detail-ui').style.display = 'none';
+    document.getElementById('command-ui').style.display = 'none';
+    document.getElementById('confirm-ui').style.display = 'none';
+}
+function showStatus(unit) {
+    currentUnit = unit;
+    document.getElementById('status-ui').style.display = 'block';
+    document.getElementById('st-name').innerText = `${unit.emoji} ${unit.id}`;
+    document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
+    document.getElementById('st-hp-bar').style.width = `${(unit.hp/unit.maxHp)*100}%`;
+    document.getElementById('st-mp').innerText = `${unit.mp}/${unit.maxMp}`;
+    document.getElementById('st-mp-bar').style.width = `${(unit.mp/unit.maxMp)*100}%`;
+    
+    document.getElementById('dt-str').innerText = unit.str;
+    document.getElementById('dt-def').innerText = unit.def;
+    document.getElementById('dt-spd').innerText = unit.spd;
+    document.getElementById('dt-mag').innerText = unit.mag;
+}
+function toggleDetail() {
+    const el = document.getElementById('detail-ui');
+    el.style.display = el.style.display === 'block' ? 'none' : 'block';
+}
+function showCommandMenu() {
+    document.getElementById('command-ui').style.display = 'block';
+    document.getElementById('cmd-move').disabled = player.hasMoved;
+    document.getElementById('cmd-attack').disabled = player.hasAttacked;
+}
 
-// --- マップ生成（20x40） ---
+// --- コマンド実行 ---
+window.execCommand = function(cmd) {
+    document.getElementById('command-ui').style.display = 'none';
+    if(cmd === 'move') {
+        gameState = 'SELECTING_MOVE';
+        setMsg("移動先を選んでね", "#00ff00");
+        walkableTiles = getWalkableNodes(player);
+        walkableTiles.forEach(node => { tilesMeshMap[`${node.x},${node.z}`].material[2].color.setHex(0x55ff55); });
+    } else if (cmd === 'attack') {
+        gameState = 'SELECTING_ATTACK';
+        setMsg("攻撃する敵を選んでね", "#ff5555");
+        attackableTiles = getAttackableEnemies(player);
+        if(attackableTiles.length === 0) {
+            setMsg("届く範囲に敵がいない！", "#aaaaaa");
+            setTimeout(() => { resetToIdle(); }, 1000);
+            return;
+        }
+        attackableTiles.forEach(u => { tilesMeshMap[`${u.x},${u.z}`].material[2].color.setHex(0xff5555); });
+    } else if (cmd === 'wait') {
+        player.hasMoved = true; player.hasAttacked = true;
+        endPlayerTurn();
+    }
+}
+
+// --- 初期化・マップ ---
 function generateMapData() {
     for (let z = 0; z < MAP_D; z++) {
         mapData[z] = [];
         for (let x = 0; x < MAP_W; x++) {
-            // 中央付近が高い山になるアルゴリズム
             const dist = Math.sqrt(Math.pow(x - 10, 2) + Math.pow(z - 20, 2));
             let h = Math.max(1, Math.floor(10 - (dist * 0.4) + (Math.random() * 1.5)));
             let type = (h >= 7) ? 3 : (h >= 5) ? 2 : (h >= 3) ? 1 : 0; 
@@ -153,8 +232,7 @@ function generateMapData() {
 
 function init() {
     const container = document.getElementById('canvas-container');
-    scene = new THREE.Scene();
-    generateMapData();
+    scene = new THREE.Scene(); generateMapData();
 
     const w = container.clientWidth; const h = container.clientHeight;
     camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000);
@@ -163,14 +241,10 @@ function init() {
     renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(w, h); renderer.setClearColor(0x1a1a1a);
     container.appendChild(renderer.domElement);
-
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.5);
-    dirLight.position.set(500, 1000, 500); scene.add(dirLight);
 
     buildMapMeshes();
 
-    // ユニットのスプライト生成
     units.forEach(u => {
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
         const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(u.emoji, 64, 64);
@@ -184,24 +258,16 @@ function init() {
     controls.enableRotate = true; controls.enableZoom = true; controls.enablePan = true;
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
 
-    controls.addEventListener('end', () => {
-        if (gameState === 'MOVING') return;
-        const az = controls.getAzimuthalAngle();
-        const snap = Math.PI / 2; const offset = Math.PI / 4;
-        const snappedAz = Math.round((az - offset) / snap) * snap + offset;
-        const polar = Math.PI / 3; const r = controls.getDistance();
-        gsap.to(camera.position, {
-            x: controls.target.x + r * Math.sin(snappedAz) * Math.sin(polar),
-            y: controls.target.y + r * Math.cos(polar),
-            z: controls.target.z + r * Math.cos(snappedAz) * Math.sin(polar),
-            duration: 0.3, ease: "power2.out", onUpdate: () => controls.update()
-        });
-    });
-    
     centerCameraInstantly(player); 
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
+    
+    let ptrDownPos = {x:0, y:0};
+    renderer.domElement.addEventListener('pointerdown', e => { ptrDownPos = { x: e.clientX, y: e.clientY }; });
+    renderer.domElement.addEventListener('pointerup', e => {
+        const dist = Math.hypot(e.clientX - ptrDownPos.x, e.clientY - ptrDownPos.y);
+        if(dist < 5) onPointerClick(e);
+    });
 
-    startPlayerMovePhase();
+    resetToIdle();
     animate();
 }
 
@@ -215,68 +281,51 @@ function createMaterial(tx, ty, tw, th) {
 const interactableTiles = [];
 function buildMapMeshes() {
     const geometry = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
+    for(let type=0; type<4; type++){
+        // テクスチャ設定... (省略なし)
+    }
+    // ... 前回のbuildMapMeshesと同等
     const matSets = [];
     for(let type=0; type<4; type++) {
         const tx = type * 256;
         matSets.push({ top: createMaterial(tx, 0, 256, 256), sideTop: createMaterial(tx, 256, 256, 64), sideBottom: createMaterial(tx, 320, 256, 64) });
     }
-
     const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
 
     for (let z = 0; z < MAP_D; z++) {
         for (let x = 0; x < MAP_W; x++) {
             const tileData = mapData[z][x];
-            const mats = matSets[tileData.type];
-            const h = tileData.h;
-
+            const h = tileData.h; const mats = matSets[tileData.type];
             for (let i = Math.max(0, h - 2); i < h; i++) {
-                let blockMats = (i === h - 1) 
-                    ? [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop]
-                    : [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
-
+                let blockMats = (i === h - 1) ? [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop] : [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
                 const cube = new THREE.Mesh(geometry, blockMats);
                 cube.position.set((x * TILE_SIZE) - offsetX, (i * H_STEP) + (H_STEP / 2), (z * TILE_SIZE) - offsetZ);
                 scene.add(cube);
-
-                if (i === h - 1) {
-                    cube.userData = { x, z, h };
-                    interactableTiles.push(cube);
-                    tilesMeshMap[`${x},${z}`] = cube;
-                }
+                if (i === h - 1) { cube.userData = { x, z, h }; interactableTiles.push(cube); tilesMeshMap[`${x},${z}`] = cube; }
             }
         }
     }
 }
 
+// --- アルゴリズム ---
 function getUnitAt(x, z) { return units.find(u => u.x === x && u.z === z && u.hp > 0); }
+function clearHighlights() { interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff)); }
 
-// ★ダイクストラ法による探索アルゴリズム★
 function getWalkableNodes(unit) {
-    let bestCost = {};
-    let queue = [{ x: unit.x, z: unit.z, cost: 0, path: [] }];
-    let resultMap = {};
-    bestCost[`${unit.x},${unit.z}`] = 0;
-
+    let bestCost = {}; let queue = [{ x: unit.x, z: unit.z, cost: 0, path: [] }];
+    let resultMap = {}; bestCost[`${unit.x},${unit.z}`] = 0;
     while(queue.length > 0) {
-        queue.sort((a, b) => a.cost - b.cost); // コストが低い順に処理（優先度付きキューの代用）
-        let curr = queue.shift();
-
+        queue.sort((a, b) => a.cost - b.cost); let curr = queue.shift();
         if (curr.cost > 0) resultMap[`${curr.x},${curr.z}`] = curr;
         let currH = mapData[curr.z][curr.x].h;
-
         for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
             let nx = curr.x + d[0]; let nz = curr.z + d[1];
             if(nx >= 0 && nx < MAP_W && nz >= 0 && nz < MAP_D) {
-                if(getUnitAt(nx, nz)) continue; // ユニットがいる場所は止まれない
-
-                let nextH = mapData[nz][nx].h;
-                let hDiff = nextH - currH;
-
+                if(getUnitAt(nx, nz)) continue; 
+                let nextH = mapData[nz][nx].h; let hDiff = nextH - currH;
                 if(Math.abs(hDiff) <= unit.jump) {
-                    // ★TO仕様コスト計算：登る時はコスト増（1段+1）★
                     let stepCost = 1 + (hDiff > 0 ? hDiff : 0);
                     let newCost = curr.cost + stepCost;
-
                     if(newCost <= unit.move) {
                         let key = `${nx},${nz}`;
                         if(bestCost[key] === undefined || newCost < bestCost[key]) {
@@ -291,168 +340,129 @@ function getWalkableNodes(unit) {
     return Object.values(resultMap);
 }
 
-// --- フェーズ進行 ---
-function startPlayerMovePhase() {
-    gameState = 'PLAYER_MOVE';
-    setMsg("移動先を選んでね（段差に注意！）", "#00ff00");
-    clearHighlights();
-    walkableTiles = getWalkableNodes(player);
-    walkableTiles.forEach(node => { tilesMeshMap[`${node.x},${node.z}`].material[2].color.setHex(0x55ff55); });
-}
-
-function startPlayerActionPhase() {
-    gameState = 'PLAYER_ACT';
-    clearHighlights();
-    attackableTiles = [];
-    // 上下左右に敵がいるかチェック
+function getAttackableEnemies(unit) {
+    let targets = [];
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
-        let nx = player.x + d[0]; let nz = player.z + d[1];
-        let u = getUnitAt(nx, nz);
-        if(u && !u.isPlayer) {
-            attackableTiles.push(u);
-            tilesMeshMap[`${nx},${nz}`].material[2].color.setHex(0xff5555); // 赤く光る
-        }
+        let u = getUnitAt(unit.x + d[0], unit.z + d[1]);
+        if(u && u.isPlayer !== unit.isPlayer) targets.push(u);
     }
-    
-    if(attackableTiles.length > 0) {
-        setMsg("隣の敵をタップして攻撃！", "#ff5555");
-    } else {
-        setMsg("敵がいないのでターン終了", "#aaaaaa");
-        setTimeout(startEnemyTurn, 1000);
-    }
+    return targets;
 }
 
-function clearHighlights() {
-    interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff));
+// --- プレイヤーターン進行 ---
+function resetToIdle() {
+    gameState = 'IDLE';
+    clearHighlights();
+    setMsg("ユニットをタップ", "#ffffff");
+    hideAllUI();
+    if(player.hasMoved && player.hasAttacked) endPlayerTurn();
 }
 
-// --- タップ処理 ---
-const raycaster = new THREE.Raycaster();
-const mouse = new THREE.Vector2();
-let ptrDownPos = {x:0, y:0};
+const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 
-function onPointerDown(event) {
-    ptrDownPos = { x: event.clientX, y: event.clientY };
-    document.addEventListener('pointerup', onPointerUp, {once:true});
-}
+function onPointerClick(event) {
+    if (gameState === 'ANIMATING' || gameState === 'ENEMY_TURN') return;
+    if (event.target.closest('.rpg-window')) return;
 
-function onPointerUp(event) {
-    if(event.target.closest('#camera-ui') || event.target.closest('#confirm-ui')) return;
-    const dist = Math.hypot(event.clientX - ptrDownPos.x, event.clientY - ptrDownPos.y);
-    if(dist > 5) return; // スワイプは無視
-
-    if (gameState !== 'PLAYER_MOVE' && gameState !== 'PLAYER_ACT') return;
-
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
     const intersects = raycaster.intersectObjects(interactableTiles);
     if (intersects.length > 0) {
         const target = intersects[0].object.userData;
         
-        if (gameState === 'PLAYER_MOVE') {
+        if(gameState === 'IDLE') {
+            const u = getUnitAt(target.x, target.z);
+            if(u) {
+                showStatus(u);
+                if(u.isPlayer) showCommandMenu();
+            } else {
+                hideAllUI();
+            }
+        } 
+        else if (gameState === 'SELECTING_MOVE') {
             const route = walkableTiles.find(n => n.x === target.x && n.z === target.z);
             if (route) {
                 gameState = 'CONFIRMING'; confirmMode = 'MOVE'; pendingData = route.path; selectedTileKey = `${target.x},${target.z}`;
                 tilesMeshMap[selectedTileKey].material[2].color.setHex(0xffff00);
-                document.getElementById('confirm-text').innerHTML = "ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？";
+                document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
-            }
-        } else if (gameState === 'PLAYER_ACT') {
+            } else { resetToIdle(); } // キャンセル
+        } 
+        else if (gameState === 'SELECTING_ATTACK') {
             const enemyUnit = attackableTiles.find(u => u.x === target.x && u.z === target.z);
             if(enemyUnit) {
                 gameState = 'CONFIRMING'; confirmMode = 'ATTACK'; pendingData = enemyUnit; selectedTileKey = `${target.x},${target.z}`;
                 tilesMeshMap[selectedTileKey].material[2].color.setHex(0xffff00);
                 document.getElementById('confirm-text').innerHTML = "攻撃しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
-            }
+            } else { resetToIdle(); }
         }
     }
 }
 
-// --- ダイアログ処理 ---
 window.answerConfirm = function(isYes) {
     document.getElementById('confirm-ui').style.display = 'none';
-    
     if (isYes) {
+        gameState = 'ANIMATING';
         clearHighlights();
         if(confirmMode === 'MOVE') {
-            gameState = 'MOVING';
-            executeMovement(player, pendingData, () => { startPlayerActionPhase(); });
+            player.hasMoved = true;
+            executeMovement(player, pendingData, () => { resetToIdle(); showStatus(player); showCommandMenu(); });
         } else if(confirmMode === 'ATTACK') {
-            gameState = 'ATTACKING';
-            executeAttack(player, pendingData, () => { startEnemyTurn(); });
+            player.hasAttacked = true;
+            executeAttack(player, pendingData, () => { resetToIdle(); });
         }
     } else {
-        if(confirmMode === 'MOVE') {
-            tilesMeshMap[selectedTileKey].material[2].color.setHex(0x55ff55);
-            gameState = 'PLAYER_MOVE';
-        } else {
-            tilesMeshMap[selectedTileKey].material[2].color.setHex(0xff5555);
-            gameState = 'PLAYER_ACT';
-        }
+        resetToIdle(); // いいえなら初期状態へ
     }
     pendingData = null; selectedTileKey = null;
 }
 
-// --- 行動処理 ---
-function executeMovement(unit, path, onCompleteCallback) {
+// --- アニメーション・ロジック ---
+function executeMovement(unit, path, onComplete) {
     const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
-    const tl = gsap.timeline({ onComplete: () => {
-        // 移動終了後にカメラを寄せる
-        if(unit.isPlayer) {
-            moveCameraToTarget(unit.sprite.position, onCompleteCallback);
-        } else {
-            onCompleteCallback();
-        }
-    }});
-
-    path.forEach((step) => {
+    const tl = gsap.timeline({ onComplete });
+    path.forEach(step => {
         const tX = (step.x * TILE_SIZE) - offsetX; const tZ = (step.z * TILE_SIZE) - offsetZ;
         const tY = (step.h * H_STEP) + (TILE_SIZE * 0.5);
         tl.to(unit.sprite.position, { x: tX, z: tZ, duration: 0.25, ease: "power1.inOut" }, "+=0");
         tl.to(unit.sprite.position, { y: Math.max(unit.sprite.position.y, tY) + 30, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
         tl.set(unit.sprite.position, { y: tY });
     });
-
     const finalStep = path[path.length - 1];
     unit.x = finalStep.x; unit.z = finalStep.z; unit.h = finalStep.h;
 }
 
-function executeAttack(attacker, defender, onCompleteCallback) {
+function executeAttack(attacker, defender, onComplete) {
     const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
     const dx = ((defender.x * TILE_SIZE) - offsetX) - attacker.sprite.position.x;
     const dz = ((defender.z * TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
 
-    // 体当たりアニメーション
+    const damage = Math.max(1, attacker.str - defender.def);
+    
     const tl = gsap.timeline({ onComplete: () => {
-        defender.hp -= 10;
-        defender.updateHPUI();
+        defender.hp -= damage;
         if(defender.hp <= 0) {
-            setMsg(`${defender.id}をたおした！`, "#ffff00");
-            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: onCompleteCallback});
-        } else {
-            onCompleteCallback();
-        }
+            setMsg(`${defender.id}を倒した！`, "#ffcc00");
+            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
+        } else { onComplete(); }
     }});
     
-    // 突進して戻る
     tl.to(attacker.sprite.position, { x: attacker.sprite.position.x + dx*0.5, z: attacker.sprite.position.z + dz*0.5, duration: 0.1, ease: "power2.in" });
     tl.to(attacker.sprite.position, { x: attacker.sprite.position.x - dx*0.5, z: attacker.sprite.position.z - dz*0.5, duration: 0.2, ease: "power2.out" });
 }
 
-// --- 敵AIターン ---
-function startEnemyTurn() {
-    if(enemy.hp <= 0) return; // 敵が死んでいたら終了
-    gameState = 'ENEMY_TURN';
-    setMsg("敵のターン...", "#ff5555");
+function endPlayerTurn() {
+    player.hasMoved = false; player.hasAttacked = false;
+    hideAllUI();
     
+    if(enemy.hp <= 0) { setMsg("STAGE CLEAR!", "#ffff00"); return; }
+
+    gameState = 'ENEMY_TURN'; setMsg("敵のターン...", "#ff5555");
     setTimeout(() => {
-        // ダイクストラでプレイヤーに一番近いマスを探す
         let routes = getWalkableNodes(enemy);
         let bestRoute = null; let minD = 999;
-        
         routes.forEach(r => {
             let d = Math.abs(r.x - player.x) + Math.abs(r.z - player.z);
             if(d < minD) { minD = d; bestRoute = r; }
@@ -460,46 +470,32 @@ function startEnemyTurn() {
 
         if(bestRoute && bestRoute.path.length > 0) {
             executeMovement(enemy, bestRoute.path, () => {
-                // 移動後、隣接していれば攻撃
-                if(Math.abs(enemy.x - player.x) + Math.abs(enemy.z - player.z) === 1) {
-                    executeAttack(enemy, player, () => { startPlayerMovePhase(); });
-                } else {
-                    startPlayerMovePhase();
-                }
+                if(getAttackableEnemies(enemy).includes(player)) {
+                    executeAttack(enemy, player, () => { resetToIdle(); });
+                } else { resetToIdle(); }
             });
-        } else {
-            // 動けなければ終了
-            startPlayerMovePhase();
-        }
+        } else { resetToIdle(); }
     }, 1000);
 }
 
-// --- ユーティリティ ---
-function updateUnitPosInstantly(unit) {
+// ユーティリティ・カメラ処理
+function updateUnitPosInstantly(u) {
     const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
-    unit.sprite.position.set((unit.x * TILE_SIZE) - offsetX, (unit.h * H_STEP) + (TILE_SIZE * 0.5), (unit.z * TILE_SIZE) - offsetZ);
-    unit.updateHPUI();
+    u.sprite.position.set((u.x * TILE_SIZE) - offsetX, (u.h * H_STEP) + (TILE_SIZE * 0.5), (u.z * TILE_SIZE) - offsetZ);
 }
-
-function moveCameraToTarget(targetPos, onCompleteCallback) {
-    const dx = targetPos.x - controls.target.x;
-    const dz = targetPos.z - controls.target.z;
-    gsap.to(controls.target, { x: controls.target.x + dx, z: controls.target.z + dz, duration: 0.8, ease: "power2.inOut" });
-    gsap.to(camera.position, { x: camera.position.x + dx, z: camera.position.z + dz, duration: 0.8, ease: "power2.inOut", onComplete: onCompleteCallback });
-}
-
-function centerCameraInstantly(unit) {
-    const rad = 45 * (Math.PI / 180); const radius = 800;
-    controls.target.copy(unit.sprite.position);
-    camera.position.set(unit.sprite.position.x + Math.sin(rad) * radius, unit.sprite.position.y + 600, unit.sprite.position.z + Math.cos(rad) * radius);
+function centerCameraInstantly(u) {
+    const rad = 45 * (Math.PI / 180); const r = 800;
+    controls.target.copy(u.sprite.position);
+    camera.position.set(u.sprite.position.x + Math.sin(rad)*r, u.sprite.position.y + 600, u.sprite.position.z + Math.cos(rad)*r);
     camera.lookAt(controls.target);
 }
-
-window.centerCamera = function() { moveCameraToTarget(player.sprite.position, ()=>{}); }
+window.centerCamera = function() { 
+    gsap.to(controls.target, { x: player.sprite.position.x, z: player.sprite.position.z, duration: 0.8, ease: "power2.inOut" }); 
+}
 window.rotateCam = function(deg) {
     const az = controls.getAzimuthalAngle(); const newAz = az + (deg * Math.PI / 180);
-    const radius = controls.getDistance(); const polar = controls.getPolarAngle();
-    gsap.to(camera.position, { x: controls.target.x + radius * Math.sin(newAz) * Math.sin(polar), z: controls.target.z + radius * Math.cos(newAz) * Math.sin(polar), duration: 0.4, ease: "power2.out", onUpdate: () => controls.update() });
+    const r = controls.getDistance(); const polar = controls.getPolarAngle();
+    gsap.to(camera.position, { x: controls.target.x + r * Math.sin(newAz) * Math.sin(polar), z: controls.target.z + r * Math.cos(newAz) * Math.sin(polar), duration: 0.4, onUpdate: () => controls.update() });
 }
 window.panCamera = function(dx, dy) {
     const panAmount = 150; const angle = controls.getAzimuthalAngle();
@@ -510,11 +506,7 @@ window.panCamera = function(dx, dy) {
 }
 window.zoomCamera = function(amount) { camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2)); camera.updateProjectionMatrix(); }
 
-function animate() {
-    requestAnimationFrame(animate);
-    controls.update(); 
-    renderer.render(scene, camera);
-}
+function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
 </script>
 </body>
 </html>
