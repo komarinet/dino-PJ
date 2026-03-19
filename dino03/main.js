@@ -3,6 +3,9 @@ window.gameState = 'IDLE';
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
 
+// ★タップ判定用の配列（床＋キャラクター画像）★
+window.raycastTargets = []; 
+
 window.addEventListener('load', () => {
     const sheetImg = new Image();
     sheetImg.src = 'img/plate01.png';
@@ -18,6 +21,7 @@ window.setMsg = function(txt, color="#ffffff") {
     if(!txt) { el.style.display = 'none'; } 
     else { el.style.display = 'block'; el.innerHTML = txt; el.style.color = color; }
 }
+
 window.hideAllUI = function() {
     document.getElementById('status-ui').style.display = 'none';
     document.getElementById('detail-ui').style.display = 'none';
@@ -25,6 +29,7 @@ window.hideAllUI = function() {
     document.getElementById('confirm-ui').style.display = 'none';
     document.getElementById('target-ui').style.display = 'none';
 }
+
 window.showStatus = function(unit) {
     window.setMsg("");
     document.getElementById('status-ui').style.display = 'block';
@@ -38,61 +43,66 @@ window.showStatus = function(unit) {
     document.getElementById('dt-spd').innerText = unit.spd;
     document.getElementById('dt-mag').innerText = unit.mag;
 }
+
 window.toggleDetail = function() {
     const el = document.getElementById('detail-ui');
     el.style.display = el.style.display === 'block' ? 'none' : 'block';
 }
+
 window.showCommandMenu = function() {
     document.getElementById('command-ui').style.display = 'block';
-    // 移動済みの場合はボタンを非表示にする（TO仕様）
     document.getElementById('cmd-move').style.display = window.player.hasMoved ? 'none' : 'block';
 }
-window.resetToIdle = function() {
-    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
-    window.setMsg(""); // 待機中はメッセージも消す
+
+// ターン開始用のメッセージ表示
+window.startPlayerTurn = function() {
+    window.gameState = 'IDLE'; 
+    window.clearHighlights(); 
+    window.hideAllUI();
+    window.setMsg("あなたのターン！<br>ユニットをタップしてね", "#00ff00");
 }
 
-// ★TO戦闘フロー完全再現：コマンド実行★
+window.resetToIdle = function() {
+    window.gameState = 'IDLE'; 
+    window.clearHighlights(); 
+    window.hideAllUI();
+    window.setMsg(""); 
+}
+
+// コマンド実行
 window.execCommand = function(cmd) {
     document.getElementById('command-ui').style.display = 'none';
     
     if(cmd === 'move') {
-        // 【移動】ウィンドウが消え、移動可能範囲が色で示される
         window.gameState = 'SELECTING_MOVE'; 
         window.walkableTiles = window.getWalkableNodes(window.player);
         window.walkableTiles.forEach(node => { window.tilesMeshMap[`${node.x},${node.z}`].material[2].color.setHex(0x55ff55); });
-    
     } else if (cmd === 'attack') {
-        // 【攻撃】対象がいない時はメッセージを出し、ターン消費せずメニューへ戻る
         let targets = window.getAttackableEnemies(window.player);
         if(targets.length === 0) {
             window.setMsg("攻撃できる対象がいません！", "#aaaaaa");
             setTimeout(() => { window.setMsg(""); window.showCommandMenu(); }, 1200);
             return;
         }
-        // 対象がいる場合、選択ウィンドウを出す
         window.gameState = 'SELECTING_ATTACK_TARGET';
         const listDiv = document.getElementById('target-list');
-        listDiv.innerHTML = ''; // リスト初期化
+        listDiv.innerHTML = ''; 
         targets.forEach(t => {
             const btn = document.createElement('button');
             btn.className = 'cmd-btn';
             btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
             btn.onclick = () => window.selectTarget(t);
             listDiv.appendChild(btn);
-            window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); // 赤く光らせる
+            window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); 
         });
         document.getElementById('target-ui').style.display = 'block';
-    
     } else if (cmd === 'wait') {
-        // 【待機】「ターンを終了しますか」の確認ダイアログ
         window.gameState = 'CONFIRMING'; window.confirmMode = 'WAIT';
         document.getElementById('confirm-text').innerHTML = "ターンを終了しますか？";
         document.getElementById('confirm-ui').style.display = 'block';
     }
 }
 
-// 攻撃目標をリストから選んだ時
 window.selectTarget = function(targetUnit) {
     document.getElementById('target-ui').style.display = 'none';
     window.gameState = 'CONFIRMING'; window.confirmMode = 'ATTACK'; window.pendingData = targetUnit;
@@ -108,30 +118,25 @@ window.cancelAttack = function() {
 
 window.answerConfirm = function(isYes) {
     document.getElementById('confirm-ui').style.display = 'none';
-    
     if (isYes) {
         window.gameState = 'ANIMATING'; window.clearHighlights(); window.setMsg("");
         
         if(window.confirmMode === 'WAIT') {
             window.endPlayerTurn();
-        } 
-        else if(window.confirmMode === 'MOVE') {
+        } else if(window.confirmMode === 'MOVE') {
             window.player.hasMoved = true;
-            // 移動後はコマンドメニューを開き直す（移動ボタンは消える）
             window.executeMovement(window.player, window.pendingData, () => { 
                 window.resetToIdle(); window.showStatus(window.player); window.showCommandMenu(); 
             });
-        } 
-        else if(window.confirmMode === 'ATTACK') {
+        } else if(window.confirmMode === 'ATTACK') {
             window.player.hasAttacked = true;
-            // 攻撃後はターン終了
             window.executeAttack(window.player, window.pendingData, () => { window.endPlayerTurn(); });
         }
     } else {
-        // 「いいえ」を選んだ時の戻り先を厳密に管理
         if(window.confirmMode === 'MOVE') {
             window.gameState = 'SELECTING_MOVE';
-            window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0x55ff55); // 黄色から緑に戻す
+            window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0x55ff55); 
+            if(window.selectorMesh) window.selectorMesh.visible = false;
         } else if(window.confirmMode === 'ATTACK') {
             window.gameState = 'SELECTING_ATTACK_TARGET';
             document.getElementById('target-ui').style.display = 'block';
@@ -142,7 +147,7 @@ window.answerConfirm = function(isYes) {
     if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
-// --- アニメーション ---
+// アニメーション (座標バグ修正版)
 window.executeMovement = function(unit, path, onComplete) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const tl = gsap.timeline({ onComplete });
@@ -163,6 +168,10 @@ window.executeAttack = function(attacker, defender, onComplete) {
     const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
     const damage = Math.max(1, attacker.str - defender.def);
     
+    // ★マスが動くバグの修正：元の座標を記憶しておく★
+    const origX = attacker.sprite.position.x;
+    const origZ = attacker.sprite.position.z;
+
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
         if(defender.hp <= 0) {
@@ -170,8 +179,10 @@ window.executeAttack = function(attacker, defender, onComplete) {
             gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
         } else { onComplete(); }
     }});
-    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x + dx*0.5, z: attacker.sprite.position.z + dz*0.5, duration: 0.1, ease: "power2.in" });
-    tl.to(attacker.sprite.position, { x: attacker.sprite.position.x - dx*0.5, z: attacker.sprite.position.z - dz*0.5, duration: 0.2, ease: "power2.out" });
+    
+    // 確実に行って、確実に元の場所へ戻る
+    tl.to(attacker.sprite.position, { x: origX + dx*0.5, z: origZ + dz*0.5, duration: 0.1, ease: "power2.in" });
+    tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" });
 }
 
 window.endPlayerTurn = function() {
@@ -189,10 +200,10 @@ window.endPlayerTurn = function() {
         if(bestRoute && bestRoute.path.length > 0) {
             window.executeMovement(window.enemy, bestRoute.path, () => {
                 if(window.getAttackableEnemies(window.enemy).includes(window.player)) { 
-                    window.executeAttack(window.enemy, window.player, () => { window.resetToIdle(); }); 
-                } else { window.resetToIdle(); }
+                    window.executeAttack(window.enemy, window.player, () => { window.startPlayerTurn(); }); 
+                } else { window.startPlayerTurn(); }
             });
-        } else { window.resetToIdle(); }
+        } else { window.startPlayerTurn(); }
     }, 1000);
 }
 
@@ -212,11 +223,26 @@ function init(sheetImg) {
 
     window.buildMapMeshes(scene, sheetImg);
 
+    // ★白枠（選択カーソル）の生成★
+    const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(window.TILE_SIZE, window.H_STEP, window.TILE_SIZE));
+    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+    window.selectorMesh = new THREE.LineSegments(geo, mat);
+    window.selectorMesh.visible = false;
+    scene.add(window.selectorMesh);
+
+    // キャラクターの生成とタップ判定への追加
+    window.raycastTargets = [...window.interactableTiles]; // 床ブロックを判定に追加
+    
     window.units.forEach(u => {
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
         const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(u.emoji, 64, 64);
         u.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
         u.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
+        
+        // ★キャラ画像自体をタップ判定に追加★
+        u.sprite.userData = { isUnit: true, unit: u };
+        window.raycastTargets.push(u.sprite);
+        
         scene.add(u.sprite);
         window.updateUnitPosInstantly(u);
     });
@@ -248,11 +274,25 @@ function init(sheetImg) {
         if(dist < 5) onPointerClick(e);
     });
 
-    window.resetToIdle();
+    window.startPlayerTurn();
     animate();
 }
 
-window.clearHighlights = function() { window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff)); }
+// ★見やすさ大改善：ハイライト管理★
+window.clearHighlights = function() { 
+    // 全マスの色をリセット
+    window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff)); 
+    if(window.selectorMesh) window.selectorMesh.visible = false;
+    
+    // キャラクターの足元を常にハイライト（味方:水色, 敵:赤色）
+    window.units.forEach(u => {
+        if(u.hp > 0) {
+            const tile = window.tilesMeshMap[`${u.x},${u.z}`];
+            if(tile) tile.material[2].color.setHex(u.isPlayer ? 0x88ccff : 0xff8888);
+        }
+    });
+}
+
 const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 
 function onPointerClick(event) {
@@ -261,22 +301,33 @@ function onPointerClick(event) {
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
-    const intersects = raycaster.intersectObjects(window.interactableTiles);
+    // ★判定を拡張した配列（raycastTargets）でチェック★
+    const intersects = raycaster.intersectObjects(window.raycastTargets);
     if (intersects.length > 0) {
-        const target = intersects[0].object.userData;
+        let targetData = intersects[0].object.userData;
+        
+        // キャラをタップした場合は、その足元の座標に変換する
+        if(targetData.isUnit) {
+            targetData = { x: targetData.unit.x, z: targetData.unit.z, h: targetData.unit.h };
+        }
         
         if(window.gameState === 'IDLE') {
-            const u = window.getUnitAt(target.x, target.z);
+            const u = window.getUnitAt(targetData.x, targetData.z);
             if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } 
             else { window.resetToIdle(); }
         } 
         else if (window.gameState === 'SELECTING_MOVE') {
-            const route = window.walkableTiles.find(n => n.x === target.x && n.z === target.z);
+            const route = window.walkableTiles.find(n => n.x === targetData.x && n.z === targetData.z);
             if (route) {
-                // タップするとその一コマだけ光る（他の緑は消す）
-                window.clearHighlights();
-                window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${target.x},${target.z}`;
-                window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0xffff00);
+                window.clearHighlights(); // 他の緑を消す
+                window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${targetData.x},${targetData.z}`;
+                
+                // タップしたマスだけを黄色にして、白枠（カーソル）を表示
+                const tile = window.tilesMeshMap[window.selectedTileKey];
+                tile.material[2].color.setHex(0xffff00);
+                window.selectorMesh.position.copy(tile.position);
+                window.selectorMesh.visible = true;
+
                 document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
             } else { window.resetToIdle(); } 
@@ -284,6 +335,7 @@ function onPointerClick(event) {
     }
 }
 
+// カメラ操作
 window.updateUnitPosInstantly = function(u) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     u.sprite.position.set((u.x * window.TILE_SIZE) - offsetX, (u.h * window.H_STEP) + (window.TILE_SIZE * 0.5), (u.z * window.TILE_SIZE) - offsetZ);
