@@ -46,3 +46,15 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
 .confirm-btns { display: flex; justify-content: center; gap: 20px; }
 .btn-yes { background: #4caf50; color: white; border: none; padding: 12px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
 .btn-no { background: #f44336; color: white; border: none; padding: 12px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
+
+/* ★追加：バージョン情報★ */
+#version-display {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    color: rgba(255, 255, 255, 0.5); /* 半透明の白 */
+    font-size: 0.8rem;
+    font-family: monospace;
+    z-index: 9999;
+    pointer-events: none; /* タップの邪魔にならないようにする */
+}
