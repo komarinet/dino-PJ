@@ -2,232 +2,152 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス</title>
+    <title>ちびっこティラノ：Three.js版</title>
     <style>
-        :root { 
-            --tile-size: 60px;
-            --sheet-w: 240px; 
-            --sheet-h: 90px;
-        }
-        body { margin: 0; background: #1a1a1a; color: white; font-family: sans-serif; overflow: hidden; touch-action: none; }
-        
-        #stage {
-            width: 100vw; height: 60vh;
-            perspective: 1500px;
-            display: flex; align-items: center; justify-content: center;
-            background: radial-gradient(circle, #333 0%, #000 80%);
-        }
-
-        #world {
-            position: relative;
-            width: 420px; height: 420px; /* 7x7マス */
-            transform-style: preserve-3d;
-            transform: rotateX(60deg) rotateZ(45deg);
-            transition: transform 0.5s cubic-bezier(0.25, 1, 0.5, 1);
-        }
-
-        #tiles-container {
-            position: absolute; width: 100%; height: 100%;
-            transform-style: preserve-3d;
-        }
-
-        /* 個別のタイル */
-        .tile {
-            position: absolute;
-            width: var(--tile-size); height: var(--tile-size);
-            transform-style: preserve-3d;
-        }
-
-        /* 面の共通設定 */
-        .face {
-            position: absolute;
-            backface-visibility: hidden;
-            box-sizing: border-box;
-        }
-
-        /* 天面 */
-        .top { 
-            width: var(--tile-size); height: var(--tile-size);
-            background-image: url('img/plate01.png');
-            background-size: var(--sheet-w) var(--sheet-h);
-            background-position: var(--tx) 0px;
-            cursor: pointer;
-        }
-
-        /* 側面（透明な枠） */
-        .side {
-            width: var(--tile-size);
-            left: 0; top: 0;
-            /* 回転の軸を「上辺の中央」に固定 */
-            transform-origin: 30px 0;
-            transform-style: preserve-3d;
-        }
-
-        /* 側面のテクスチャ実体 */
-        .side-part {
-            position: absolute;
-            left: 0; width: 100%;
-            background-image: url('img/plate01.png');
-            background-size: var(--sheet-w) var(--sheet-h);
-            background-position-x: var(--tx);
-        }
-
-        /* 光源処理（明るさ） */
-        .south { filter: brightness(0.9); }
-        .east  { filter: brightness(0.8); }
-        .north { filter: brightness(0.6); }
-        .west  { filter: brightness(0.7); }
-
-        /* キャラクター */
-        #unit {
-            position: absolute;
-            width: var(--tile-size); height: var(--tile-size);
-            font-size: 50px; text-align: center; line-height: var(--tile-size);
-            transform-style: preserve-3d;
-            /* 修正の要：回転の軸を「足元」にする！ これで沈まない！ */
-            transform-origin: center bottom;
-            transition: transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-            pointer-events: none;
-        }
-
-        #ui { height: 40vh; background: #00008b; border-top: 4px solid #eee; padding: 15px; box-sizing: border-box; }
-        #msg { height: 60px; border: 2px solid white; padding: 10px; border-radius: 10px; margin-bottom: 10px; background: rgba(0,0,0,0.5); font-size: 1.1rem;}
-        .controls { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-        button { padding: 15px; font-size: 1.2rem; font-weight: bold; border-radius: 10px; border: none; background: #eee; box-shadow: 0 4px #999; }
-        button:active { transform: translateY(2px); box-shadow: 0 2px #999; }
+        body { margin: 0; overflow: hidden; background: #1a1a1a; }
+        canvas { display: block; }
     </style>
 </head>
 <body>
 
-<div id="stage">
-    <div id="world">
-        <div id="tiles-container"></div>
-        <div id="unit">🦖</div>
-    </div>
-</div>
+<script async src="https://unpkg.com/es-module-shims@1.8.0/dist/es-module-shims.js"></script>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.156.1/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.156.1/examples/jsm/"
+  }
+}
+</script>
 
-<div id="ui">
-    <div id="msg">
-        <ruby>高低差<rt>こうていさ</rt></ruby>のあるマップだ！<br>タップで <ruby>移動<rt>いどう</rt></ruby>しよう！
-    </div>
-    <div class="controls">
-        <button onclick="rotateWorld(-45)">◀ 回す</button>
-        <button onclick="rotateWorld(45)">回す ▶</button>
-        <button onclick="jump()">JUMP!</button>
-    </div>
-</div>
+<script type="module">
+import * as THREE from 'three';
+// マウスでカメラを回せるようにするライブラリ
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
-<script>
-// Version: v1.3.0
+// ==========================================
+// 1. 基礎設定（シーン、カメラ、レンダラー）
+// ==========================================
+
+// 1.1 シーン（舞台）
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x1a1a1a);
+
+// 1.2 カメラ（平行投影：タクティクスオウガ風）
+const aspect = window.innerWidth / window.innerHeight;
+const d = 5; // カメラの表示範囲の広さ
+const camera = new THREE.OrthographicCamera(-d * aspect, d * aspect, d, -d, 1, 1000);
+
+// カメラの位置と向き（斜め上から見下ろす）
+camera.position.set(20, 20, 20); 
+camera.lookAt(0, 0, 0); // 中心を見る
+
+// 1.3 レンダラー（描画実行）
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true; // 影を有効にする
+document.body.appendChild(renderer.domElement);
+
+// マウス操作を有効にする
+const controls = new OrbitControls(camera, renderer.domElement);
+
+// ==========================================
+// 2. 照明（ライト）
+// ==========================================
+const ambientLight = new THREE.AmbientLight(0xffxffx, 0.6); // 全体を明るく
+scene.add(ambientLight);
+
+const directionalLight = new THREE.DirectionalLight(0xffffff, 1.0); // 太陽光のような光
+directionalLight.position.set(10, 20, 10);
+directionalLight.castShadow = true; // 影を落とす
+scene.add(directionalLight);
+
+// ==========================================
+// 3. マップ生成 (mapData から)
+// ==========================================
+
+// 元の mapData
 const mapData = [
-    [[1,0], [2,0], [3,0], [4,0], [5,0], [6,0], [7,0]],
-    [[2,0], [3,1], [4,1], [5,1], [6,1], [7,1], [6,0]],
-    [[3,0], [4,1], [5,2], [6,2], [7,2], [6,1], [5,0]],
-    [[4,0], [5,1], [6,2], [8,3], [6,2], [5,1], [4,0]],
-    [[5,0], [6,1], [7,2], [6,2], [5,2], [4,1], [3,0]],
-    [[6,0], [7,1], [6,1], [5,1], [4,1], [3,1], [2,0]],
-    [[7,0], [6,0], [5,0], [4,0], [3,0], [2,0], [1,0]]
+    [1, 2, 3, 4, 5, 6, 7],
+    [2, 3, 4, 5, 6, 7, 6],
+    [3, 4, 5, 6, 7, 6, 5],
+    [4, 5, 6, 8, 6, 5, 4],
+    [5, 6, 7, 6, 5, 4, 3],
+    [6, 7, 6, 5, 4, 3, 2],
+    [7, 6, 5, 4, 3, 2, 1]
 ];
 
-const world = document.getElementById('world');
-const unit = document.getElementById('unit');
-const tileSize = 60;
-const hStep = 40; // 1段の高さ
-let unitPos = { x: 3, y: 3, z: 8 * hStep }; 
-let currentRotation = 45;
+const tileSize = 1;
+const heightStep = 0.5; // 1段の高さ
 
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playSound(type) {
-    if (audioCtx.state === 'suspended') audioCtx.resume();
-    const osc = audioCtx.createOscillator();
-    const gain = audioCtx.createGain();
-    osc.connect(gain); gain.connect(audioCtx.destination);
-    const now = audioCtx.currentTime;
-    if(type === 'move') {
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
-        gain.gain.linearRampToValueAtTime(0, now + 0.1);
-        osc.start(); osc.stop(now + 0.1);
+// テクスチャ読み込み（今回は仮の色。画像があればここを書き換える）
+// const textureLoader = new THREE.TextureLoader();
+// const mapTexture = textureLoader.load('img/plate01.png');
+
+for (let y = 0; y < mapData.length; y++) {
+    for (let x = 0; x < mapData[y].length; x++) {
+        const height = mapData[y][x] * heightStep;
+
+        // 【Three.js のポイント】
+        // 幾何学（形）と材質（テクスチャ）を定義する
+
+        // 立方体の形を作る (幅, 高さ, 奥行き)
+        const geometry = new THREE.BoxGeometry(tileSize, height, tileSize);
+
+        // 材質を作る（色や影の設定）
+        const material = new THREE.MeshStandardMaterial({
+            color: new THREE.Color(`hsl(120, 40%, ${30 + mapData[y][x] * 5}%)`), // 高さで色を変える
+            // map: mapTexture, // 画像を使う場合はここをコメント解除
+        });
+
+        // 3Dオブジェクト（メッシュ）を作成
+        const box = new THREE.Mesh(geometry, material);
+
+        // 位置を設定（デフォルトの中心が(0,0,0)なので、地面に接するように調整）
+        box.position.x = x * tileSize - (mapData[y].length * tileSize) / 2;
+        box.position.y = height / 2; // 地面から浮かせる
+        box.position.z = y * tileSize - (mapData.length * tileSize) / 2;
+
+        box.castShadow = true; // 影を落とす
+        box.receiveShadow = true; // 影を受け止める
+
+        scene.add(box); // シーンに追加
     }
 }
 
-function createMap() {
-    const container = document.getElementById('tiles-container');
-    let htmlStr = '';
+// ==========================================
+// 4. キャラクター（仮）
+// ==========================================
+const unitGeometry = new THREE.SphereGeometry(0.4, 32, 32);
+const unitMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+const unit = new THREE.Mesh(unitGeometry, unitMaterial);
+unit.position.set(0, mapData[3][3] * heightStep + 0.4, 0); // マップ中央の高さに配置
+unit.castShadow = true;
+scene.add(unit);
 
-    for (let y = 0; y < 7; y++) {
-        for (let x = 0; x < 7; x++) {
-            const [h, type] = mapData[y][x];
-            const hPx = h * hStep;
-            const tx = -(type * tileSize);
 
-            // 側面のテクスチャを必要な分だけ積み上げる
-            let sidePartsHTML = '';
-            if (hPx > 0) {
-                sidePartsHTML += `<div class="side-part" style="top:0px; height:15px; background-position-y:-60px;"></div>`;
-                for (let i = 15; i < hPx; i += 15) {
-                    let ch = Math.min(15, hPx - i);
-                    sidePartsHTML += `<div class="side-part" style="top:${i}px; height:${ch}px; background-position-y:-75px;"></div>`;
-                }
-            }
+// ==========================================
+// 5. アニメーション（描画ループ）
+// ==========================================
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update(); // マウス操作の更新
+    renderer.render(scene, camera); // 描画
+}
+animate();
 
-            // 【完全版アルゴリズム】中心からZ回転で方角を決め、Y方向に押し出し、X回転で垂らす
-            const tSouth = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(0deg) translateY(30px) rotateX(-90deg);`;
-            const tEast  = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(-90deg) translateY(30px) rotateX(-90deg);`;
-            const tNorth = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(180deg) translateY(30px) rotateX(-90deg);`;
-            const tWest  = `transform: translate3d(0, 30px, ${hPx}px) rotateZ(90deg) translateY(30px) rotateX(-90deg);`;
-
-            htmlStr += `
-            <div class="tile" style="left: ${x * tileSize}px; top: ${y * tileSize}px; --tx: ${tx}px;">
-                <div class="face top" style="transform: translateZ(${hPx}px);" onclick="moveUnit(${x}, ${y}, ${hPx})"></div>
-                <div class="face side south" style="height: ${hPx}px; ${tSouth}">${sidePartsHTML}</div>
-                <div class="face side east"  style="height: ${hPx}px; ${tEast}">${sidePartsHTML}</div>
-                <div class="face side north" style="height: ${hPx}px; ${tNorth}">${sidePartsHTML}</div>
-                <div class="face side west"  style="height: ${hPx}px; ${tWest}">${sidePartsHTML}</div>
-            </div>`;
-        }
-    }
-    container.innerHTML = htmlStr;
-    updateUnitTransform(unitPos.x * tileSize, unitPos.y * tileSize, unitPos.z);
+// 画面サイズが変わったときの調整
+window.addEventListener('resize', onWindowResize, false);
+function onWindowResize() {
+    const aspect = window.innerWidth / window.innerHeight;
+    camera.left = -d * aspect;
+    camera.right = d * aspect;
+    camera.top = d;
+    camera.bottom = -d;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-function moveUnit(x, y, z) {
-    const dist = Math.abs(x - unitPos.x) + Math.abs(y - unitPos.y);
-    if (dist > 0 && dist <= 1) { 
-        playSound('move');
-        unitPos = { x, y, z };
-        
-        // ジャンプ中も足元(z)の基準を保つ
-        const maxZ = Math.max(parseFloat(unit.style.getPropertyValue('--uz') || 0), z);
-        unit.style.transform = `translate3d(${x * tileSize}px, ${y * tileSize}px, ${maxZ + 50}px) rotateZ(-45deg) rotateX(-60deg)`;
-        
-        setTimeout(() => {
-            updateUnitTransform(x * tileSize, y * tileSize, z);
-        }, 150);
-    }
-}
-
-function updateUnitTransform(px, py, pz) {
-    // pz + 1px 浮かせることで、床との重なり（z-fighting）を防止
-    unit.style.setProperty('--uz', `${pz}`);
-    unit.style.transform = `translate3d(${px}px, ${py}px, ${pz + 1}px) rotateZ(-45deg) rotateX(-60deg)`;
-}
-
-function rotateWorld(deg) {
-    currentRotation += deg;
-    world.style.transform = `rotateX(60deg) rotateZ(${currentRotation}deg)`;
-}
-
-function jump() {
-    const baseZ = unitPos.z;
-    unit.style.transform = `translate3d(${unitPos.x * tileSize}px, ${unitPos.y * tileSize}px, ${baseZ + 60}px) rotateZ(-45deg) rotateX(-60deg)`;
-    setTimeout(() => {
-        updateUnitTransform(unitPos.x * tileSize, unitPos.y * tileSize, baseZ);
-    }, 200);
-}
-
-createMap();
 </script>
 </body>
 </html>
