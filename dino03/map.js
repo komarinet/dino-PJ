@@ -1,4 +1,3 @@
-// マップの基本設定をグローバルに
 window.MAP_W = 20; 
 window.MAP_D = 40;
 window.TILE_SIZE = 60; 
