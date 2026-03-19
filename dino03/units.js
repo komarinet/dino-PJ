@@ -1,4 +1,3 @@
-// クラス定義
 window.Unit = class {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer) {
         this.id = id; this.emoji = emoji;
@@ -9,11 +8,11 @@ window.Unit = class {
         this.move = move; this.jump = jump;
         this.isPlayer = isPlayer;
         this.sprite = null;
-        this.hasMoved = false; this.hasAttacked = false;
+        this.hasMoved = false; 
+        this.hasAttacked = false;
     }
 };
 
-// ユニット生成とグローバル登録
 window.player = new window.Unit("ティラノ", "🦖", 10, 25, 30, 10, 15, 10, 5, 8, 4, 2, true);
 window.enemy  = new window.Unit("トリケラ", "🦕", 10, 21, 20, 5, 12, 12, 4, 2, 4, 2, false);
 window.units = [window.player, window.enemy];
@@ -24,6 +23,7 @@ window.getUnitAt = function(x, z) {
 
 window.getAttackableEnemies = function(unit) {
     let targets = [];
+    // 上下左右1マスを判定
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
         let u = window.getUnitAt(unit.x + d[0], unit.z + d[1]);
         if(u && u.isPlayer !== unit.isPlayer) targets.push(u);
