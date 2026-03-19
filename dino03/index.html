@@ -3,63 +3,63 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v5.0.0)</title>
+    <title>ちびっこティラノ：タクティクス (v5.1.0)</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; user-select: none; }
-        #canvas-container { width: 100vw; height: 100vh; }
+        #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
         
-        /* 共通RPGウィンドウスタイル */
+        /* 共通RPGウィンドウスタイル (スマホ向けにbox-sizing追加) */
         .rpg-window {
             position: absolute; background: rgba(0, 15, 60, 0.9); color: white;
-            border: 2px solid #ddd; border-radius: 8px; box-shadow: inset 0 0 10px rgba(0,0,0,0.8), 0 5px 15px rgba(0,0,0,0.7);
-            padding: 10px; z-index: 1000;
+            border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.7);
+            padding: 10px; z-index: 1000; box-sizing: border-box;
         }
 
-        /* ① ステータスウィンドウ (左上) */
-        #status-ui { top: 20px; left: 20px; width: 200px; display: none; }
-        .unit-name { font-size: 1.2rem; font-weight: bold; border-bottom: 1px solid #777; margin-bottom: 5px; padding-bottom: 3px; }
+        /* ① ステータスウィンドウ (左上・見切れないよう幅調整) */
+        #status-ui { top: 10px; left: 10px; width: 45vw; max-width: 200px; display: none; }
+        .unit-name { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #777; margin-bottom: 5px; padding-bottom: 3px; }
         .bar-bg { width: 100%; background: #333; height: 10px; border-radius: 5px; margin: 5px 0; overflow: hidden; }
         .hp-bar { height: 100%; background: #4caf50; transition: width 0.3s; }
         .mp-bar { height: 100%; background: #2196f3; transition: width 0.3s; }
-        .btn-detail { background: #555; color: white; border: 1px solid #aaa; border-radius: 3px; width: 100%; margin-top: 5px; cursor: pointer; }
+        .btn-detail { background: #555; color: white; border: 1px solid #aaa; border-radius: 3px; width: 100%; margin-top: 5px; cursor: pointer; padding: 5px 0;}
 
-        /* ② 詳細ステータス (中央左寄り) */
-        #detail-ui { top: 20px; left: 240px; width: 200px; display: none; }
-        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 1.1rem; }
+        /* ② 詳細ステータス (ステータスの右側) */
+        #detail-ui { top: 10px; left: calc(45vw + 20px); width: 45vw; max-width: 200px; display: none; }
+        .stat-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 1rem; }
         
-        /* ③ コマンドメニュー (左下) */
-        #command-ui { bottom: 20px; left: 20px; width: 150px; display: none; }
+        /* ③ コマンドメニュー (左下・押しやすく) */
+        #command-ui { bottom: 10px; left: 10px; width: 130px; display: none; }
         .cmd-btn { 
             display: block; width: 100%; background: transparent; color: white; 
-            border: none; text-align: left; padding: 10px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
+            border: none; text-align: left; padding: 12px 10px; font-size: 1.2rem; font-weight: bold; cursor: pointer;
             border-bottom: 1px solid #444;
         }
         .cmd-btn:hover { background: rgba(255,255,255,0.2); }
         .cmd-btn:disabled { color: #666; pointer-events: none; }
 
-        /* ④ カメラUI (右下) */
-        #camera-ui { bottom: 20px; right: 20px; width: 220px; transition: transform 0.3s ease; }
+        /* ④ カメラUI (右下・デフォルトで閉じる) */
+        #camera-ui { bottom: 10px; right: 10px; width: 200px; transition: transform 0.3s ease; z-index: 1500; }
         #camera-ui.collapsed { transform: translateY(calc(100% - 40px)); }
         #ui-header { font-weight: bold; text-align: center; cursor: pointer; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.3); margin-bottom: 10px;}
         .ui-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; text-align: center; }
         .ui-btn { background: #eee; border: none; border-radius: 5px; padding: 10px 5px; font-weight: bold; cursor: pointer; box-shadow: 0 2px #999; }
         .ui-btn:active { transform: translateY(2px); box-shadow: 0 0 #999; }
         
-        /* ⑤ メッセージ (上部中央) */
+        /* ⑤ メッセージ (上部中央・不要時は完全に消える) */
         #msg-ui {
-            top: 20px; left: 50%; transform: translateX(-50%); text-align: center;
-            font-size: 1.2rem; font-weight: bold; pointer-events: none; min-width: 250px;
+            top: 15px; left: 50%; transform: translateX(-50%); text-align: center;
+            font-size: 1.1rem; font-weight: bold; pointer-events: none; width: max-content;
         }
 
-        /* ⑥ 確認ダイアログ (中央) */
+        /* ⑥ 確認ダイアログ (中央被りを防ぐため上部へ) */
         #confirm-ui {
-            display: none; top: 50%; left: 50%; transform: translate(-50%, -50%);
-            text-align: center; z-index: 2000; border-color: #ffcc00;
+            display: none; top: 15%; left: 50%; transform: translateX(-50%);
+            text-align: center; z-index: 2000; border-color: #ffcc00; width: 80vw; max-width: 300px;
         }
-        #confirm-ui p { margin: 0 0 20px 0; font-size: 1.3rem; font-weight: bold; }
+        #confirm-ui p { margin: 0 0 20px 0; font-size: 1.2rem; font-weight: bold; }
         .confirm-btns { display: flex; justify-content: center; gap: 20px; }
-        .btn-yes { background: #4caf50; color: white; border: none; padding: 10px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
-        .btn-no { background: #f44336; color: white; border: none; padding: 10px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
+        .btn-yes { background: #4caf50; color: white; border: none; padding: 12px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
+        .btn-no { background: #f44336; color: white; border: none; padding: 12px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -102,7 +102,7 @@
     </div>
 </div>
 
-<div id="camera-ui" class="rpg-window">
+<div id="camera-ui" class="rpg-window collapsed">
     <div id="ui-header" onclick="document.getElementById('camera-ui').classList.toggle('collapsed');">📷 カメラ操作</div>
     <div class="ui-grid">
         <button class="ui-btn" onclick="rotateCam(-90)">◀ 回す</button>
@@ -129,10 +129,7 @@ class Unit {
         this.move = move; this.jump = jump;
         this.isPlayer = isPlayer;
         this.sprite = null;
-        
-        // ターンごとの行動状態
-        this.hasMoved = false;
-        this.hasAttacked = false;
+        this.hasMoved = false; this.hasAttacked = false;
     }
 }
 
@@ -148,19 +145,23 @@ const player = new Unit("ティラノ", "🦖", 10, 25, 30, 10, 15, 10, 5, 8, 4,
 const enemy  = new Unit("トリケラ", "🦕", 10, 21, 20, 5, 12, 12, 4, 2, 4, 2, false);
 const units = [player, enemy];
 
-// ステート管理 (IDLE, SELECTING_MOVE, SELECTING_ATTACK, CONFIRMING, ANIMATING)
 let gameState = 'IDLE'; 
-let currentUnit = null; // 現在ステータスを見ているユニット
+let currentUnit = null; 
 let pendingData = null; let selectedTileKey = null;
 
 const sheetImg = new Image();
 sheetImg.src = 'img/plate01.png';
 sheetImg.onload = init;
 
-// --- UI制御関数 ---
+// --- 究極のUI制御ロジック (React風ステート管理) ---
 function setMsg(txt, color="#ffffff") { 
     const el = document.getElementById('msg-ui');
-    el.innerHTML = txt; el.style.color = color;
+    if(!txt) {
+        el.style.display = 'none'; // テキストが無い時は完全に消す！
+    } else {
+        el.style.display = 'block';
+        el.innerHTML = txt; el.style.color = color;
+    }
 }
 function hideAllUI() {
     document.getElementById('status-ui').style.display = 'none';
@@ -169,6 +170,7 @@ function hideAllUI() {
     document.getElementById('confirm-ui').style.display = 'none';
 }
 function showStatus(unit) {
+    setMsg(""); // ステータス表示時はメッセージを消して被りを防ぐ
     currentUnit = unit;
     document.getElementById('status-ui').style.display = 'block';
     document.getElementById('st-name').innerText = `${unit.emoji} ${unit.id}`;
@@ -190,6 +192,13 @@ function showCommandMenu() {
     document.getElementById('command-ui').style.display = 'block';
     document.getElementById('cmd-move').disabled = player.hasMoved;
     document.getElementById('cmd-attack').disabled = player.hasAttacked;
+}
+function resetToIdle() {
+    gameState = 'IDLE';
+    clearHighlights();
+    hideAllUI();
+    setMsg("ユニットをタップ", "#ffffff"); // 待機状態に戻ったらメッセージ復活
+    if(player.hasMoved && player.hasAttacked) endPlayerTurn();
 }
 
 // --- コマンド実行 ---
@@ -216,7 +225,7 @@ window.execCommand = function(cmd) {
     }
 }
 
-// --- 初期化・マップ ---
+// --- 初期化・マップ構築 ---
 function generateMapData() {
     for (let z = 0; z < MAP_D; z++) {
         mapData[z] = [];
@@ -281,10 +290,6 @@ function createMaterial(tx, ty, tw, th) {
 const interactableTiles = [];
 function buildMapMeshes() {
     const geometry = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
-    for(let type=0; type<4; type++){
-        // テクスチャ設定... (省略なし)
-    }
-    // ... 前回のbuildMapMeshesと同等
     const matSets = [];
     for(let type=0; type<4; type++) {
         const tx = type * 256;
@@ -349,21 +354,12 @@ function getAttackableEnemies(unit) {
     return targets;
 }
 
-// --- プレイヤーターン進行 ---
-function resetToIdle() {
-    gameState = 'IDLE';
-    clearHighlights();
-    setMsg("ユニットをタップ", "#ffffff");
-    hideAllUI();
-    if(player.hasMoved && player.hasAttacked) endPlayerTurn();
-}
-
+// --- タップ処理 ---
 const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 
 function onPointerClick(event) {
     if (gameState === 'ANIMATING' || gameState === 'ENEMY_TURN') return;
-    if (event.target.closest('.rpg-window')) return;
-
+    
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
 
@@ -377,7 +373,7 @@ function onPointerClick(event) {
                 showStatus(u);
                 if(u.isPlayer) showCommandMenu();
             } else {
-                hideAllUI();
+                resetToIdle(); // ユニット以外をタップしたらキャンセル
             }
         } 
         else if (gameState === 'SELECTING_MOVE') {
@@ -387,7 +383,7 @@ function onPointerClick(event) {
                 tilesMeshMap[selectedTileKey].material[2].color.setHex(0xffff00);
                 document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
-            } else { resetToIdle(); } // キャンセル
+            } else { resetToIdle(); } 
         } 
         else if (gameState === 'SELECTING_ATTACK') {
             const enemyUnit = attackableTiles.find(u => u.x === target.x && u.z === target.z);
@@ -406,6 +402,7 @@ window.answerConfirm = function(isYes) {
     if (isYes) {
         gameState = 'ANIMATING';
         clearHighlights();
+        setMsg(""); // 移動中はメッセージ非表示
         if(confirmMode === 'MOVE') {
             player.hasMoved = true;
             executeMovement(player, pendingData, () => { resetToIdle(); showStatus(player); showCommandMenu(); });
@@ -438,7 +435,6 @@ function executeAttack(attacker, defender, onComplete) {
     const offsetX = (MAP_W * TILE_SIZE) / 2; const offsetZ = (MAP_D * TILE_SIZE) / 2;
     const dx = ((defender.x * TILE_SIZE) - offsetX) - attacker.sprite.position.x;
     const dz = ((defender.z * TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
-
     const damage = Math.max(1, attacker.str - defender.def);
     
     const tl = gsap.timeline({ onComplete: () => {
@@ -456,7 +452,6 @@ function executeAttack(attacker, defender, onComplete) {
 function endPlayerTurn() {
     player.hasMoved = false; player.hasAttacked = false;
     hideAllUI();
-    
     if(enemy.hp <= 0) { setMsg("STAGE CLEAR!", "#ffff00"); return; }
 
     gameState = 'ENEMY_TURN'; setMsg("敵のターン...", "#ff5555");
