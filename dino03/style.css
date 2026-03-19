@@ -2,9 +2,10 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
 #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
 .rpg-window {
-    position: absolute; background: rgba(0, 15, 60, 0.9); color: white;
-    border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.7);
+    position: absolute; background: rgba(0, 15, 60, 0.95); color: white;
+    border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.8);
     padding: 10px; z-index: 1000; box-sizing: border-box;
+    pointer-events: auto;
 }
 
 #status-ui { top: 10px; left: 10px; width: 45vw; max-width: 200px; display: none; }
@@ -24,7 +25,14 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
     border-bottom: 1px solid #444;
 }
 .cmd-btn:hover { background: rgba(255,255,255,0.2); }
-.cmd-btn:disabled { color: #666; pointer-events: none; }
+.cmd-btn:disabled { display: none; /* 移動済みの場合はボタン自体を消す(TO仕様) */ }
+
+/* ★新規：ターゲット選択ウィンドウ★ */
+#target-ui {
+    display: none; top: 15%; left: 50%; transform: translateX(-50%);
+    width: 80vw; max-width: 300px; z-index: 1800; border-color: #ff5555;
+}
+.btn-cancel { text-align: center; background: #666; margin-top: 10px; border-bottom: none; border-radius: 5px; }
 
 #camera-ui { bottom: 10px; right: 10px; width: 200px; transition: transform 0.3s ease; z-index: 1500; }
 #camera-ui.collapsed { transform: translateY(calc(100% - 40px)); }
@@ -35,7 +43,7 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
 
 #msg-ui {
     top: 15px; left: 50%; transform: translateX(-50%); text-align: center;
-    font-size: 1.1rem; font-weight: bold; pointer-events: none; width: max-content;
+    font-size: 1.1rem; font-weight: bold; pointer-events: none; width: max-content; display: none;
 }
 
 #confirm-ui {
@@ -47,18 +55,11 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
 .btn-yes { background: #4caf50; color: white; border: none; padding: 12px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
 .btn-no { background: #f44336; color: white; border: none; padding: 12px 30px; font-size: 1.1rem; border-radius: 5px; font-weight: bold; cursor: pointer;}
 
-/* ★追加：バージョン情報★ */
 #version-display {
-    position: absolute;
-    top: 5px;
-    right: 5px;
-    color: rgba(255, 255, 255, 0.5); /* 半透明の白 */
-    font-size: 0.8rem;
-    font-family: monospace;
-    z-index: 9999;
-    pointer-events: none; /* タップの邪魔にならないようにする */
+    position: absolute; top: 5px; right: 5px; color: rgba(255, 255, 255, 0.5);
+    font-size: 0.8rem; font-family: monospace; z-index: 9999; pointer-events: none;
 }
-/* ★追加：ロード画面のスタイル★ */
+
 #loading-screen {
     position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
     background-color: #000; z-index: 9999; 
@@ -69,8 +70,4 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
     color: #fff; font-size: 2rem; font-weight: bold; font-family: sans-serif;
     animation: blink 1.5s infinite;
 }
-@keyframes blink {
-    0% { opacity: 1; }
-    50% { opacity: 0.3; }
-    100% { opacity: 1; }
-}
+@keyframes blink { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
