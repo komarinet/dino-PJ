@@ -3,23 +3,16 @@ window.gameState = 'IDLE';
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
 
-// ★ロード管理ロジック★
 window.addEventListener('load', () => {
-    // スクリプト群が読み込まれた後、画像のロードを待つ
     const sheetImg = new Image();
     sheetImg.src = 'img/plate01.png';
     sheetImg.onload = () => {
-        // 画像も読み込まれたらロード画面をフェードアウト
         const loader = document.getElementById('loading-screen');
         loader.style.opacity = '0';
-        setTimeout(() => {
-            loader.style.display = 'none';
-            init(sheetImg); // ゲームスタート！
-        }, 500);
+        setTimeout(() => { loader.style.display = 'none'; init(sheetImg); }, 500);
     };
 });
 
-// --- UI制御 ---
 window.setMsg = function(txt, color="#ffffff") { 
     const el = document.getElementById('msg-ui');
     if(!txt) { el.style.display = 'none'; } 
@@ -30,9 +23,10 @@ window.hideAllUI = function() {
     document.getElementById('detail-ui').style.display = 'none';
     document.getElementById('command-ui').style.display = 'none';
     document.getElementById('confirm-ui').style.display = 'none';
+    document.getElementById('target-ui').style.display = 'none';
 }
 window.showStatus = function(unit) {
-    window.setMsg(""); window.currentUnit = unit;
+    window.setMsg("");
     document.getElementById('status-ui').style.display = 'block';
     document.getElementById('st-name').innerText = `${unit.emoji} ${unit.id}`;
     document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
@@ -50,49 +44,105 @@ window.toggleDetail = function() {
 }
 window.showCommandMenu = function() {
     document.getElementById('command-ui').style.display = 'block';
-    document.getElementById('cmd-move').disabled = window.player.hasMoved;
-    document.getElementById('cmd-attack').disabled = window.player.hasAttacked;
+    // 移動済みの場合はボタンを非表示にする（TO仕様）
+    document.getElementById('cmd-move').style.display = window.player.hasMoved ? 'none' : 'block';
 }
 window.resetToIdle = function() {
     window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
-    window.setMsg("ユニットをタップ", "#ffffff");
-    if(window.player.hasMoved && window.player.hasAttacked) window.endPlayerTurn();
+    window.setMsg(""); // 待機中はメッセージも消す
 }
 
+// ★TO戦闘フロー完全再現：コマンド実行★
 window.execCommand = function(cmd) {
     document.getElementById('command-ui').style.display = 'none';
+    
     if(cmd === 'move') {
-        window.gameState = 'SELECTING_MOVE'; window.setMsg("移動先を選んでね", "#00ff00");
+        // 【移動】ウィンドウが消え、移動可能範囲が色で示される
+        window.gameState = 'SELECTING_MOVE'; 
         window.walkableTiles = window.getWalkableNodes(window.player);
         window.walkableTiles.forEach(node => { window.tilesMeshMap[`${node.x},${node.z}`].material[2].color.setHex(0x55ff55); });
+    
     } else if (cmd === 'attack') {
-        window.gameState = 'SELECTING_ATTACK'; window.setMsg("攻撃する敵を選んでね", "#ff5555");
-        window.attackableTiles = window.getAttackableEnemies(window.player);
-        if(window.attackableTiles.length === 0) {
-            window.setMsg("届く範囲に敵がいない！", "#aaaaaa"); setTimeout(() => { window.resetToIdle(); }, 1000); return;
+        // 【攻撃】対象がいない時はメッセージを出し、ターン消費せずメニューへ戻る
+        let targets = window.getAttackableEnemies(window.player);
+        if(targets.length === 0) {
+            window.setMsg("攻撃できる対象がいません！", "#aaaaaa");
+            setTimeout(() => { window.setMsg(""); window.showCommandMenu(); }, 1200);
+            return;
         }
-        window.attackableTiles.forEach(u => { window.tilesMeshMap[`${u.x},${u.z}`].material[2].color.setHex(0xff5555); });
+        // 対象がいる場合、選択ウィンドウを出す
+        window.gameState = 'SELECTING_ATTACK_TARGET';
+        const listDiv = document.getElementById('target-list');
+        listDiv.innerHTML = ''; // リスト初期化
+        targets.forEach(t => {
+            const btn = document.createElement('button');
+            btn.className = 'cmd-btn';
+            btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
+            btn.onclick = () => window.selectTarget(t);
+            listDiv.appendChild(btn);
+            window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); // 赤く光らせる
+        });
+        document.getElementById('target-ui').style.display = 'block';
+    
     } else if (cmd === 'wait') {
-        window.player.hasMoved = true; window.player.hasAttacked = true; window.endPlayerTurn();
+        // 【待機】「ターンを終了しますか」の確認ダイアログ
+        window.gameState = 'CONFIRMING'; window.confirmMode = 'WAIT';
+        document.getElementById('confirm-text').innerHTML = "ターンを終了しますか？";
+        document.getElementById('confirm-ui').style.display = 'block';
     }
+}
+
+// 攻撃目標をリストから選んだ時
+window.selectTarget = function(targetUnit) {
+    document.getElementById('target-ui').style.display = 'none';
+    window.gameState = 'CONFIRMING'; window.confirmMode = 'ATTACK'; window.pendingData = targetUnit;
+    document.getElementById('confirm-text').innerHTML = `${targetUnit.id} を攻撃しますか？`;
+    document.getElementById('confirm-ui').style.display = 'block';
+}
+
+window.cancelAttack = function() {
+    document.getElementById('target-ui').style.display = 'none';
+    window.clearHighlights();
+    window.showCommandMenu();
 }
 
 window.answerConfirm = function(isYes) {
     document.getElementById('confirm-ui').style.display = 'none';
+    
     if (isYes) {
         window.gameState = 'ANIMATING'; window.clearHighlights(); window.setMsg("");
-        if(window.confirmMode === 'MOVE') {
+        
+        if(window.confirmMode === 'WAIT') {
+            window.endPlayerTurn();
+        } 
+        else if(window.confirmMode === 'MOVE') {
             window.player.hasMoved = true;
-            window.executeMovement(window.player, window.pendingData, () => { window.resetToIdle(); window.showStatus(window.player); window.showCommandMenu(); });
-        } else if(window.confirmMode === 'ATTACK') {
+            // 移動後はコマンドメニューを開き直す（移動ボタンは消える）
+            window.executeMovement(window.player, window.pendingData, () => { 
+                window.resetToIdle(); window.showStatus(window.player); window.showCommandMenu(); 
+            });
+        } 
+        else if(window.confirmMode === 'ATTACK') {
             window.player.hasAttacked = true;
-            window.executeAttack(window.player, window.pendingData, () => { window.resetToIdle(); });
+            // 攻撃後はターン終了
+            window.executeAttack(window.player, window.pendingData, () => { window.endPlayerTurn(); });
         }
-    } else { window.resetToIdle(); }
-    window.pendingData = null; window.selectedTileKey = null;
+    } else {
+        // 「いいえ」を選んだ時の戻り先を厳密に管理
+        if(window.confirmMode === 'MOVE') {
+            window.gameState = 'SELECTING_MOVE';
+            window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0x55ff55); // 黄色から緑に戻す
+        } else if(window.confirmMode === 'ATTACK') {
+            window.gameState = 'SELECTING_ATTACK_TARGET';
+            document.getElementById('target-ui').style.display = 'block';
+        } else if(window.confirmMode === 'WAIT') {
+            window.showCommandMenu();
+        }
+    }
+    if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
-// --- アニメーションとターン処理 ---
+// --- アニメーション ---
 window.executeMovement = function(unit, path, onComplete) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const tl = gsap.timeline({ onComplete });
@@ -138,7 +188,9 @@ window.endPlayerTurn = function() {
         });
         if(bestRoute && bestRoute.path.length > 0) {
             window.executeMovement(window.enemy, bestRoute.path, () => {
-                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { window.executeAttack(window.enemy, window.player, () => { window.resetToIdle(); }); } else { window.resetToIdle(); }
+                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { 
+                    window.executeAttack(window.enemy, window.player, () => { window.resetToIdle(); }); 
+                } else { window.resetToIdle(); }
             });
         } else { window.resetToIdle(); }
     }, 1000);
@@ -147,8 +199,7 @@ window.endPlayerTurn = function() {
 // --- 初期化 ---
 function init(sheetImg) {
     const container = document.getElementById('canvas-container');
-    scene = new THREE.Scene(); 
-    window.generateMapData();
+    scene = new THREE.Scene(); window.generateMapData();
 
     const w = container.clientWidth; const h = container.clientHeight;
     camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000);
@@ -202,7 +253,6 @@ function init(sheetImg) {
 }
 
 window.clearHighlights = function() { window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff)); }
-
 const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 
 function onPointerClick(event) {
@@ -223,25 +273,17 @@ function onPointerClick(event) {
         else if (window.gameState === 'SELECTING_MOVE') {
             const route = window.walkableTiles.find(n => n.x === target.x && n.z === target.z);
             if (route) {
+                // タップするとその一コマだけ光る（他の緑は消す）
+                window.clearHighlights();
                 window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${target.x},${target.z}`;
                 window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0xffff00);
                 document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
             } else { window.resetToIdle(); } 
         } 
-        else if (window.gameState === 'SELECTING_ATTACK') {
-            const enemyUnit = window.attackableTiles.find(u => u.x === target.x && u.z === target.z);
-            if(enemyUnit) {
-                window.gameState = 'CONFIRMING'; window.confirmMode = 'ATTACK'; window.pendingData = enemyUnit; window.selectedTileKey = `${target.x},${target.z}`;
-                window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0xffff00);
-                document.getElementById('confirm-text').innerHTML = "攻撃しますか？";
-                document.getElementById('confirm-ui').style.display = 'block';
-            } else { window.resetToIdle(); }
-        }
     }
 }
 
-// カメラ操作
 window.updateUnitPosInstantly = function(u) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     u.sprite.position.set((u.x * window.TILE_SIZE) - offsetX, (u.h * window.H_STEP) + (window.TILE_SIZE * 0.5), (u.z * window.TILE_SIZE) - offsetZ);
