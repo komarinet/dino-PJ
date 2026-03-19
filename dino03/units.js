@@ -1,4 +1,5 @@
-class Unit {
+// クラス定義
+window.Unit = class {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer) {
         this.id = id; this.emoji = emoji;
         this.x = x; this.z = z; this.h = 0;
@@ -10,24 +11,22 @@ class Unit {
         this.sprite = null;
         this.hasMoved = false; this.hasAttacked = false;
     }
-}
+};
 
-// ★キャラクターの登録★
-const player = new Unit("ティラノ", "🦖", 10, 25, 30, 10, 15, 10, 5, 8, 4, 2, true);
-const enemy  = new Unit("トリケラ", "🦕", 10, 21, 20, 5, 12, 12, 4, 2, 4, 2, false);
-// 新しい敵を作る時は、ここに const enemy2 = new Unit(...) を書いて追加するだけ！
+// ユニット生成とグローバル登録
+window.player = new window.Unit("ティラノ", "🦖", 10, 25, 30, 10, 15, 10, 5, 8, 4, 2, true);
+window.enemy  = new window.Unit("トリケラ", "🦕", 10, 21, 20, 5, 12, 12, 4, 2, 4, 2, false);
+window.units = [window.player, window.enemy];
 
-const units = [player, enemy];
+window.getUnitAt = function(x, z) {
+    return window.units.find(u => u.x === x && u.z === z && u.hp > 0);
+};
 
-function getUnitAt(x, z) {
-    return units.find(u => u.x === x && u.z === z && u.hp > 0);
-}
-
-function getAttackableEnemies(unit) {
+window.getAttackableEnemies = function(unit) {
     let targets = [];
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
-        let u = getUnitAt(unit.x + d[0], unit.z + d[1]);
+        let u = window.getUnitAt(unit.x + d[0], unit.z + d[1]);
         if(u && u.isPlayer !== unit.isPlayer) targets.push(u);
     }
     return targets;
-}
+};
