@@ -3,9 +3,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス</title>
+    <title>ちびっこティラノ：タクティクス (v7.0.0 TO Combat Flow)</title>
     <link rel="stylesheet" href="style.css">
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
@@ -16,7 +15,7 @@
     <div class="loader-text">Now Loading...</div>
 </div>
 
-<div id="version-display">v6.1.0 (Module & Loader)</div>
+<div id="version-display">v7.0.0 (TO Combat Engine)</div>
 <div id="canvas-container"></div>
 
 <div id="msg-ui" class="rpg-window"></div>
@@ -27,7 +26,7 @@
     <div class="bar-bg"><div id="st-hp-bar" class="hp-bar" style="width:100%"></div></div>
     <div style="font-size:0.9rem;">MP: <span id="st-mp">10/10</span></div>
     <div class="bar-bg"><div id="st-mp-bar" class="mp-bar" style="width:100%"></div></div>
-    <button class="btn-detail" onclick="toggleDetail()">詳細を見る ▼</button>
+    <button class="btn-detail" onclick="window.toggleDetail()">詳細を見る ▼</button>
 </div>
 
 <div id="detail-ui" class="rpg-window">
@@ -39,31 +38,37 @@
 </div>
 
 <div id="command-ui" class="rpg-window">
-    <button id="cmd-move" class="cmd-btn" onclick="execCommand('move')">🚶 移動</button>
-    <button id="cmd-attack" class="cmd-btn" onclick="execCommand('attack')">⚔️ 攻撃</button>
-    <button id="cmd-wait" class="cmd-btn" onclick="execCommand('wait')">⏳ 待機</button>
+    <button id="cmd-move" class="cmd-btn" onclick="window.execCommand('move')">🚶 移動</button>
+    <button id="cmd-attack" class="cmd-btn" onclick="window.execCommand('attack')">⚔️ 攻撃</button>
+    <button id="cmd-wait" class="cmd-btn" onclick="window.execCommand('wait')">⏳ 待機</button>
+</div>
+
+<div id="target-ui" class="rpg-window">
+    <div class="unit-name">誰を攻撃する？</div>
+    <div id="target-list"></div>
+    <button class="cmd-btn btn-cancel" onclick="window.cancelAttack()">❌ キャンセル</button>
 </div>
 
 <div id="confirm-ui" class="rpg-window">
     <p id="confirm-text">行動しますか？</p>
     <div class="confirm-btns">
-        <button class="btn-yes" onclick="answerConfirm(true)">はい</button>
-        <button class="btn-no" onclick="answerConfirm(false)">いいえ</button>
+        <button class="btn-yes" onclick="window.answerConfirm(true)">はい</button>
+        <button class="btn-no" onclick="window.answerConfirm(false)">いいえ</button>
     </div>
 </div>
 
 <div id="camera-ui" class="rpg-window collapsed">
     <div id="ui-header" onclick="document.getElementById('camera-ui').classList.toggle('collapsed');">📷 カメラ操作</div>
     <div class="ui-grid">
-        <button class="ui-btn" onclick="rotateCam(-90)">◀ 回す</button>
-        <button class="ui-btn" onclick="panCamera(0, -1)">上</button>
-        <button class="ui-btn" onclick="rotateCam(90)">回す ▶</button>
-        <button class="ui-btn" onclick="panCamera(-1, 0)">左</button>
-        <button class="ui-btn" onclick="centerCamera()">中心</button>
-        <button class="ui-btn" onclick="panCamera(1, 0)">右</button>
-        <button class="ui-btn" onclick="zoomCamera(-50)">＋ 寄る</button>
-        <button class="ui-btn" onclick="panCamera(0, 1)">下</button>
-        <button class="ui-btn" onclick="zoomCamera(50)">－ 引く</button>
+        <button class="ui-btn" onclick="window.rotateCam(-90)">◀ 回す</button>
+        <button class="ui-btn" onclick="window.panCamera(0, -1)">上</button>
+        <button class="ui-btn" onclick="window.rotateCam(90)">回す ▶</button>
+        <button class="ui-btn" onclick="window.panCamera(-1, 0)">左</button>
+        <button class="ui-btn" onclick="window.centerCamera()">中心</button>
+        <button class="ui-btn" onclick="window.panCamera(1, 0)">右</button>
+        <button class="ui-btn" onclick="window.zoomCamera(-50)">＋ 寄る</button>
+        <button class="ui-btn" onclick="window.panCamera(0, 1)">下</button>
+        <button class="ui-btn" onclick="window.zoomCamera(50)">－ 引く</button>
     </div>
 </div>
 
