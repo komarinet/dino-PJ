@@ -6,7 +6,7 @@ window.raycastTargets = [];
 
 window.addEventListener('load', () => {
     const sheetImg = new Image();
-    sheetImg.src = 'img/plate01.png';
+    sheetImg.src = 'img/plate01.png'; // スマホのキャッシュクリアを徹底してください
     sheetImg.onload = () => {
         const loader = document.getElementById('loading-screen');
         loader.style.opacity = '0';
@@ -143,32 +143,28 @@ window.answerConfirm = function(isYes) {
     if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
-// ★新規追加：ポップアップテキスト（ダメージ・回復）表示機能★
 window.showFloatingText = function(unit, text, type) {
-    // 3D空間のキャラの頭上座標を計算
     const vector = unit.sprite.position.clone();
-    vector.y += 60; // 少し上に浮かせる
-    vector.project(camera); // 2Dスクリーン座標に変換
+    vector.y += 60; 
+    vector.project(camera); 
 
     const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
     const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
 
-    // HTML要素を作成して配置
     const el = document.createElement('div');
     el.className = 'floating-text';
     el.innerText = text;
-    el.style.color = (type === 'heal') ? '#00ffff' : '#ffffff'; // 青か白
+    el.style.color = (type === 'heal') ? '#00ffff' : '#ffffff'; 
     el.style.left = `${x}px`;
     el.style.top = `${y}px`;
     document.body.appendChild(el);
 
-    // GSAPで上にフワッと消えるアニメーション
     gsap.to(el, {
         y: y - 80,
         opacity: 0,
         duration: 1.0,
         ease: "power2.out",
-        onComplete: () => { el.remove(); } // アニメが終わったら消す
+        onComplete: () => { el.remove(); } 
     });
 }
 
@@ -197,7 +193,6 @@ window.executeAttack = function(attacker, defender, onComplete) {
 
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
-        // ★ダメージポップアップを表示★
         window.showFloatingText(defender, damage, 'damage');
         
         if(defender.hp <= 0) {
@@ -206,10 +201,9 @@ window.executeAttack = function(attacker, defender, onComplete) {
         } else { onComplete(); }
     }});
     
-    // ★攻撃モーションを大幅強化：後ろにタメてから突進★
-    tl.to(attacker.sprite.position, { x: origX - dx*0.2, z: origZ - dz*0.2, duration: 0.15, ease: "power1.out" }); // タメ
-    tl.to(attacker.sprite.position, { x: origX + dx*0.6, z: origZ + dz*0.6, duration: 0.1, ease: "power2.in" });  // 突進
-    tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" }); // 元に戻る
+    tl.to(attacker.sprite.position, { x: origX - dx*0.2, z: origZ - dz*0.2, duration: 0.15, ease: "power1.out" }); 
+    tl.to(attacker.sprite.position, { x: origX + dx*0.6, z: origZ + dz*0.6, duration: 0.1, ease: "power2.in" });  
+    tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" }); 
 }
 
 window.endPlayerTurn = function() {
