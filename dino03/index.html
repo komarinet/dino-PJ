@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v7.3.0)</title>
+    <title>ちびっこティラノ：タクティクス (v7.5.0)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -15,50 +15,59 @@
     <div class="loader-text">Now Loading...</div>
 </div>
 
-<div id="version-display">v7.3.0 (Moat & Water Textures)</div>
+<div id="version-display">v7.5.0 (Event & Rubied Command)</div>
 <div id="canvas-container"></div>
 
 <div id="msg-ui" class="rpg-window"></div>
 
+<div id="event-ui" class="rpg-window collapsed">
+    <div class="event-body">
+        <div id="ev-face" class="face-gra">🦖</div> <div class="ev-text-area">
+            <p id="ev-text"></p>
+        </div>
+    </div>
+    <button id="ev-next" class="cmd-btn" style="text-align:right; border:none; padding:10px;">（続く ▲）</button>
+</div>
+
 <div id="status-ui" class="rpg-window">
     <div id="st-name" class="unit-name">🦖 ティラノ</div>
-    <div style="font-size:0.9rem;">HP: <span id="st-hp">30/30</span></div>
+    <div style="font-size:0.9rem;"><ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id="st-hp">30/30</span></div>
     <div class="bar-bg"><div id="st-hp-bar" class="hp-bar" style="width:100%"></div></div>
-    <div style="font-size:0.9rem;">MP: <span id="st-mp">10/10</span></div>
+    <div style="font-size:0.9rem;"><ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp">10/10</span></div>
     <div class="bar-bg"><div id="st-mp-bar" class="mp-bar" style="width:100%"></div></div>
-    <button class="btn-detail" onclick="window.toggleDetail()">詳細を見る ▼</button>
+    <button class="btn-detail" onclick="window.toggleDetail()"><ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼</button>
 </div>
 
 <div id="detail-ui" class="rpg-window">
-    <div class="unit-name">パラメータ</div>
-    <div class="stat-row"><span>💪 力</span><span id="dt-str">15</span></div>
-    <div class="stat-row"><span>🛡️ 防御</span><span id="dt-def">10</span></div>
-    <div class="stat-row"><span>👟 速度</span><span id="dt-spd">5</span></div>
-    <div class="stat-row"><span>✨ 恐竜力</span><span id="dt-mag">8</span></div>
+    <div class="unit-name">能力値</div>
+    <div class="stat-row"><span>💪 <ruby>力<rt>ちから</rt></ruby></span><span id="dt-str">15</span></div>
+    <div class="stat-row"><span>🛡️ <ruby>防御<rt>ぼうぎょ</rt></ruby></span><span id="dt-def">10</span></div>
+    <div class="stat-row"><span>👟 <ruby>速度<rt>そくど</rt></ruby></span><span id="dt-spd">5</span></div>
+    <div class="stat-row"><span>✨ <ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby></span><span id="dt-mag">8</span></div>
 </div>
 
 <div id="command-ui" class="rpg-window">
-    <button id="cmd-move" class="cmd-btn" onclick="window.execCommand('move')">🚶 移動</button>
-    <button id="cmd-attack" class="cmd-btn" onclick="window.execCommand('attack')">⚔️ 攻撃</button>
-    <button id="cmd-wait" class="cmd-btn" onclick="window.execCommand('wait')">⏳ 待機</button>
+    <button id="cmd-move" class="cmd-btn" onclick="window.execCommand('move')">🚶 <ruby>移動<rt>いどう</rt></ruby></button>
+    <button id="cmd-attack" class="cmd-btn" onclick="window.execCommand('attack')">⚔️ <ruby>攻撃<rt>こうげき</rt></ruby></button>
+    <button id="cmd-wait" class="cmd-btn" onclick="window.execCommand('wait')">⏳ <ruby>待機<rt>たいき</rt></ruby></button>
 </div>
 
 <div id="target-ui" class="rpg-window">
-    <div class="unit-name">誰を攻撃する？</div>
+    <div class="unit-name">誰を<ruby>攻撃<rt>こうげき</rt></ruby>する？</div>
     <div id="target-list"></div>
     <button class="cmd-btn btn-cancel" onclick="window.cancelAttack()">❌ キャンセル</button>
 </div>
 
 <div id="confirm-ui" class="rpg-window">
-    <p id="confirm-text">行動しますか？</p>
+    <p id="confirm-text"><ruby>行動<rt>こうどう</rt></ruby>しますか？</p>
     <div class="confirm-btns">
-        <button class="btn-yes" onclick="window.answerConfirm(true)">はい</button>
+        <button class="btn-yes">はい</button>
         <button class="btn-no" onclick="window.answerConfirm(false)">いいえ</button>
     </div>
 </div>
 
 <div id="camera-ui" class="rpg-window collapsed">
-    <div id="ui-header" onclick="document.getElementById('camera-ui').classList.toggle('collapsed');">📷 カメラ操作</div>
+    <div id="ui-header" onclick="document.getElementById('camera-ui').classList.toggle('collapsed');">📷 カメラ<ruby>操作<rt>そうさ</rt></ruby> (開閉)</div>
     <div class="ui-grid">
         <button class="ui-btn" onclick="window.rotateCam(-90)">◀ 回す</button>
         <button class="ui-btn" onclick="window.panCamera(0, -1)">上</button>
