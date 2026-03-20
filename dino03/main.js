@@ -1,18 +1,8 @@
 let scene, camera, renderer, controls;
-// ゲーム状態に「TALKING」を追加
-window.gameState = 'TALKING'; 
+window.gameState = 'INIT'; 
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
-window.raycastTargets = []; 
-
-// ★新規：会話データ (ルビ付き、先生指定の内容)★
-window.eventTalkData = [
-    { unit: window.player, text: "<ruby>お前<rt>おまえ</rt></ruby>が、お<ruby>母<rt>かあ</rt></ruby>さんをさらったのかッ！" },
-    { unit: window.enemy,  text: "グォォォォォォ！" },
-    { unit: window.player, text: "お<ruby>母<rt>かあ</rt></ruby>さんを、<ruby>返<rt>かえ</rt></ruby>せぇッ！" },
-    { unit: window.enemy,  text: "……グォァァァ！ (<ruby>戦<rt>たたか</rt></ruby>いの<ruby>始<rt>はじ</rt></ruby>まりだ！)" }
-];
-window.talkIndex = 0; // 現在何行目の会話か
+window.raycastTargets = []; window.talkIndex = 0;
 
 window.addEventListener('load', () => {
     const sheetImg = new Image();
@@ -31,12 +21,8 @@ window.setMsg = function(txt, color="#ffffff") {
 }
 
 window.hideAllUI = function() {
-    document.getElementById('status-ui').style.display = 'none';
-    document.getElementById('detail-ui').style.display = 'none';
-    document.getElementById('command-ui').style.display = 'none';
-    document.getElementById('confirm-ui').style.display = 'none';
-    document.getElementById('target-ui').style.display = 'none';
-    document.getElementById('event-ui').style.display = 'none'; // 会話UIも隠す
+    const ids = ['status-ui', 'detail-ui', 'command-ui', 'confirm-ui', 'target-ui', 'event-ui'];
+    ids.forEach(id => document.getElementById(id).style.display = 'none');
 }
 
 window.showStatus = function(unit) {
@@ -63,56 +49,59 @@ window.showCommandMenu = function() {
     document.getElementById('cmd-move').style.display = window.player.hasMoved ? 'none' : 'block';
 }
 
-window.startPlayerTurn = function() {
-    window.gameState = 'IDLE'; 
-    window.clearHighlights(); 
+// ★演出：ステージタイトル表示★
+function playStageTitle(callback) {
+    const titleUi = document.getElementById('stage-title-ui');
+    document.getElementById('chapter-name').innerText = window.Scenario.stageInfo.chapter;
+    document.getElementById('stage-name').innerHTML = window.Scenario.stageInfo.name;
+    
+    gsap.to(titleUi, { opacity: 1, y: -20, duration: 1.5, onComplete: () => {
+        gsap.to(titleUi, { opacity: 0, delay: 2.0, duration: 1.0, onComplete: callback });
+    }});
+}
+
+// ★演出：会話イベント処理★
+window.startEvent = function(talkData, callback) {
+    window.gameState = 'TALKING';
     window.hideAllUI();
-    // ここで初めて「あなたのターン」のメッセージとルビを表示
-    window.setMsg("あなたの<ruby>ターン<rt>順番</rt></ruby>！<br><ruby>ユニット<rt>仲間</rt></ruby>をタップしてね", "#00ff00");
+    document.getElementById('event-ui').style.display = 'flex';
+    window.talkIndex = 0;
+    window.onTalkClick = () => {
+        window.talkIndex++;
+        if (window.talkIndex < talkData.length) {
+            renderTalk(talkData[window.talkIndex]);
+        } else {
+            document.getElementById('event-ui').style.display = 'none';
+            callback();
+        }
+    };
+    renderTalk(talkData[0]);
+};
+
+function renderTalk(data) {
+    const leftP = document.getElementById('ev-portrait-left');
+    const rightP = document.getElementById('ev-portrait-right');
+    const nameP = document.getElementById('ev-name-plate');
+    const textP = document.getElementById('ev-text');
+    
+    leftP.innerHTML = data.side === 'left' ? data.face : '';
+    rightP.innerHTML = data.side === 'right' ? data.face : '';
+    nameP.innerText = data.name;
+    textP.innerHTML = data.text;
+    
+    // 話者に合わせてカメラを少し寄せる
+    const unit = data.name === "ティラノ" ? window.player : window.enemy;
+    gsap.to(controls.target, { x: unit.sprite.position.x, z: unit.sprite.position.z, duration: 0.5 });
+}
+
+window.startPlayerTurn = function() {
+    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
+    window.setMsg("あなたの<ruby>番<rt>ばん</rt></ruby>です！<br><ruby>仲間<rt>なかま</rt></ruby>をタップしてね", "#00ff00");
 }
 
 window.resetToIdle = function() {
-    window.gameState = 'IDLE'; 
-    window.clearHighlights(); 
-    window.hideAllUI();
+    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
     window.setMsg(""); 
-}
-
-// ★新規：会話イベントモードを開始★
-window.startEventMode = function() {
-    window.gameState = 'TALKING';
-    window.clearHighlights();
-    window.hideAllUI();
-    window.setMsg(""); 
-    document.getElementById('event-ui').style.display = 'block';
-    window.talkIndex = 0;
-    window.processEventTalk();
-}
-
-// ★新規：会話データをUIに反映★
-window.processEventTalk = function() {
-    if (window.talkIndex < window.eventTalkData.length) {
-        const data = window.eventTalkData[window.talkIndex];
-        document.getElementById('ev-face').innerText = data.unit.emoji;
-        document.getElementById('ev-text').innerHTML = data.unit.isPlayer ? data.text : `<span style='color:#ff5555'>${data.text}</span>`; // 敵の台詞は赤
-        
-        // TO風：話しているユニットにカメラを寄せる
-        if (data.unit === window.enemy) {
-             window.zoomCamera(-100); // 寄る
-        } else {
-             window.zoomCamera(100); // 戻す
-        }
-    } else {
-        // 会話終了、バトルスタート！
-        document.getElementById('event-ui').style.display = 'none';
-        window.startPlayerTurn();
-    }
-}
-
-// ★新規：次の台詞へ進む★
-window.nextEventTalk = function() {
-    window.talkIndex++;
-    window.processEventTalk();
 }
 
 window.execCommand = function(cmd) {
@@ -124,7 +113,7 @@ window.execCommand = function(cmd) {
     } else if (cmd === 'attack') {
         let targets = window.getAttackableEnemies(window.player);
         if(targets.length === 0) {
-            window.setMsg("<ruby>攻撃<rt>こうげき</rt></ruby>できる<ruby>対象<rt>あいて</rt></ruby>がいません！", "#aaaaaa");
+            window.setMsg("<ruby>攻撃<rt>こうげき</rt></ruby>できる<ruby>相手<rt>あいて</rt></ruby>がいません！", "#aaaaaa");
             setTimeout(() => { window.setMsg(""); window.showCommandMenu(); }, 1200);
             return;
         }
@@ -133,8 +122,7 @@ window.execCommand = function(cmd) {
         listDiv.innerHTML = ''; 
         targets.forEach(t => {
             const btn = document.createElement('button');
-            btn.className = 'cmd-btn';
-            btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
+            btn.className = 'cmd-btn'; btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
             btn.onclick = () => window.selectTarget(t);
             listDiv.appendChild(btn);
             window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); 
@@ -142,7 +130,8 @@ window.execCommand = function(cmd) {
         document.getElementById('target-ui').style.display = 'block';
     } else if (cmd === 'wait') {
         window.gameState = 'CONFIRMING'; window.confirmMode = 'WAIT';
-        document.getElementById('confirm-text').innerHTML = "<ruby>ターン<rt>順番</rt></ruby>を<ruby>終了<rt>しゅうりょう</rt></ruby>しますか？";
+        document.getElementById('confirm-text').innerHTML = "<ruby>行動<rt>こうどう</rt></ruby>を<ruby>終<rt>お</rt></ruby>了しますか？";
+        document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
         document.getElementById('confirm-ui').style.display = 'block';
     }
 }
@@ -151,13 +140,13 @@ window.selectTarget = function(targetUnit) {
     document.getElementById('target-ui').style.display = 'none';
     window.gameState = 'CONFIRMING'; window.confirmMode = 'ATTACK'; window.pendingData = targetUnit;
     document.getElementById('confirm-text').innerHTML = `${targetUnit.id} を<ruby>攻撃<rt>こうげき</rt></ruby>しますか？`;
+    document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
     document.getElementById('confirm-ui').style.display = 'block';
 }
 
 window.cancelAttack = function() {
     document.getElementById('target-ui').style.display = 'none';
-    window.clearHighlights();
-    window.showCommandMenu();
+    window.clearHighlights(); window.showCommandMenu();
 }
 
 window.answerConfirm = function(isYes) {
@@ -173,8 +162,9 @@ window.answerConfirm = function(isYes) {
             });
         } else if(window.confirmMode === 'ATTACK') {
             window.player.hasAttacked = true;
-            // 攻撃実行後、反撃判定を含めてターン終了へ
-            window.executeAttack(window.player, window.pendingData, true, () => { window.endPlayerTurn(); });
+            window.executeAttack(window.player, window.pendingData, true, () => { 
+                if(window.enemy.hp <= 0) { checkVictory(); } else { window.endPlayerTurn(); }
+            });
         }
     } else {
         if(window.confirmMode === 'MOVE') {
@@ -191,7 +181,29 @@ window.answerConfirm = function(isYes) {
     if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
-// ★ポップアップ低速化: durationを1.5sに延ばす★
+// ★勝利判定と後半イベントへの移行★
+function checkVictory() {
+    if(window.enemy.hp <= 0) {
+        // 敵は倒されたが会話のために一度復活（半透明にするなどの演出も可）
+        window.enemy.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
+        window.startEvent(window.Scenario.postBattleTalk, () => {
+            // ★ティラノ退場演出★
+            const path = [{x: 12, z: 16, h: 2}, {x: 12, z: 18, h: 1}, {x: 12, z: 22, h: 0}];
+            window.executeMovement(window.player, path, () => {
+                gsap.to(window.player.sprite.scale, { x: 0, y: 0, duration: 0.5 });
+                showBigClear();
+            });
+        });
+    }
+}
+
+function showBigClear() {
+    const titleUi = document.getElementById('stage-title-ui');
+    document.getElementById('chapter-name').innerText = "STAGE COMPLETE";
+    document.getElementById('stage-name').innerText = "STAGE CLEAR!";
+    gsap.to(titleUi, { opacity: 1, y: -20, duration: 1.0 });
+}
+
 window.showFloatingText = function(unit, text, type) {
     const vector = unit.sprite.position.clone();
     vector.y += 60; vector.project(camera); 
@@ -202,45 +214,28 @@ window.showFloatingText = function(unit, text, type) {
     el.style.color = (type === 'heal') ? '#00ffff' : '#ffffff'; 
     el.style.left = `${x}px`; el.style.top = `${y}px`;
     document.body.appendChild(el);
-
-    gsap.to(el, {
-        y: y - 100, opacity: 0, 
-        duration: 1.5, // 1.0 -> 1.5s へ変更
-        ease: "power2.out", 
-        onComplete: () => { el.remove(); } 
-    });
+    gsap.to(el, { y: y - 100, opacity: 0, duration: 1.5, ease: "power2.out", onComplete: () => { el.remove(); } });
 }
 
-// ★攻撃＆反撃ロジック★
 window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
     const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
     const damage = Math.max(1, attacker.str - defender.def);
-    
     const origX = attacker.sprite.position.x; const origZ = attacker.sprite.position.z;
 
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
         window.showFloatingText(defender, damage, 'damage');
-        
         if(defender.hp <= 0) {
-            window.setMsg(`${defender.id}を<ruby>倒<rt>たお</rt></ruby>した！`, "#ffcc00");
             gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
         } else {
-            // ★反撃判定：防御側が生存しており、攻撃側が隣接していれば反撃★
             const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
             if(allowCounter && dist === 1) {
-                setTimeout(() => {
-                    window.setMsg("COUNTER! (<ruby>反撃<rt>はんげき</rt></ruby>ッ！)", "#ff0000");
-                    window.executeAttack(defender, attacker, false, onComplete); // 反撃は連鎖させない
-                }, 800);
-            } else {
-                onComplete();
-            }
+                setTimeout(() => { window.setMsg("COUNTER!", "#ff0000"); window.executeAttack(defender, attacker, false, onComplete); }, 800);
+            } else { onComplete(); }
         }
     }});
-    
     tl.to(attacker.sprite.position, { x: origX - dx*0.2, z: origZ - dz*0.2, duration: 0.15, ease: "power1.out" }); 
     tl.to(attacker.sprite.position, { x: origX + dx*0.6, z: origZ + dz*0.6, duration: 0.1, ease: "power2.in" });  
     tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" }); 
@@ -252,7 +247,7 @@ window.executeMovement = function(unit, path, onComplete) {
     path.forEach(step => {
         const tX = (step.x * window.TILE_SIZE) - offsetX; const tZ = (step.z * window.TILE_SIZE) - offsetZ;
         const tY = (step.h * window.H_STEP) + (window.TILE_SIZE * 0.5);
-        tl.to(unit.sprite.position, { x: tX, z: tZ, duration: 0.25, ease: "power1.inOut" }, "+=0");
+        tl.to(unit.sprite.position, { x: tX, z: tZ, duration: 0.25, ease: "power1.inOut" });
         tl.to(unit.sprite.position, { y: Math.max(unit.sprite.position.y, tY) + 30, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
         tl.set(unit.sprite.position, { y: tY });
     });
@@ -262,21 +257,15 @@ window.executeMovement = function(unit, path, onComplete) {
 
 window.endPlayerTurn = function() {
     window.player.hasMoved = false; window.player.hasAttacked = false; window.hideAllUI();
-    if(window.enemy.hp <= 0) { window.setMsg("STAGE CLEAR!", "#ffff00"); return; }
-
-    window.gameState = 'ENEMY_TURN'; window.setMsg("<ruby>敵<rt>てき</rt></ruby>の<ruby>ターン<rt>順番</rt></ruby>...", "#ff5555");
+    if(window.enemy.hp <= 0) return;
+    window.gameState = 'ENEMY_TURN'; window.setMsg("<ruby>敵<rt>てき</rt></ruby>の<ruby>番<rt>ばん</rt></ruby>です...", "#ff5555");
     setTimeout(() => {
         let routes = window.getWalkableNodes(window.enemy);
         let bestRoute = null; let minD = 999;
-        routes.forEach(r => {
-            let d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z);
-            if(d < minD) { minD = d; bestRoute = r; }
-        });
+        routes.forEach(r => { let d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z); if(d < minD) { minD = d; bestRoute = r; } });
         if(bestRoute && bestRoute.path.length > 0) {
             window.executeMovement(window.enemy, bestRoute.path, () => {
-                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { 
-                    window.executeAttack(window.enemy, window.player, true, () => { window.startPlayerTurn(); }); // 敵の攻撃にも反撃あり
-                } else { window.startPlayerTurn(); }
+                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { window.executeAttack(window.enemy, window.player, true, () => { window.startPlayerTurn(); }); } else { window.startPlayerTurn(); }
             });
         } else { window.startPlayerTurn(); }
     }, 1000);
@@ -295,8 +284,7 @@ function init(sheetImg) {
     window.buildMapMeshes(scene, sheetImg);
     const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(window.TILE_SIZE, window.H_STEP, window.TILE_SIZE));
     const mat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-    window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false;
-    scene.add(window.selectorMesh);
+    window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
     window.raycastTargets = [...window.interactableTiles]; 
     window.units.forEach(u => {
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
@@ -307,31 +295,16 @@ function init(sheetImg) {
         scene.add(u.sprite); window.updateUnitPosInstantly(u);
     });
     controls = new THREE.OrbitControls(camera, renderer.domElement);
-    controls.enableRotate = true; controls.enableZoom = true; controls.enablePan = true;
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
-    controls.addEventListener('end', () => {
-        if (window.gameState === 'MOVING' || window.gameState === 'ANIMATING') return;
-        const az = controls.getAzimuthalAngle(); const snap = Math.PI / 2; const offset = Math.PI / 4;
-        const snappedAz = Math.round((az - offset) / snap) * snap + offset;
-        const polar = Math.PI / 3; const r = controls.getDistance();
-        gsap.to(camera.position, {
-            x: controls.target.x + r * Math.sin(snappedAz) * Math.sin(polar),
-            y: controls.target.y + r * Math.cos(polar),
-            z: controls.target.z + r * Math.cos(snappedAz) * Math.sin(polar),
-            duration: 0.3, ease: "power2.out", onUpdate: () => controls.update()
+    window.centerCameraInstantly(window.player); 
+    renderer.domElement.addEventListener('pointerup', onPointerClick);
+    
+    // ★演出フロー開始★
+    playStageTitle(() => {
+        window.startEvent(window.Scenario.preBattleTalk, () => {
+            window.startPlayerTurn();
         });
     });
-    window.centerCameraInstantly(window.player); 
-    let ptrDownPos = {x:0, y:0};
-    renderer.domElement.addEventListener('pointerdown', e => { ptrDownPos = { x: e.clientX, y: e.clientY }; });
-    renderer.domElement.addEventListener('pointerup', e => {
-        const dist = Math.hypot(e.clientX - ptrDownPos.x, e.clientY - ptrDownPos.y);
-        if(dist < 5) onPointerClick(e);
-    });
-    
-    // ★バトル開始前の会話イベントを開始★
-    window.startEventMode();
-    
     animate();
 }
 
@@ -346,36 +319,28 @@ window.clearHighlights = function() {
     });
 }
 
-const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
-    
-    // ★会話モード中は会話を進める★
-    if (window.gameState === 'TALKING') {
-        window.nextEventTalk();
-        return;
-    }
+    if (window.gameState === 'TALKING') { window.onTalkClick(); return; }
 
-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
-    raycaster.setFromCamera(mouse, camera);
+    const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
+    const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(window.raycastTargets);
+    
     if (intersects.length > 0) {
-        let targetData = intersects[0].object.userData;
-        if(targetData.isUnit) targetData = { x: targetData.unit.x, z: targetData.unit.z, h: targetData.unit.h };
+        let data = intersects[0].object.userData;
+        if(data.isUnit) data = { x: data.unit.x, z: data.unit.z, h: data.unit.h };
         if(window.gameState === 'IDLE') {
-            const u = window.getUnitAt(targetData.x, targetData.z);
-            if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } 
-            else { window.resetToIdle(); }
+            const u = window.getUnitAt(data.x, data.z);
+            if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } else { window.resetToIdle(); }
         } 
         else if (window.gameState === 'SELECTING_MOVE') {
-            const route = window.walkableTiles.find(n => n.x === targetData.x && n.z === targetData.z);
+            const route = window.walkableTiles.find(n => n.x === data.x && n.z === data.z);
             if (route) {
-                window.clearHighlights(); window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${targetData.x},${targetData.z}`;
+                window.clearHighlights(); window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${data.x},${data.z}`;
                 const tile = window.tilesMeshMap[window.selectedTileKey];
-                tile.material[2].color.setHex(0xffff00);
-                window.selectorMesh.position.copy(tile.position); window.selectorMesh.visible = true;
+                tile.material[2].color.setHex(0xffff00); window.selectorMesh.position.copy(tile.position); window.selectorMesh.visible = true;
                 document.getElementById('confirm-text').innerHTML = "ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？";
-                // 確認ダイアログのルビ化に対応
                 document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
                 document.getElementById('confirm-ui').style.display = 'block';
             } else { window.resetToIdle(); } 
@@ -393,22 +358,20 @@ window.centerCameraInstantly = function(u) {
     camera.position.set(u.sprite.position.x + Math.sin(rad)*r, u.sprite.position.y + 600, u.sprite.position.z + Math.cos(rad)*r);
     camera.lookAt(controls.target);
 }
-window.centerCamera = function() { gsap.to(controls.target, { x: window.player.sprite.position.x, z: window.player.sprite.position.z, duration: 0.8, ease: "power2.inOut" }); }
+window.centerCamera = function() { gsap.to(controls.target, { x: window.player.sprite.position.x, z: window.player.sprite.position.z, duration: 0.8 }); }
 window.rotateCam = function(deg) {
-    if (window.gameState === 'ANIMATING') return;
     const r = controls.getDistance(); const polar = controls.getPolarAngle(); const startAz = controls.getAzimuthalAngle();
     const targetAz = startAz + (Number(deg) * Math.PI / 180);
     const proxy = { angle: startAz };
-    gsap.to(proxy, { angle: targetAz, duration: 0.4, ease: "power2.out", onUpdate: () => {
+    gsap.to(proxy, { angle: targetAz, duration: 0.4, onUpdate: () => {
         camera.position.x = controls.target.x + r * Math.sin(proxy.angle) * Math.sin(polar);
         camera.position.z = controls.target.z + r * Math.cos(proxy.angle) * Math.sin(polar);
         camera.lookAt(controls.target); controls.update();
     }});
 }
 window.panCamera = function(dx, dy) {
-    const panAmount = 150; const angle = controls.getAzimuthalAngle();
-    const s = Math.sin(angle); const c = Math.cos(angle);
-    const moveX = (dx * c + dy * s) * panAmount; const moveZ = (-dx * s + dy * c) * panAmount;
+    const pan = 150; const ang = controls.getAzimuthalAngle();
+    const moveX = (dx * Math.cos(ang) + dy * Math.sin(ang)) * pan; const moveZ = (-dx * Math.sin(ang) + dy * Math.cos(ang)) * pan;
     gsap.to(camera.position, { x: camera.position.x + moveX, z: camera.position.z + moveZ, duration: 0.3 });
     gsap.to(controls.target, { x: controls.target.x + moveX, z: controls.target.z + moveZ, duration: 0.3 });
 }
