@@ -13,8 +13,9 @@ window.Unit = class {
     }
 };
 
-window.player = new window.Unit("ティラノ", "🦖", 12, 20, 30, 10, 15, 10, 5, 8, 4, 2, true);
-window.enemy  = new window.Unit("トリケラ", "🦕", 12, 4, 20, 5, 12, 12, 4, 2, 4, 2, false);
+// ★24x18マップに合わせた配置：ティラノ(手前)、トリケラ(城壁の上)
+window.player = new window.Unit("ティラノ", "🦖", 12, 15, 30, 10, 15, 10, 5, 8, 4, 3, true);
+window.enemy  = new window.Unit("トリケラ", "🦕", 12, 3, 20, 5, 12, 12, 4, 2, 4, 2, false);
 window.units = [window.player, window.enemy];
 
 window.getUnitAt = function(x, z) {
