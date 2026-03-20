@@ -1,5 +1,5 @@
-window.MAP_W = 20; 
-window.MAP_D = 40;
+window.MAP_W = 25; // マップを25マスに縮小
+window.MAP_D = 25;
 window.TILE_SIZE = 60; 
 window.H_STEP = 30;
 
@@ -7,13 +7,61 @@ window.mapData = [];
 window.tilesMeshMap = {}; 
 window.interactableTiles = [];
 
+// ★お城と階段を生成する新アルゴリズム★
 window.generateMapData = function() {
     for (let z = 0; z < window.MAP_D; z++) {
         window.mapData[z] = [];
         for (let x = 0; x < window.MAP_W; x++) {
-            const dist = Math.sqrt(Math.pow(x - 10, 2) + Math.pow(z - 20, 2));
-            let h = Math.max(1, Math.floor(10 - (dist * 0.4) + (Math.random() * 1.5)));
-            let type = (h >= 7) ? 3 : (h >= 5) ? 2 : (h >= 3) ? 1 : 0; 
+            let h = 1;
+            let type = 0; // 基本は平地（草）
+
+            // 城の敷地 (x: 5~19, z: 5~19)
+            if (x >= 5 && x <= 19 && z >= 5 && z <= 19) {
+                h = 2;
+                type = 4; // Top草、Side岩 (城の敷地の土台)
+
+                // お城の建物 (x: 8~16, z: 8~16)
+                if (x >= 8 && x <= 16 && z >= 8 && z <= 16) {
+                    // 城の外壁
+                    if (x === 8 || x === 16 || z === 8 || z === 16) {
+                        h = 6;
+                        type = 3; // 全部岩
+                        
+                        // 四隅の塔
+                        if ((x === 8 || x === 16) && (z === 8 || z === 16)) {
+                            h = 7;
+                        }
+                        // 正面入り口（南側 z=16 の中央）を開ける
+                        if (z === 16 && x >= 11 && x <= 13) {
+                            h = 5;
+                            type = 4; // 門の上は草
+                        }
+                    } else {
+                        // 城の内部（中庭）
+                        h = 5;
+                        type = 4; // Top草、Side岩
+                        
+                        // 王座・祭壇 (奥の中央)
+                        if (x >= 11 && x <= 13 && z >= 10 && z <= 11) {
+                            h = 6;
+                            type = 3; // 王座は岩
+                        }
+                    }
+                }
+
+                // 階段 (城の正面入り口から続く)
+                if (x >= 11 && x <= 13) {
+                    if (z === 17) { h = 4; type = 3; } // 岩階段
+                    if (z === 18) { h = 3; type = 3; }
+                    if (z === 19) { h = 2; type = 3; }
+                }
+            }
+
+            // 外側の装飾（少し苔の生えた場所）
+            if (h === 1 && Math.random() > 0.8) {
+                type = 2;
+            }
+
             window.mapData[z][x] = { h, type };
         }
     }
@@ -30,6 +78,8 @@ window.createMaterial = function(sheetImg, tx, ty, tw, th) {
 window.buildMapMeshes = function(scene, sheetImg) {
     const geometry = new THREE.BoxGeometry(window.TILE_SIZE, window.H_STEP, window.TILE_SIZE);
     const matSets = [];
+    
+    // 基本の4種類 (0:草, 1:土, 2:苔, 3:岩)
     for(let type=0; type<4; type++) {
         const tx = type * 256;
         matSets.push({ 
@@ -38,6 +88,15 @@ window.buildMapMeshes = function(scene, sheetImg) {
             sideBottom: window.createMaterial(sheetImg, tx, 320, 256, 64) 
         });
     }
+
+    // ★先生のアイデア！特殊Type4の合成★
+    // 天面(Top)は草(Type0)、側面(Side)は岩(Type3)
+    matSets.push({
+        top: matSets[0].top,
+        sideTop: matSets[3].sideTop,
+        sideBottom: matSets[3].sideBottom
+    });
+
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; 
     const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
 
