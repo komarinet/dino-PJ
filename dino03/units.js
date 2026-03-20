@@ -13,9 +13,9 @@ window.Unit = class {
     }
 };
 
-// ★配置変更: ティラノは階段下(z:22)、トリケラは城の王座(z:10)
-window.player = new window.Unit("ティラノ", "🦖", 12, 22, 30, 10, 15, 10, 5, 8, 4, 2, true);
-window.enemy  = new window.Unit("トリケラ", "🦕", 12, 10, 20, 5, 12, 12, 4, 2, 4, 2, false);
+// ★攻城戦の配置！ティラノは堀の外(z:20)、トリケラは本丸の最上部(z:4)
+window.player = new window.Unit("ティラノ", "🦖", 12, 20, 30, 10, 15, 10, 5, 8, 4, 2, true);
+window.enemy  = new window.Unit("トリケラ", "🦕", 12, 4, 20, 5, 12, 12, 4, 2, 4, 2, false);
 window.units = [window.player, window.enemy];
 
 window.getUnitAt = function(x, z) {
