@@ -1,11 +1,30 @@
 body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; user-select: none; }
 #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
+/* ふりがな（ルビ）のスタイル調整 */
+ruby { ruby-position: over; font-style: normal;}
+rt { font-size: 0.6em; color: rgba(255, 255, 255, 0.7); line-height: 1; transform: translateY(-0.1em); display: block; }
+/* コマンドメニューのルビは少し大きく見やすく */
+.cmd-btn rt { font-size: 0.7em; }
+
 .rpg-window {
     position: absolute; background: rgba(0, 15, 60, 0.95); color: white;
     border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 5px 15px rgba(0,0,0,0.8);
     padding: 10px; z-index: 1000; box-sizing: border-box; pointer-events: auto;
+    font-weight: bold;
 }
+
+/* ★新規：会話イベントウィンドウのスタイル★ */
+#event-ui {
+    display: none; bottom: 0; left: 0; width: 100vw; height: 160px; /* ふりがな分高さを確保 */
+    z-index: 3000; border:none; border-radius: 0; border-top: 2px solid #ddd;
+    transition: transform 0.3s ease;
+}
+#event-ui.collapsed { transform: translateY(100%); }
+.event-body { display: flex; align-items: flex-start; gap: 10px; height: calc(100% - 40px); overflow: hidden; }
+.face-gra { font-size: 80px; width: 100px; text-align: center; } /* 立ち絵エリア */
+.ev-text-area { flex: 1; padding: 5px; }
+#ev-text { font-size: 1.2rem; line-height: 1.8; margin: 0; } /* ルビ用に行間を広く */
 
 #status-ui { top: 10px; left: 10px; width: 45vw; max-width: 200px; display: none; }
 .unit-name { font-size: 1.1rem; font-weight: bold; border-bottom: 1px solid #777; margin-bottom: 5px; padding-bottom: 3px; }
