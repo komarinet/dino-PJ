@@ -1,4 +1,4 @@
-window.MAP_W = 25; // マップを25マスに縮小
+window.MAP_W = 25; 
 window.MAP_D = 25;
 window.TILE_SIZE = 60; 
 window.H_STEP = 30;
@@ -7,64 +7,79 @@ window.mapData = [];
 window.tilesMeshMap = {}; 
 window.interactableTiles = [];
 
-// ★お城と階段を生成する新アルゴリズム★
+// ★v7.3.0 「難攻不落の城塞：堀と水中テクスチャ実装」★
 window.generateMapData = function() {
     for (let z = 0; z < window.MAP_D; z++) {
         window.mapData[z] = [];
         for (let x = 0; x < window.MAP_W; x++) {
-            let h = 1;
-            let type = 0; // 基本は平地（草）
+            
+            // 1. 基本の地形（城の外周）
+            let h = 2; 
+            let type = 0; // 草
+            
+            // 自然な起伏
+            if (Math.random() > 0.8) { h = 3; }
+            if (Math.random() > 0.95) { h = 4; type = 1; }
 
-            // 城の敷地 (x: 5~19, z: 5~19)
-            if (x >= 5 && x <= 19 && z >= 5 && z <= 19) {
-                h = 2;
-                type = 4; // Top草、Side岩 (城の敷地の土台)
-
-                // お城の建物 (x: 8~16, z: 8~16)
-                if (x >= 8 && x <= 16 && z >= 8 && z <= 16) {
-                    // 城の外壁
-                    if (x === 8 || x === 16 || z === 8 || z === 16) {
-                        h = 6;
-                        type = 3; // 全部岩
-                        
-                        // 四隅の塔
-                        if ((x === 8 || x === 16) && (z === 8 || z === 16)) {
-                            h = 7;
-                        }
-                        // 正面入り口（南側 z=16 の中央）を開ける
-                        if (z === 16 && x >= 11 && x <= 13) {
-                            h = 5;
-                            type = 4; // 門の上は草
-                        }
-                    } else {
-                        // 城の内部（中庭）
-                        h = 5;
-                        type = 4; // Top草、Side岩
-                        
-                        // 王座・祭壇 (奥の中央)
-                        if (x >= 11 && x <= 13 && z >= 10 && z <= 11) {
-                            h = 6;
-                            type = 3; // 王座は岩
-                        }
-                    }
-                }
-
-                // 階段 (城の正面入り口から続く)
-                if (x >= 11 && x <= 13) {
-                    if (z === 17) { h = 4; type = 3; } // 岩階段
-                    if (z === 18) { h = 3; type = 3; }
-                    if (z === 19) { h = 2; type = 3; }
-                }
+            // ★堀（お城の周りを囲む堀）をリアル化★
+            // 堀の底の高さを h=0 にし、新しい水場テクスチャ（Type 4）を敷く
+            if ( (x >= 2 && x <= 22 && z >= 16 && z <= 17) || 
+                 (x >= 2 && x <= 3 && z >= 2 && z <= 17) || 
+                 (x >= 21 && x <= 22 && z >= 2 && z <= 17) ) {
+                h = 0; // 堀の底の高さを 0 に（水面のみ表示）
+                type = 4; // 先生が描き足してくれた「水場」テクスチャ
             }
 
-            // 外側の装飾（少し苔の生えた場所）
-            if (h === 1 && Math.random() > 0.8) {
-                type = 2;
+            // 3. 城塞のベース（中庭）
+            if (x >= 4 && x <= 20 && z >= 2 && z <= 15) {
+                h = 4; 
+                type = 5; // 天面が草、側面が岩（特殊 Type 5 合成ブロック）
+            }
+
+            // 4. 正面の高い防壁 (h=6) と、その裏の通路 (h=5)
+            if (x >= 4 && x <= 20 && z === 15) { h = 6; type = 3; } // 外壁 (全部岩)
+            if (x >= 4 && x <= 20 && z === 14) { h = 5; type = 3; } // 石の通路 (全部岩)
+
+            // 5. 左右の防壁
+            if ((x === 4 || x === 20) && z >= 2 && z <= 15) { h = 6; type = 3; }
+
+            // 6. 前衛の見張り塔（左右に出っ張ったバルコニー）
+            if (x >= 4 && x <= 6 && z >= 13 && z <= 15) { h = 7; type = 3; }
+            if (x >= 18 && x <= 20 && z >= 13 && z <= 15) { h = 7; type = 3; }
+
+            // 7. 正面城門（城壁の一部が欠けている）
+            if (x >= 11 && x <= 13 && z === 15) { h = 5; type = 3; }
+
+            // 8. 堀を渡る大階段
+            if (x >= 11 && x <= 13) {
+                if (z === 16) { h = 4; type = 3; }
+                if (z === 17) { h = 3; type = 3; }
+                if (z === 18) { h = 2; type = 3; } // 堀の外と繋がる
+            }
+
+            // 9. 本丸（奥にあるボスの居城）
+            if (x >= 8 && x <= 16 && z >= 2 && z <= 8) {
+                h = 7; type = 3;
+                // 王座の最上部
+                if (x >= 9 && x <= 15 && z >= 2 && z <= 5) { h = 9; type = 3; } 
+            }
+
+            // 10. 本丸へ登る「L字型の階段」（アシンメトリーな構造）
+            if (x === 15 && z >= 9 && z <= 11) {
+                if (z === 11) { h = 5; type = 3; }
+                if (z === 10) { h = 6; type = 3; }
+                if (z === 9)  { h = 7; type = 3; }
+            }
+
+            // 本丸左側の防壁の装飾
+            if (x >= 8 && x <= 10 && z >= 9 && z <= 11) {
+                h = 5; type = 3;
             }
 
             window.mapData[z][x] = { h, type };
         }
     }
+    // ユニットのZとXから初期高さを設定
     window.units.forEach(u => { u.h = window.mapData[u.z][u.x].h; });
 };
 
@@ -89,8 +104,16 @@ window.buildMapMeshes = function(scene, sheetImg) {
         });
     }
 
-    // ★先生のアイデア！特殊Type4の合成★
-    // 天面(Top)は草(Type0)、側面(Side)は岩(Type3)
+    // ★先生が追加した新しい水場テクスチャ (Type 4)★
+    // 右に256px追加された位置 (tx = 4 * 256 = 1024) から切り出す
+    const tx4 = 4 * 256;
+    matSets.push({
+        top: window.createMaterial(sheetImg, tx4, 0, 256, 256), // 水面
+        sideTop: window.createMaterial(sheetImg, tx4, 256, 256, 64), // 水中断面
+        sideBottom: window.createMaterial(sheetImg, tx4, 320, 256, 64) // 砂地側面
+    });
+
+    // 特殊Type5の合成 (Top草、Side岩)
     matSets.push({
         top: matSets[0].top,
         sideTop: matSets[3].sideTop,
@@ -103,14 +126,42 @@ window.buildMapMeshes = function(scene, sheetImg) {
     for (let z = 0; z < window.MAP_D; z++) {
         for (let x = 0; x < window.MAP_W; x++) {
             const tileData = window.mapData[z][x];
-            const h = tileData.h; const mats = matSets[tileData.type];
-            for (let i = Math.max(0, h - 2); i < h; i++) {
-                let blockMats = (i === h - 1) ? [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop] : [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
+            const heightVal = tileData.h;
+            const mats = matSets[tileData.type];
+
+            // ★堀の底（h=0）の処理：水面タイルのみを生成★
+            if (heightVal === 0 && tileData.type === 4) {
+                // PlaneGeometry で天面（水面）のみを作成
+                const waterGeometry = new THREE.PlaneGeometry(window.TILE_SIZE, window.TILE_SIZE);
+                waterGeometry.rotateX(-Math.PI / 2); // 上に向ける
+                const waterMesh = new THREE.Mesh(waterGeometry, mats.top);
+                // 堀の底は地面(y=0)に密着させて配置
+                waterMesh.position.set((x * window.TILE_SIZE) - offsetX, 0, (z * window.TILE_SIZE) - offsetZ); 
+                scene.add(waterMesh);
+                // 堀の底はインタラクティブ（移動先）には追加しない
+                continue;
+            }
+
+            for (let i = Math.max(0, heightVal - 2); i < heightVal; i++) {
+                let blockMats;
+                if (i === heightVal - 1) {
+                    // 天面ブロック
+                    blockMats = [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop];
+                } else {
+                    // 土台ブロック
+                    // 土台ブロックの側面は常に sideBottom (土、苔岩、岩、または砂地側面)
+                    blockMats = [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
+                }
+
+                // これで、水場タイル(Type4)の土台ブロックの側面は、先生が描いてくれた砂地側面(sideBottom)になる。
+                // 草地タイル(Type0)などの土台ブロックの側面は、土側面(sideBottom)になる。
+                // そして、堀の周囲のブロックの側面（水中）が水中断面(sideTop)になる。
+
                 const cube = new THREE.Mesh(geometry, blockMats);
                 cube.position.set((x * window.TILE_SIZE) - offsetX, (i * window.H_STEP) + (window.H_STEP / 2), (z * window.TILE_SIZE) - offsetZ);
                 scene.add(cube);
-                if (i === h - 1) { 
-                    cube.userData = { x, z, h }; 
+                if (i === heightVal - 1) { 
+                    cube.userData = { x, z, h: heightVal }; 
                     window.interactableTiles.push(cube); 
                     window.tilesMeshMap[`${x},${z}`] = cube; 
                 }
@@ -131,7 +182,7 @@ window.getWalkableNodes = function(unit) {
             if(nx >= 0 && nx < window.MAP_W && nz >= 0 && nz < window.MAP_D) {
                 if(window.getUnitAt(nx, nz)) continue; 
                 let nextH = window.mapData[nz][nx].h; let hDiff = nextH - currH;
-                if(Math.abs(hDiff) <= unit.jump) {
+                if(Math.abs(hDiff) <= unit.jump) { // ジャンプ力判定はここ！
                     let stepCost = 1 + (hDiff > 0 ? hDiff : 0);
                     let newCost = curr.cost + stepCost;
                     if(newCost <= unit.move) {
