@@ -1,8 +1,18 @@
 let scene, camera, renderer, controls;
-window.gameState = 'IDLE'; 
+// ゲーム状態に「TALKING」を追加
+window.gameState = 'TALKING'; 
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
 window.raycastTargets = []; 
+
+// ★新規：会話データ (ルビ付き、先生指定の内容)★
+window.eventTalkData = [
+    { unit: window.player, text: "<ruby>お前<rt>おまえ</rt></ruby>が、お<ruby>母<rt>かあ</rt></ruby>さんをさらったのかッ！" },
+    { unit: window.enemy,  text: "グォォォォォォ！" },
+    { unit: window.player, text: "お<ruby>母<rt>かあ</rt></ruby>さんを、<ruby>返<rt>かえ</rt></ruby>せぇッ！" },
+    { unit: window.enemy,  text: "……グォァァァ！ (<ruby>戦<rt>たたか</rt></ruby>いの<ruby>始<rt>はじ</rt></ruby>まりだ！)" }
+];
+window.talkIndex = 0; // 現在何行目の会話か
 
 window.addEventListener('load', () => {
     const sheetImg = new Image();
@@ -26,6 +36,7 @@ window.hideAllUI = function() {
     document.getElementById('command-ui').style.display = 'none';
     document.getElementById('confirm-ui').style.display = 'none';
     document.getElementById('target-ui').style.display = 'none';
+    document.getElementById('event-ui').style.display = 'none'; // 会話UIも隠す
 }
 
 window.showStatus = function(unit) {
@@ -53,13 +64,55 @@ window.showCommandMenu = function() {
 }
 
 window.startPlayerTurn = function() {
-    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
-    window.setMsg("あなたのターン！<br>ユニットをタップしてね", "#00ff00");
+    window.gameState = 'IDLE'; 
+    window.clearHighlights(); 
+    window.hideAllUI();
+    // ここで初めて「あなたのターン」のメッセージとルビを表示
+    window.setMsg("あなたの<ruby>ターン<rt>順番</rt></ruby>！<br><ruby>ユニット<rt>仲間</rt></ruby>をタップしてね", "#00ff00");
 }
 
 window.resetToIdle = function() {
-    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
+    window.gameState = 'IDLE'; 
+    window.clearHighlights(); 
+    window.hideAllUI();
     window.setMsg(""); 
+}
+
+// ★新規：会話イベントモードを開始★
+window.startEventMode = function() {
+    window.gameState = 'TALKING';
+    window.clearHighlights();
+    window.hideAllUI();
+    window.setMsg(""); 
+    document.getElementById('event-ui').style.display = 'block';
+    window.talkIndex = 0;
+    window.processEventTalk();
+}
+
+// ★新規：会話データをUIに反映★
+window.processEventTalk = function() {
+    if (window.talkIndex < window.eventTalkData.length) {
+        const data = window.eventTalkData[window.talkIndex];
+        document.getElementById('ev-face').innerText = data.unit.emoji;
+        document.getElementById('ev-text').innerHTML = data.unit.isPlayer ? data.text : `<span style='color:#ff5555'>${data.text}</span>`; // 敵の台詞は赤
+        
+        // TO風：話しているユニットにカメラを寄せる
+        if (data.unit === window.enemy) {
+             window.zoomCamera(-100); // 寄る
+        } else {
+             window.zoomCamera(100); // 戻す
+        }
+    } else {
+        // 会話終了、バトルスタート！
+        document.getElementById('event-ui').style.display = 'none';
+        window.startPlayerTurn();
+    }
+}
+
+// ★新規：次の台詞へ進む★
+window.nextEventTalk = function() {
+    window.talkIndex++;
+    window.processEventTalk();
 }
 
 window.execCommand = function(cmd) {
@@ -71,7 +124,7 @@ window.execCommand = function(cmd) {
     } else if (cmd === 'attack') {
         let targets = window.getAttackableEnemies(window.player);
         if(targets.length === 0) {
-            window.setMsg("攻撃できる対象がいません！", "#aaaaaa");
+            window.setMsg("<ruby>攻撃<rt>こうげき</rt></ruby>できる<ruby>対象<rt>あいて</rt></ruby>がいません！", "#aaaaaa");
             setTimeout(() => { window.setMsg(""); window.showCommandMenu(); }, 1200);
             return;
         }
@@ -80,7 +133,8 @@ window.execCommand = function(cmd) {
         listDiv.innerHTML = ''; 
         targets.forEach(t => {
             const btn = document.createElement('button');
-            btn.className = 'cmd-btn'; btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
+            btn.className = 'cmd-btn';
+            btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
             btn.onclick = () => window.selectTarget(t);
             listDiv.appendChild(btn);
             window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); 
@@ -88,7 +142,7 @@ window.execCommand = function(cmd) {
         document.getElementById('target-ui').style.display = 'block';
     } else if (cmd === 'wait') {
         window.gameState = 'CONFIRMING'; window.confirmMode = 'WAIT';
-        document.getElementById('confirm-text').innerHTML = "ターンを終了しますか？";
+        document.getElementById('confirm-text').innerHTML = "<ruby>ターン<rt>順番</rt></ruby>を<ruby>終了<rt>しゅうりょう</rt></ruby>しますか？";
         document.getElementById('confirm-ui').style.display = 'block';
     }
 }
@@ -96,13 +150,14 @@ window.execCommand = function(cmd) {
 window.selectTarget = function(targetUnit) {
     document.getElementById('target-ui').style.display = 'none';
     window.gameState = 'CONFIRMING'; window.confirmMode = 'ATTACK'; window.pendingData = targetUnit;
-    document.getElementById('confirm-text').innerHTML = `${targetUnit.id} を攻撃しますか？`;
+    document.getElementById('confirm-text').innerHTML = `${targetUnit.id} を<ruby>攻撃<rt>こうげき</rt></ruby>しますか？`;
     document.getElementById('confirm-ui').style.display = 'block';
 }
 
 window.cancelAttack = function() {
     document.getElementById('target-ui').style.display = 'none';
-    window.clearHighlights(); window.showCommandMenu();
+    window.clearHighlights();
+    window.showCommandMenu();
 }
 
 window.answerConfirm = function(isYes) {
@@ -136,7 +191,7 @@ window.answerConfirm = function(isYes) {
     if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
-// ★ポップアップ低速化: durationを1.5sに★
+// ★ポップアップ低速化: durationを1.5sに延ばす★
 window.showFloatingText = function(unit, text, type) {
     const vector = unit.sprite.position.clone();
     vector.y += 60; vector.project(camera); 
@@ -149,7 +204,9 @@ window.showFloatingText = function(unit, text, type) {
     document.body.appendChild(el);
 
     gsap.to(el, {
-        y: y - 100, opacity: 0, duration: 1.5, ease: "power2.out", 
+        y: y - 100, opacity: 0, 
+        duration: 1.5, // 1.0 -> 1.5s へ変更
+        ease: "power2.out", 
         onComplete: () => { el.remove(); } 
     });
 }
@@ -168,15 +225,15 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
         window.showFloatingText(defender, damage, 'damage');
         
         if(defender.hp <= 0) {
-            window.setMsg(`${defender.id}を倒した！`, "#ffcc00");
+            window.setMsg(`${defender.id}を<ruby>倒<rt>たお</rt></ruby>した！`, "#ffcc00");
             gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
         } else {
             // ★反撃判定：防御側が生存しており、攻撃側が隣接していれば反撃★
             const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
             if(allowCounter && dist === 1) {
                 setTimeout(() => {
-                    window.setMsg("COUNTER!", "#ff0000");
-                    window.executeAttack(defender, attacker, false, onComplete);
+                    window.setMsg("COUNTER! (<ruby>反撃<rt>はんげき</rt></ruby>ッ！)", "#ff0000");
+                    window.executeAttack(defender, attacker, false, onComplete); // 反撃は連鎖させない
                 }, 800);
             } else {
                 onComplete();
@@ -207,7 +264,7 @@ window.endPlayerTurn = function() {
     window.player.hasMoved = false; window.player.hasAttacked = false; window.hideAllUI();
     if(window.enemy.hp <= 0) { window.setMsg("STAGE CLEAR!", "#ffff00"); return; }
 
-    window.gameState = 'ENEMY_TURN'; window.setMsg("敵のターン...", "#ff5555");
+    window.gameState = 'ENEMY_TURN'; window.setMsg("<ruby>敵<rt>てき</rt></ruby>の<ruby>ターン<rt>順番</rt></ruby>...", "#ff5555");
     setTimeout(() => {
         let routes = window.getWalkableNodes(window.enemy);
         let bestRoute = null; let minD = 999;
@@ -218,7 +275,7 @@ window.endPlayerTurn = function() {
         if(bestRoute && bestRoute.path.length > 0) {
             window.executeMovement(window.enemy, bestRoute.path, () => {
                 if(window.getAttackableEnemies(window.enemy).includes(window.player)) { 
-                    window.executeAttack(window.enemy, window.player, true, () => { window.startPlayerTurn(); }); 
+                    window.executeAttack(window.enemy, window.player, true, () => { window.startPlayerTurn(); }); // 敵の攻撃にも反撃あり
                 } else { window.startPlayerTurn(); }
             });
         } else { window.startPlayerTurn(); }
@@ -271,7 +328,10 @@ function init(sheetImg) {
         const dist = Math.hypot(e.clientX - ptrDownPos.x, e.clientY - ptrDownPos.y);
         if(dist < 5) onPointerClick(e);
     });
-    window.startPlayerTurn();
+    
+    // ★バトル開始前の会話イベントを開始★
+    window.startEventMode();
+    
     animate();
 }
 
@@ -289,6 +349,13 @@ window.clearHighlights = function() {
 const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
+    
+    // ★会話モード中は会話を進める★
+    if (window.gameState === 'TALKING') {
+        window.nextEventTalk();
+        return;
+    }
+
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(window.raycastTargets);
@@ -307,7 +374,9 @@ function onPointerClick(event) {
                 const tile = window.tilesMeshMap[window.selectedTileKey];
                 tile.material[2].color.setHex(0xffff00);
                 window.selectorMesh.position.copy(tile.position); window.selectorMesh.visible = true;
-                document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
+                document.getElementById('confirm-text').innerHTML = "ここへ<ruby>移動<rt>いどう</rt></ruby>しますか？";
+                // 確認ダイアログのルビ化に対応
+                document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
                 document.getElementById('confirm-ui').style.display = 'block';
             } else { window.resetToIdle(); } 
         } 
