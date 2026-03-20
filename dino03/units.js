@@ -13,8 +13,9 @@ window.Unit = class {
     }
 };
 
-window.player = new window.Unit("ティラノ", "🦖", 10, 25, 30, 10, 15, 10, 5, 8, 4, 2, true);
-window.enemy  = new window.Unit("トリケラ", "🦕", 10, 21, 20, 5, 12, 12, 4, 2, 4, 2, false);
+// ★配置変更: ティラノは階段下(z:22)、トリケラは城の王座(z:10)
+window.player = new window.Unit("ティラノ", "🦖", 12, 22, 30, 10, 15, 10, 5, 8, 4, 2, true);
+window.enemy  = new window.Unit("トリケラ", "🦕", 12, 10, 20, 5, 12, 12, 4, 2, 4, 2, false);
 window.units = [window.player, window.enemy];
 
 window.getUnitAt = function(x, z) {
@@ -23,7 +24,6 @@ window.getUnitAt = function(x, z) {
 
 window.getAttackableEnemies = function(unit) {
     let targets = [];
-    // 上下左右1マスを判定
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
         let u = window.getUnitAt(unit.x + d[0], unit.z + d[1]);
         if(u && u.isPlayer !== unit.isPlayer) targets.push(u);
