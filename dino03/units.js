@@ -8,12 +8,11 @@ window.Unit = class {
         this.move = move; this.jump = jump;
         this.isPlayer = isPlayer;
         this.sprite = null;
-        this.hasMoved = false; 
-        this.hasAttacked = false;
+        this.hasMoved = false; this.hasAttacked = false;
     }
 };
 
-// ★変更：敵の名前を「ブラキオサウルス」へ★
+// ユニット生成
 window.player = new window.Unit("ティラノ", "🦖", 12, 15, 30, 10, 15, 10, 5, 8, 4, 3, true);
 window.enemy  = new window.Unit("ブラキオサウルス", "🦕", 12, 3, 20, 5, 12, 12, 4, 2, 4, 2, false);
 window.units = [window.player, window.enemy];
