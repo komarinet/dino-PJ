@@ -6,7 +6,7 @@ window.raycastTargets = [];
 
 window.addEventListener('load', () => {
     const sheetImg = new Image();
-    sheetImg.src = 'img/plate01.png'; // スマホのキャッシュクリアを徹底してください
+    sheetImg.src = 'img/plate01.png';
     sheetImg.onload = () => {
         const loader = document.getElementById('loading-screen');
         loader.style.opacity = '0';
@@ -53,22 +53,17 @@ window.showCommandMenu = function() {
 }
 
 window.startPlayerTurn = function() {
-    window.gameState = 'IDLE'; 
-    window.clearHighlights(); 
-    window.hideAllUI();
+    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
     window.setMsg("あなたのターン！<br>ユニットをタップしてね", "#00ff00");
 }
 
 window.resetToIdle = function() {
-    window.gameState = 'IDLE'; 
-    window.clearHighlights(); 
-    window.hideAllUI();
+    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
     window.setMsg(""); 
 }
 
 window.execCommand = function(cmd) {
     document.getElementById('command-ui').style.display = 'none';
-    
     if(cmd === 'move') {
         window.gameState = 'SELECTING_MOVE'; 
         window.walkableTiles = window.getWalkableNodes(window.player);
@@ -85,8 +80,7 @@ window.execCommand = function(cmd) {
         listDiv.innerHTML = ''; 
         targets.forEach(t => {
             const btn = document.createElement('button');
-            btn.className = 'cmd-btn';
-            btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
+            btn.className = 'cmd-btn'; btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
             btn.onclick = () => window.selectTarget(t);
             listDiv.appendChild(btn);
             window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); 
@@ -108,15 +102,13 @@ window.selectTarget = function(targetUnit) {
 
 window.cancelAttack = function() {
     document.getElementById('target-ui').style.display = 'none';
-    window.clearHighlights();
-    window.showCommandMenu();
+    window.clearHighlights(); window.showCommandMenu();
 }
 
 window.answerConfirm = function(isYes) {
     document.getElementById('confirm-ui').style.display = 'none';
     if (isYes) {
         window.gameState = 'ANIMATING'; window.clearHighlights(); window.setMsg("");
-        
         if(window.confirmMode === 'WAIT') {
             window.endPlayerTurn();
         } else if(window.confirmMode === 'MOVE') {
@@ -126,7 +118,8 @@ window.answerConfirm = function(isYes) {
             });
         } else if(window.confirmMode === 'ATTACK') {
             window.player.hasAttacked = true;
-            window.executeAttack(window.player, window.pendingData, () => { window.endPlayerTurn(); });
+            // 攻撃実行後、反撃判定を含めてターン終了へ
+            window.executeAttack(window.player, window.pendingData, true, () => { window.endPlayerTurn(); });
         }
     } else {
         if(window.confirmMode === 'MOVE') {
@@ -143,29 +136,57 @@ window.answerConfirm = function(isYes) {
     if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
+// ★ポップアップ低速化: durationを1.5sに★
 window.showFloatingText = function(unit, text, type) {
     const vector = unit.sprite.position.clone();
-    vector.y += 60; 
-    vector.project(camera); 
-
+    vector.y += 60; vector.project(camera); 
     const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
     const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
-
     const el = document.createElement('div');
-    el.className = 'floating-text';
-    el.innerText = text;
+    el.className = 'floating-text'; el.innerText = text;
     el.style.color = (type === 'heal') ? '#00ffff' : '#ffffff'; 
-    el.style.left = `${x}px`;
-    el.style.top = `${y}px`;
+    el.style.left = `${x}px`; el.style.top = `${y}px`;
     document.body.appendChild(el);
 
     gsap.to(el, {
-        y: y - 80,
-        opacity: 0,
-        duration: 1.0,
-        ease: "power2.out",
+        y: y - 100, opacity: 0, duration: 1.5, ease: "power2.out", 
         onComplete: () => { el.remove(); } 
     });
+}
+
+// ★攻撃＆反撃ロジック★
+window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
+    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
+    const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
+    const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
+    const damage = Math.max(1, attacker.str - defender.def);
+    
+    const origX = attacker.sprite.position.x; const origZ = attacker.sprite.position.z;
+
+    const tl = gsap.timeline({ onComplete: () => {
+        defender.hp -= damage;
+        window.showFloatingText(defender, damage, 'damage');
+        
+        if(defender.hp <= 0) {
+            window.setMsg(`${defender.id}を倒した！`, "#ffcc00");
+            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
+        } else {
+            // ★反撃判定：防御側が生存しており、攻撃側が隣接していれば反撃★
+            const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
+            if(allowCounter && dist === 1) {
+                setTimeout(() => {
+                    window.setMsg("COUNTER!", "#ff0000");
+                    window.executeAttack(defender, attacker, false, onComplete);
+                }, 800);
+            } else {
+                onComplete();
+            }
+        }
+    }});
+    
+    tl.to(attacker.sprite.position, { x: origX - dx*0.2, z: origZ - dz*0.2, duration: 0.15, ease: "power1.out" }); 
+    tl.to(attacker.sprite.position, { x: origX + dx*0.6, z: origZ + dz*0.6, duration: 0.1, ease: "power2.in" });  
+    tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" }); 
 }
 
 window.executeMovement = function(unit, path, onComplete) {
@@ -180,30 +201,6 @@ window.executeMovement = function(unit, path, onComplete) {
     });
     const finalStep = path[path.length - 1];
     unit.x = finalStep.x; unit.z = finalStep.z; unit.h = finalStep.h;
-}
-
-window.executeAttack = function(attacker, defender, onComplete) {
-    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
-    const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
-    const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
-    const damage = Math.max(1, attacker.str - defender.def);
-    
-    const origX = attacker.sprite.position.x;
-    const origZ = attacker.sprite.position.z;
-
-    const tl = gsap.timeline({ onComplete: () => {
-        defender.hp -= damage;
-        window.showFloatingText(defender, damage, 'damage');
-        
-        if(defender.hp <= 0) {
-            window.setMsg(`${defender.id}を倒した！`, "#ffcc00");
-            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
-        } else { onComplete(); }
-    }});
-    
-    tl.to(attacker.sprite.position, { x: origX - dx*0.2, z: origZ - dz*0.2, duration: 0.15, ease: "power1.out" }); 
-    tl.to(attacker.sprite.position, { x: origX + dx*0.6, z: origZ + dz*0.6, duration: 0.1, ease: "power2.in" });  
-    tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" }); 
 }
 
 window.endPlayerTurn = function() {
@@ -221,7 +218,7 @@ window.endPlayerTurn = function() {
         if(bestRoute && bestRoute.path.length > 0) {
             window.executeMovement(window.enemy, bestRoute.path, () => {
                 if(window.getAttackableEnemies(window.enemy).includes(window.player)) { 
-                    window.executeAttack(window.enemy, window.player, () => { window.startPlayerTurn(); }); 
+                    window.executeAttack(window.enemy, window.player, true, () => { window.startPlayerTurn(); }); 
                 } else { window.startPlayerTurn(); }
             });
         } else { window.startPlayerTurn(); }
@@ -231,47 +228,33 @@ window.endPlayerTurn = function() {
 function init(sheetImg) {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene(); window.generateMapData();
-
     const w = container.clientWidth; const h = container.clientHeight;
     camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000);
     camera.zoom = 1.5; camera.updateProjectionMatrix();
-    
     renderer = new THREE.WebGLRenderer({ antialias: false });
     renderer.setSize(w, h); renderer.setClearColor(0x1a1a1a);
     container.appendChild(renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-
     window.buildMapMeshes(scene, sheetImg);
-
     const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(window.TILE_SIZE, window.H_STEP, window.TILE_SIZE));
     const mat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-    window.selectorMesh = new THREE.LineSegments(geo, mat);
-    window.selectorMesh.visible = false;
+    window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false;
     scene.add(window.selectorMesh);
-
     window.raycastTargets = [...window.interactableTiles]; 
-    
     window.units.forEach(u => {
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
         const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(u.emoji, 64, 64);
         u.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
         u.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
-        
-        u.sprite.userData = { isUnit: true, unit: u };
-        window.raycastTargets.push(u.sprite);
-        
-        scene.add(u.sprite);
-        window.updateUnitPosInstantly(u);
+        u.sprite.userData = { isUnit: true, unit: u }; window.raycastTargets.push(u.sprite);
+        scene.add(u.sprite); window.updateUnitPosInstantly(u);
     });
-
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.enableRotate = true; controls.enableZoom = true; controls.enablePan = true;
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
-
     controls.addEventListener('end', () => {
         if (window.gameState === 'MOVING' || window.gameState === 'ANIMATING') return;
-        const az = controls.getAzimuthalAngle();
-        const snap = Math.PI / 2; const offset = Math.PI / 4;
+        const az = controls.getAzimuthalAngle(); const snap = Math.PI / 2; const offset = Math.PI / 4;
         const snappedAz = Math.round((az - offset) / snap) * snap + offset;
         const polar = Math.PI / 3; const r = controls.getDistance();
         gsap.to(camera.position, {
@@ -281,16 +264,13 @@ function init(sheetImg) {
             duration: 0.3, ease: "power2.out", onUpdate: () => controls.update()
         });
     });
-
     window.centerCameraInstantly(window.player); 
-    
     let ptrDownPos = {x:0, y:0};
     renderer.domElement.addEventListener('pointerdown', e => { ptrDownPos = { x: e.clientX, y: e.clientY }; });
     renderer.domElement.addEventListener('pointerup', e => {
         const dist = Math.hypot(e.clientX - ptrDownPos.x, e.clientY - ptrDownPos.y);
         if(dist < 5) onPointerClick(e);
     });
-
     window.startPlayerTurn();
     animate();
 }
@@ -298,7 +278,6 @@ function init(sheetImg) {
 window.clearHighlights = function() { 
     window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff)); 
     if(window.selectorMesh) window.selectorMesh.visible = false;
-    
     window.units.forEach(u => {
         if(u.hp > 0) {
             const tile = window.tilesMeshMap[`${u.x},${u.z}`];
@@ -308,21 +287,14 @@ window.clearHighlights = function() {
 }
 
 const raycaster = new THREE.Raycaster(); const mouse = new THREE.Vector2();
-
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
-    
     mouse.x = (event.clientX / window.innerWidth) * 2 - 1; mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
     raycaster.setFromCamera(mouse, camera);
-
     const intersects = raycaster.intersectObjects(window.raycastTargets);
     if (intersects.length > 0) {
         let targetData = intersects[0].object.userData;
-        
-        if(targetData.isUnit) {
-            targetData = { x: targetData.unit.x, z: targetData.unit.z, h: targetData.unit.h };
-        }
-        
+        if(targetData.isUnit) targetData = { x: targetData.unit.x, z: targetData.unit.z, h: targetData.unit.h };
         if(window.gameState === 'IDLE') {
             const u = window.getUnitAt(targetData.x, targetData.z);
             if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } 
@@ -331,14 +303,10 @@ function onPointerClick(event) {
         else if (window.gameState === 'SELECTING_MOVE') {
             const route = window.walkableTiles.find(n => n.x === targetData.x && n.z === targetData.z);
             if (route) {
-                window.clearHighlights(); 
-                window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${targetData.x},${targetData.z}`;
-                
+                window.clearHighlights(); window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${targetData.x},${targetData.z}`;
                 const tile = window.tilesMeshMap[window.selectedTileKey];
                 tile.material[2].color.setHex(0xffff00);
-                window.selectorMesh.position.copy(tile.position);
-                window.selectorMesh.visible = true;
-
+                window.selectorMesh.position.copy(tile.position); window.selectorMesh.visible = true;
                 document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
             } else { window.resetToIdle(); } 
@@ -356,30 +324,18 @@ window.centerCameraInstantly = function(u) {
     camera.position.set(u.sprite.position.x + Math.sin(rad)*r, u.sprite.position.y + 600, u.sprite.position.z + Math.cos(rad)*r);
     camera.lookAt(controls.target);
 }
-
 window.centerCamera = function() { gsap.to(controls.target, { x: window.player.sprite.position.x, z: window.player.sprite.position.z, duration: 0.8, ease: "power2.inOut" }); }
-
 window.rotateCam = function(deg) {
     if (window.gameState === 'ANIMATING') return;
-    const r = controls.getDistance();
-    const polar = controls.getPolarAngle();
-    const startAz = controls.getAzimuthalAngle();
+    const r = controls.getDistance(); const polar = controls.getPolarAngle(); const startAz = controls.getAzimuthalAngle();
     const targetAz = startAz + (Number(deg) * Math.PI / 180);
-
     const proxy = { angle: startAz };
-    gsap.to(proxy, {
-        angle: targetAz,
-        duration: 0.4,
-        ease: "power2.out",
-        onUpdate: () => {
-            camera.position.x = controls.target.x + r * Math.sin(proxy.angle) * Math.sin(polar);
-            camera.position.z = controls.target.z + r * Math.cos(proxy.angle) * Math.sin(polar);
-            camera.lookAt(controls.target);
-            controls.update();
-        }
-    });
+    gsap.to(proxy, { angle: targetAz, duration: 0.4, ease: "power2.out", onUpdate: () => {
+        camera.position.x = controls.target.x + r * Math.sin(proxy.angle) * Math.sin(polar);
+        camera.position.z = controls.target.z + r * Math.cos(proxy.angle) * Math.sin(polar);
+        camera.lookAt(controls.target); controls.update();
+    }});
 }
-
 window.panCamera = function(dx, dy) {
     const panAmount = 150; const angle = controls.getAzimuthalAngle();
     const s = Math.sin(angle); const c = Math.cos(angle);
@@ -387,7 +343,5 @@ window.panCamera = function(dx, dy) {
     gsap.to(camera.position, { x: camera.position.x + moveX, z: camera.position.z + moveZ, duration: 0.3 });
     gsap.to(controls.target, { x: controls.target.x + moveX, z: controls.target.z + moveZ, duration: 0.3 });
 }
-
 window.zoomCamera = function(amount) { camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2)); camera.updateProjectionMatrix(); }
-
 function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
