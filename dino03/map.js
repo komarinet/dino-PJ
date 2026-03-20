@@ -79,7 +79,6 @@ window.generateMapData = function() {
             window.mapData[z][x] = { h, type };
         }
     }
-    // ユニットのZとXから初期高さを設定
     window.units.forEach(u => { u.h = window.mapData[u.z][u.x].h; });
 };
 
@@ -106,6 +105,7 @@ window.buildMapMeshes = function(scene, sheetImg) {
 
     // ★先生が追加した新しい水場テクスチャ (Type 4)★
     // 右に256px追加された位置 (tx = 4 * 256 = 1024) から切り出す
+    // ここがユーザー様が追加した水場テクスチャ（1024px目）の開始位置です。完璧に合っています。
     const tx4 = 4 * 256;
     matSets.push({
         top: window.createMaterial(sheetImg, tx4, 0, 256, 256), // 水面
@@ -129,36 +129,26 @@ window.buildMapMeshes = function(scene, sheetImg) {
             const heightVal = tileData.h;
             const mats = matSets[tileData.type];
 
-            // ★堀の底（h=0）の処理：水面タイルのみを生成★
+            // 堀の底（h=0）の処理：水面タイルのみを生成
             if (heightVal === 0 && tileData.type === 4) {
-                // PlaneGeometry で天面（水面）のみを作成
                 const waterGeometry = new THREE.PlaneGeometry(window.TILE_SIZE, window.TILE_SIZE);
                 waterGeometry.rotateX(-Math.PI / 2); // 上に向ける
                 const waterMesh = new THREE.Mesh(waterGeometry, mats.top);
-                // 堀の底は地面(y=0)に密着させて配置
                 waterMesh.position.set((x * window.TILE_SIZE) - offsetX, 0, (z * window.TILE_SIZE) - offsetZ); 
                 scene.add(waterMesh);
-                // 堀の底はインタラクティブ（移動先）には追加しない
                 continue;
             }
 
             for (let i = Math.max(0, heightVal - 2); i < heightVal; i++) {
                 let blockMats;
                 if (i === heightVal - 1) {
-                    // 天面ブロック
                     blockMats = [mats.sideTop, mats.sideTop, mats.top.clone(), mats.sideBottom, mats.sideTop, mats.sideTop];
                 } else {
-                    // 土台ブロック
-                    // 土台ブロックの側面は常に sideBottom (土、苔岩、岩、または砂地側面)
                     blockMats = [mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom, mats.sideBottom];
                 }
 
-                // これで、水場タイル(Type4)の土台ブロックの側面は、先生が描いてくれた砂地側面(sideBottom)になる。
-                // 草地タイル(Type0)などの土台ブロックの側面は、土側面(sideBottom)になる。
-                // そして、堀の周囲のブロックの側面（水中）が水中断面(sideTop)になる。
-
                 const cube = new THREE.Mesh(geometry, blockMats);
-                cube.position.set((x * window.TILE_SIZE) - offsetX, (i * window.H_STEP) + (window.H_STEP / 2), (z * window.TILE_SIZE) - offsetZ);
+                cube.position.set((x * window.TILE_SIZE) - offsetX, (i * window.H_STEP) + (H_STEP / 2), (z * window.TILE_SIZE) - offsetZ);
                 scene.add(cube);
                 if (i === heightVal - 1) { 
                     cube.userData = { x, z, h: heightVal }; 
@@ -182,7 +172,7 @@ window.getWalkableNodes = function(unit) {
             if(nx >= 0 && nx < window.MAP_W && nz >= 0 && nz < window.MAP_D) {
                 if(window.getUnitAt(nx, nz)) continue; 
                 let nextH = window.mapData[nz][nx].h; let hDiff = nextH - currH;
-                if(Math.abs(hDiff) <= unit.jump) { // ジャンプ力判定はここ！
+                if(Math.abs(hDiff) <= unit.jump) { 
                     let stepCost = 1 + (hDiff > 0 ? hDiff : 0);
                     let newCost = curr.cost + stepCost;
                     if(newCost <= unit.move) {
