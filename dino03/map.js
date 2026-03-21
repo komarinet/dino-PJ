@@ -1,34 +1,13 @@
 window.MAP_W = 24; window.MAP_D = 18; window.TILE_SIZE = 60; window.H_STEP = 30;
 window.mapData = []; window.tilesMeshMap = {}; window.interactableTiles = [];
-window.generateMapData = function() {
-    for (let z = 0; z < window.MAP_D; z++) {
-        window.mapData[z] = [];
-        for (let x = 0; x < window.MAP_W; x++) {
-            let h = 2; let type = 0;
-            if (z >= 16) { h = 0; type = 4; }
-            if (z < 16) { h = 2; type = 0; }
-            if (z < 14) { h = 3; }
-            if (z <= 10) { h = 5; type = 5; }
-            if (z <= 6) { h = 7; type = 5; }
-            if (z <= 3 && x >= 8 && x <= 16) { h = 9; type = 3; }
-            if (x >= 11 && x <= 13) {
-                if (z === 11) { h = 4; type = 3; }
-                if (z === 10) { h = 5; type = 3; }
-                if (z === 7)  { h = 6; type = 3; }
-                if (z === 6)  { h = 7; type = 3; }
-            }
-            if (z === 15) { h = 1; type = 2; }
-            window.mapData[z][x] = { h, type };
-        }
-    }
-    window.units.forEach(u => { u.h = window.mapData[u.z][u.x].h; });
-};
+
 window.createMaterial = function(sheetImg, tx, ty, tw, th) {
     const canvas = document.createElement('canvas'); canvas.width = 64; canvas.height = 64;
     const ctx = canvas.getContext('2d'); ctx.drawImage(sheetImg, tx, ty, tw, th, 0, 0, 64, 64);
     const tex = new THREE.CanvasTexture(canvas); tex.magFilter = THREE.NearestFilter;
     return new THREE.MeshLambertMaterial({ map: tex });
 };
+
 window.buildMapMeshes = function(scene, sheetImg) {
     const geometry = new THREE.BoxGeometry(window.TILE_SIZE, window.H_STEP, window.TILE_SIZE);
     const matSets = [];
@@ -65,6 +44,7 @@ window.buildMapMeshes = function(scene, sheetImg) {
         }
     }
 };
+
 window.getWalkableNodes = function(unit) {
     let bestCost = {}; let queue = [{ x: unit.x, z: unit.z, cost: 0, path: [] }];
     let resultMap = {}; bestCost[`${unit.x},${unit.z}`] = 0;
