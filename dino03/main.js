@@ -51,15 +51,14 @@ window.showCommandMenu = function() {
 
 function playStageTitle(callback) {
     const overlay = document.getElementById('stage-overlay');
-    document.getElementById('chapter-num').innerText = window.Scenario.stageInfo.chapter;
-    document.getElementById('stage-title').innerHTML = window.Scenario.stageInfo.name;
+    document.getElementById('chapter-num').innerText = window.StageData.info.chapter;
+    document.getElementById('stage-title').innerHTML = window.StageData.info.name;
     gsap.to(overlay, { opacity: 1, y: -20, duration: 1.5, onComplete: () => {
         gsap.to(overlay, { opacity: 0, delay: 2.0, duration: 1.0, onComplete: callback });
     }});
 }
 
 function playBattleStart() {
-    // メッセージ欄の重複表示を削除し、大ロゴのみにする
     const overlay = document.getElementById('battle-start-overlay');
     gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, ease:"back.out", onComplete: () => {
         gsap.to(overlay, { opacity:0, delay:1.0, duration:0.5, onComplete: () => {
@@ -91,9 +90,11 @@ function renderTalkLine(data) {
     const textArea = document.getElementById('ev-text');
     portrait.innerText = data.face;
     namePlate.innerText = data.name;
-    textArea.innerHTML = data.text; // HTMLとして解釈してルビを出す
-    const unit = (data.name === "ティラノ") ? window.player : window.enemy;
-    gsap.to(controls.target, { x: unit.sprite.position.x, z: unit.sprite.position.z, duration: 0.6 });
+    textArea.innerHTML = data.text;
+    const speakerUnit = window.units.find(u => u.id === data.name);
+    if(speakerUnit) {
+        gsap.to(controls.target, { x: speakerUnit.sprite.position.x, z: speakerUnit.sprite.position.z, duration: 0.6 });
+    }
 }
 
 window.startPlayerTurn = function() {
@@ -189,10 +190,8 @@ window.answerConfirm = function(isYes) {
 
 function checkVictory() {
     if(window.enemy.hp <= 0) {
-        // 敵を一旦復活させて会話へ
         window.enemy.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
-        window.startEvent(window.Scenario.postBattleTalk, () => {
-            // ティラノ退場演出
+        window.startEvent(window.StageData.postBattleTalk, () => {
             const exitPath = [{x:12, z:20, h:1}, {x:12, z:25, h:0}];
             window.executeMovement(window.player, exitPath, () => {
                 gsap.to(window.player.sprite.scale, {x:0, y:0, duration:0.5});
@@ -224,10 +223,8 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
     const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
-    
     const heightBonus = (attacker.h - defender.h) * 2;
     const damage = Math.max(1, (attacker.str - defender.def) + heightBonus);
-    
     const origX = attacker.sprite.position.x; const origZ = attacker.sprite.position.z;
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
@@ -278,7 +275,8 @@ window.endPlayerTurn = function() {
 
 function init(sheetImg) {
     const container = document.getElementById('canvas-container');
-    scene = new THREE.Scene(); window.generateMapData();
+    scene = new THREE.Scene(); 
+    window.mapData = window.StageData.generateLayout();
     const w = container.clientWidth; const h = container.clientHeight;
     camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000);
     camera.zoom = 1.5; camera.updateProjectionMatrix();
@@ -291,23 +289,24 @@ function init(sheetImg) {
     const mat = new THREE.LineBasicMaterial({ color: 0xffffff });
     window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
     window.raycastTargets = [...window.interactableTiles]; 
-    window.units.forEach(u => {
+    window.units = window.StageData.units.map(u => {
+        const unit = new window.Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer);
+        unit.h = window.mapData[unit.z][unit.x].h;
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
-        const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(u.emoji, 64, 64);
-        u.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
-        u.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
-        u.sprite.userData = { isUnit: true, unit: u }; window.raycastTargets.push(u.sprite);
-        scene.add(u.sprite); window.updateUnitPosInstantly(u);
+        const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
+        unit.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
+        unit.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
+        unit.sprite.userData = { isUnit: true, unit: unit }; window.raycastTargets.push(unit.sprite);
+        scene.add(unit.sprite); window.updateUnitPosInstantly(unit);
+        if(unit.isPlayer) window.player = unit; else window.enemy = unit;
+        return unit;
     });
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
     window.centerCameraInstantly(window.player); 
     renderer.domElement.addEventListener('pointerup', onPointerClick);
-    
     playStageTitle(() => {
-        window.startEvent(window.Scenario.preBattleTalk, () => {
-            playBattleStart();
-        });
+        window.startEvent(window.StageData.preBattleTalk, () => { playBattleStart(); });
     });
     animate();
 }
@@ -326,19 +325,16 @@ window.clearHighlights = function() {
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
     if (window.gameState === 'TALKING') { window.onGlobalTap(); return; }
-
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(window.raycastTargets);
-    
     if (intersects.length > 0) {
         let data = intersects[0].object.userData;
         if(data.isUnit) data = { x: data.unit.x, z: data.unit.z, h: data.unit.h };
         if(window.gameState === 'IDLE') {
             const u = window.getUnitAt(data.x, data.z);
             if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } else { window.resetToIdle(); }
-        } 
-        else if (window.gameState === 'SELECTING_MOVE') {
+        } else if (window.gameState === 'SELECTING_MOVE') {
             const route = window.walkableTiles.find(n => n.x === Math.round(data.x) && n.z === Math.round(data.z));
             if (route) {
                 window.clearHighlights(); window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${route.x},${route.z}`;
@@ -363,6 +359,7 @@ window.centerCameraInstantly = function(u) {
     camera.lookAt(controls.target);
 }
 window.rotateCam = function(deg) {
+    if (window.gameState === 'ANIMATING') return;
     const r = controls.getDistance(); const polar = controls.getPolarAngle(); const startAz = controls.getAzimuthalAngle();
     const targetAz = startAz + (Number(deg) * Math.PI / 180);
     const proxy = { angle: startAz };
