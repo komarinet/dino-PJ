@@ -59,6 +59,7 @@ function playStageTitle(callback) {
 }
 
 function playBattleStart() {
+    // メッセージ欄の重複表示を削除し、大ロゴのみにする
     const overlay = document.getElementById('battle-start-overlay');
     gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, ease:"back.out", onComplete: () => {
         gsap.to(overlay, { opacity:0, delay:1.0, duration:0.5, onComplete: () => {
@@ -90,7 +91,7 @@ function renderTalkLine(data) {
     const textArea = document.getElementById('ev-text');
     portrait.innerText = data.face;
     namePlate.innerText = data.name;
-    textArea.innerHTML = data.text;
+    textArea.innerHTML = data.text; // HTMLとして解釈してルビを出す
     const unit = (data.name === "ティラノ") ? window.player : window.enemy;
     gsap.to(controls.target, { x: unit.sprite.position.x, z: unit.sprite.position.z, duration: 0.6 });
 }
@@ -109,7 +110,7 @@ window.execCommand = function(cmd) {
     document.getElementById('command-ui').style.display = 'none';
     if(cmd === 'move') {
         window.gameState = 'SELECTING_MOVE'; 
-        window.clearHighlights(); // 色を一度全リセット
+        window.clearHighlights();
         window.walkableTiles = window.getWalkableNodes(window.player);
         window.walkableTiles.forEach(node => { 
             const tile = window.tilesMeshMap[`${node.x},${node.z}`];
@@ -224,7 +225,6 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
     const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
     
-    // 高低差ダメージ補正
     const heightBonus = (attacker.h - defender.h) * 2;
     const damage = Math.max(1, (attacker.str - defender.def) + heightBonus);
     
@@ -302,8 +302,6 @@ function init(sheetImg) {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
     window.centerCameraInstantly(window.player); 
-    
-    // 会話モード中はどこをタップしても進む
     renderer.domElement.addEventListener('pointerup', onPointerClick);
     
     playStageTitle(() => {
@@ -327,8 +325,6 @@ window.clearHighlights = function() {
 
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
-    
-    // 全画面タップ対応
     if (window.gameState === 'TALKING') { window.onGlobalTap(); return; }
 
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
@@ -367,7 +363,6 @@ window.centerCameraInstantly = function(u) {
     camera.lookAt(controls.target);
 }
 window.rotateCam = function(deg) {
-    if (window.gameState === 'ANIMATING') return;
     const r = controls.getDistance(); const polar = controls.getPolarAngle(); const startAz = controls.getAzimuthalAngle();
     const targetAz = startAz + (Number(deg) * Math.PI / 180);
     const proxy = { angle: startAz };
