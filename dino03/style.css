@@ -3,7 +3,6 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
 
 #version-display { position: absolute; top: 5px; right: 5px; color: rgba(255, 255, 255, 0.4); font-size: 0.7rem; font-family: monospace; z-index: 9999; pointer-events: none; }
 
-/* ルビ配置の完全修正 */
 ruby { display: inline-flex; flex-direction: column-reverse; vertical-align: bottom; align-items: center; }
 rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-align: center; margin-bottom: 2px; }
 
@@ -24,14 +23,14 @@ rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-alig
 #ev-text { font-size: 1.1rem; line-height: 1.8; margin: 0; color: #fff; }
 #ev-click-hint { position: absolute; bottom: 0; right: 5px; animation: blink 1s infinite; color: #ffcc00; }
 
-/* ロゴ演出：発光と黒縁で見やすく */
 .big-text-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 5000; text-align: center; pointer-events: none; opacity: 0; width: 100%; }
 .cool-text { color: #fff !important; text-shadow: 0 0 10px #000, 0 0 20px #000, 2px 2px 0 #000; }
 #chapter-num { font-size: 1.8rem; color: #ffcc00 !important; }
 #stage-title { font-size: 2.8rem; margin-top: 10px; }
 
-.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff, 0 0 10px #000, 2px 2px 0 #000; }
-.clear-text { font-size: 3.5rem; font-weight: bold; color: #00ff00 !important; text-shadow: 0 0 20px #000, 0 0 10px #fff, 2px 2px 0 #000; }
+.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff, 0 0 10px #000; }
+/* クリアテキストを鮮やかな緑＋黒縁に修正 */
+.clear-text { font-size: 3.5rem; font-weight: bold; color: #00ff00 !important; text-shadow: 2px 2px 4px #000, 0 0 20px #000, 0 0 10px #fff; }
 
 #status-ui { top: 10px; left: 10px; width: 170px; display: none; }
 .unit-name { font-size: 1.1rem; border-bottom: 1px solid #777; margin-bottom: 5px; }
@@ -40,7 +39,7 @@ rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-alig
 .mp-bar { height: 100%; background: #2196f3; transition: width 0.3s; }
 .btn-detail { background: #444; color: white; border: 1px solid #888; width: 100%; margin-top: 5px; padding: 4px 0; border-radius: 4px; font-size: 0.8rem;}
 
-#command-ui { bottom: 10px; left: 10px; width: 110px; display: none; }
+#command-ui { bottom: 10px; left: 10px; width: 120px; display: none; }
 .cmd-btn { display: block; width: 100%; background: transparent; color: white; border: none; text-align: left; padding: 12px 8px; font-size: 1.1rem; border-bottom: 1px solid #444; }
 .cmd-btn:hover { background: rgba(255,255,255,0.15); }
 .cmd-btn:disabled { display: none; }
