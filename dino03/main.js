@@ -12,12 +12,21 @@ window.addEventListener('load', () => {
     sheetImg.src = 'img/plate01.png';
 
     sheetImg.onload = () => {
-        // ブラキオのドット絵をロード
-        texLoader.load('img/bra.png', (braTex) => {
-            const loader = document.getElementById('loading-screen');
-            loader.style.opacity = '0';
-            setTimeout(() => { loader.style.display = 'none'; init(sheetImg, braTex); }, 500);
-        });
+        // ★画像の読み込み失敗時の安全装置を追加★
+        texLoader.load('img/bra.png', 
+            (braTex) => {
+                const loader = document.getElementById('loading-screen');
+                loader.style.opacity = '0';
+                setTimeout(() => { loader.style.display = 'none'; init(sheetImg, braTex); }, 500);
+            },
+            undefined,
+            (err) => {
+                console.error("画像が見つかりません。絵文字で代用します。");
+                const loader = document.getElementById('loading-screen');
+                loader.style.opacity = '0';
+                setTimeout(() => { loader.style.display = 'none'; init(sheetImg, null); }, 500);
+            }
+        );
     };
 });
 
@@ -101,16 +110,18 @@ function renderTalkLine(data) {
     const namePlate = document.getElementById('ev-name-plate');
     const textArea = document.getElementById('ev-text');
     
-    // 顔グラの表示（ブラキオならドット絵の1コマ目、他は絵文字）
-    if (data.name === 'ブラキオサウルス') {
-        portrait.innerHTML = `<img src="img/bra.png" style="object-fit:none; object-position: center top; width:352px; height:250px; transform:scale(0.35); transform-origin:center top;">`;
+    // ★UI顔グラフィック：ブラキオならドット絵の上のコマだけ表示★
+    const speakerUnit = window.units.find(u => u.id === data.name);
+    if (speakerUnit && speakerUnit.texture) {
+        // 画像の表示領域を調整して綺麗に表示
+        portrait.innerHTML = `<div style="width: 88px; height: 62px; background-image: url('img/bra.png'); background-size: 88px 250px; background-position: 0 0;"></div>`;
     } else {
         portrait.innerHTML = `<span>${data.face}</span>`;
     }
     
     namePlate.innerText = data.name;
     textArea.innerHTML = data.text;
-    const speakerUnit = window.units.find(u => u.id === data.name);
+    
     if(speakerUnit) {
         gsap.to(controls.target, { x: speakerUnit.sprite.position.x, z: speakerUnit.sprite.position.z, duration: 0.6 });
     }
@@ -159,7 +170,7 @@ window.execCommand = function(cmd) {
         listDiv.innerHTML = ''; 
         targets.forEach(t => {
             const btn = document.createElement('button');
-            btn.className = 'cmd-btn'; btn.innerHTML = `${t.emoji} ${t.id} (HP: ${t.hp})`;
+            btn.className = 'cmd-btn'; btn.innerHTML = `${t.id} (HP: ${t.hp})`;
             btn.onclick = () => window.selectTarget(t);
             listDiv.appendChild(btn);
             window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); 
@@ -225,10 +236,11 @@ function checkVictory() {
         window.gameState = 'FINISHED'; 
         setTimeout(() => {
             // 被弾ポーズ(4)で停止させる
-            window.enemy.animState = 'FIXED';
-            window.enemy.setFrame(4);
-            const h = 150;
-            gsap.to(window.enemy.sprite.scale, { x: h * (352/250), y: h, duration: 0.1 });
+            if(window.enemy.texture) {
+                window.enemy.animState = 'FIXED';
+                window.enemy.setFrame(4);
+            }
+            gsap.to(window.enemy.sprite.scale, { x: 150 * (352/250), y: 150, duration: 0.1 }); 
 
             const mainTalk = window.StageData.postBattleTalk.slice(0, -1);
             const lastLine = [window.StageData.postBattleTalk[window.StageData.postBattleTalk.length - 1]];
@@ -296,16 +308,13 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const damage = Math.max(1, (attacker.str - defender.def) + heightBonus);
     const origX = attacker.sprite.position.x; const origZ = attacker.sprite.position.z;
 
-    // ★攻撃ポーズ(3)
     if(attacker.texture) { attacker.animState = 'FIXED'; attacker.setFrame(3); }
-    // ★やられポーズ(4)
     if(defender.texture) { defender.animState = 'FIXED'; defender.setFrame(4); }
 
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
         window.showFloatingText(defender, damage, 'damage');
         
-        // 攻撃終了後にIDLEに戻す
         if(attacker.texture) attacker.animState = 'IDLE';
         if(defender.texture && defender.hp > 0) defender.animState = 'IDLE';
 
@@ -377,7 +386,9 @@ function init(sheetImg, braTex) {
     window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
     window.raycastTargets = [...window.interactableTiles]; 
     window.units = window.StageData.units.map(u => {
-        const tex = (u.id === 'ブラキオサウルス') ? braTex : null;
+        const tex = (u.id === 'ブラキオサウルス' && braTex) ? braTex.clone() : null;
+        if(tex) tex.needsUpdate = true;
+
         const unit = new window.Unit(u.id, u.emoji, Number(u.x), Number(u.z), u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, tex);
         
         if(!tex) {
