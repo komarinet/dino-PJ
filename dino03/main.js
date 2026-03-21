@@ -6,16 +6,13 @@ window.raycastTargets = []; window.talkIndex = 0;
 let hasBattleStarted = false;
 
 window.addEventListener('load', () => {
-    // 時間計測用
     clock = new THREE.Clock();
-    
-    // ★テクスチャロード待ちにフローを変更★
     const texLoader = new THREE.TextureLoader();
     const sheetImg = new Image();
-    sheetImg.src = 'img/plate01.png'; // 地形用
+    sheetImg.src = 'img/plate01.png';
 
     sheetImg.onload = () => {
-        // ★ブラキオサウルスのスプライトテクスチャ（img/bra.png）をロード★
+        // ブラキオのドット絵をロード
         texLoader.load('img/bra.png', (braTex) => {
             const loader = document.getElementById('loading-screen');
             loader.style.opacity = '0';
@@ -38,7 +35,6 @@ window.hideAllUI = function() {
 window.showStatus = function(unit) {
     window.setMsg("");
     document.getElementById('status-ui').style.display = 'block';
-    // ドット絵表示の場合は絵文字は不要。名前のみ。
     document.getElementById('st-name').innerText = unit.id;
     document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
     document.getElementById('st-hp-bar').style.width = `${(unit.hp/unit.maxHp)*100}%`;
@@ -56,8 +52,7 @@ window.toggleDetail = function() {
 }
 
 window.showCommandMenu = function() {
-    const ui = document.getElementById('command-ui');
-    ui.style.display = 'block';
+    document.getElementById('command-ui').style.display = 'block';
     document.getElementById('cmd-move').style.display = window.player.hasMoved ? 'none' : 'block';
     document.getElementById('cmd-attack').style.display = 'block';
     document.getElementById('cmd-wait').style.display = 'block';
@@ -105,7 +100,14 @@ function renderTalkLine(data) {
     const portrait = document.getElementById('ev-portrait');
     const namePlate = document.getElementById('ev-name-plate');
     const textArea = document.getElementById('ev-text');
-    portrait.innerText = data.face;
+    
+    // 顔グラの表示（ブラキオならドット絵の1コマ目、他は絵文字）
+    if (data.name === 'ブラキオサウルス') {
+        portrait.innerHTML = `<img src="img/bra.png" style="object-fit:none; object-position: center top; width:352px; height:250px; transform:scale(0.35); transform-origin:center top;">`;
+    } else {
+        portrait.innerHTML = `<span>${data.face}</span>`;
+    }
+    
     namePlate.innerText = data.name;
     textArea.innerHTML = data.text;
     const speakerUnit = window.units.find(u => u.id === data.name);
@@ -222,8 +224,11 @@ function checkVictory() {
     if(window.enemy.hp <= 0 && window.gameState !== 'FINISHED') {
         window.gameState = 'FINISHED'; 
         setTimeout(() => {
-            // 敵を一旦復活（会話のため）
-            gsap.to(window.enemy.sprite.scale, { x: 200 * (352/250), y: 200, duration: 0.1 }); // ドット絵サイズに合わせる
+            // 被弾ポーズ(4)で停止させる
+            window.enemy.animState = 'FIXED';
+            window.enemy.setFrame(4);
+            const h = 150;
+            gsap.to(window.enemy.sprite.scale, { x: h * (352/250), y: h, duration: 0.1 });
 
             const mainTalk = window.StageData.postBattleTalk.slice(0, -1);
             const lastLine = [window.StageData.postBattleTalk[window.StageData.postBattleTalk.length - 1]];
@@ -291,9 +296,19 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const damage = Math.max(1, (attacker.str - defender.def) + heightBonus);
     const origX = attacker.sprite.position.x; const origZ = attacker.sprite.position.z;
 
+    // ★攻撃ポーズ(3)
+    if(attacker.texture) { attacker.animState = 'FIXED'; attacker.setFrame(3); }
+    // ★やられポーズ(4)
+    if(defender.texture) { defender.animState = 'FIXED'; defender.setFrame(4); }
+
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
         window.showFloatingText(defender, damage, 'damage');
+        
+        // 攻撃終了後にIDLEに戻す
+        if(attacker.texture) attacker.animState = 'IDLE';
+        if(defender.texture && defender.hp > 0) defender.animState = 'IDLE';
+
         if(defender.hp <= 0) {
             gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: () => { checkVictory(); }});
         } else {
@@ -345,7 +360,6 @@ window.endPlayerTurn = function() {
     }, 1000);
 }
 
-// ★引数 braTex を追加★
 function init(sheetImg, braTex) {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene(); 
@@ -363,18 +377,15 @@ function init(sheetImg, braTex) {
     window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
     window.raycastTargets = [...window.interactableTiles]; 
     window.units = window.StageData.units.map(u => {
-        // ★ユニット作成時にbraTexを渡す（現状は敵にのみテクスチャありと仮定）★
         const tex = (u.id === 'ブラキオサウルス') ? braTex : null;
-        
         const unit = new window.Unit(u.id, u.emoji, Number(u.x), Number(u.z), u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, tex);
         
-        // テクスチャがないユニット（現状のティラノ）は現状維持
-        if(!u.texture) {
+        if(!tex) {
             const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
             const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
             unit.material = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) });
             unit.sprite = new THREE.Sprite(unit.material);
-            unit.sprite.scale.set(window.TILE_SIZE * 1.6, window.TILE_SIZE * 1.6, 1); // 判定拡大
+            unit.sprite.scale.set(window.TILE_SIZE * 1.6, window.TILE_SIZE * 1.6, 1);
             unit.sprite.userData = { isUnit: true, unit: unit };
         }
         
@@ -408,15 +419,12 @@ window.clearHighlights = function() {
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
     if (window.gameState === 'TALKING') { window.onGlobalTap(); return; }
-    
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(window.raycastTargets);
-    
     if (intersects.length > 0) {
         let data = intersects[0].object.userData;
         if(data.isUnit) data = { x: data.unit.x, z: data.unit.z, h: data.unit.h };
-        
         if(window.gameState === 'IDLE') {
             const u = window.getUnitAt(data.x, data.z);
             if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } else { window.resetToIdle(); }
@@ -464,10 +472,9 @@ window.panCamera = function(dx, dy) {
 }
 window.zoomCamera = function(amount) { camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2)); camera.updateProjectionMatrix(); }
 
-// ★animate()内でユニットのアニメーションを更新★
 function animate() {
     requestAnimationFrame(animate);
-    const delta = clock.getDelta() * 1000; // msに変換
+    const delta = clock.getDelta() * 1000;
     if(window.units) { window.units.forEach(u => u.updateAnimation && u.updateAnimation(delta)); }
     controls.update();
     renderer.render(scene, camera);
