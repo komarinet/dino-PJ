@@ -11,63 +11,47 @@ window.Unit = class {
         this.sprite = null; this.material = null;
         this.hasMoved = false; this.hasAttacked = false;
 
-        // アニメーション用
+        // アニメーション制御
         this.texture = texture;
-        this.animTime = 0; // 時間計測
-        this.animSpeed = 500; // 1フレームの長さ(ms)
-        this.animState = 'IDLE'; // IDLE, ATTACK, HURT
+        this.animTime = 0;
+        this.animSpeed = 500; // 0.5秒
+        this.animState = 'IDLE'; // IDLE, ATTACK, HURT, FIXED
 
         if(this.texture) { this.initTextureSprite(); }
     }
 
-    // ★ドット絵スプライトの初期化★
     initTextureSprite() {
-        // テクスチャ設定。1枚の画像を縦4分割（縦repeat: 0.25）
+        // スプライトシートとして設定（縦4枚）
         this.texture.repeat.set(1, 0.25);
-        this.texture.magFilter = THREE.NearestFilter; // ドットをクッキリ
+        this.texture.magFilter = THREE.NearestFilter;
         
         this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true });
         this.sprite = new THREE.Sprite(this.material);
+        this.sprite.center.set(0.5, 0.0); // 足元を基準に
         
-        // ★重要：スプライトの中心を足元に（x:0.5, y:0.0）★
-        this.sprite.center.set(0.5, 0.0);
-        
-        // スケーリング。画像のサイズ（352x250）をゲーム単位に調整。
-        // とりあえず1タイル（60px）の3倍の高さに。
-        const baseH = 200;
-        this.sprite.scale.set(baseH * (352/250), baseH, 1);
-        
+        // 150pxの高さにスケーリング
+        const h = 150;
+        this.sprite.scale.set(h * (352/250), h, 1);
         this.sprite.userData = { isUnit: true, unit: this };
-        this.updateUV(); // 最初のフレーム設定
+        this.setFrame(1);
     }
 
-    // ★アニメーション状態の更新（animateループ内で呼ばれる）★
     updateAnimation(delta) {
-        if(!this.texture) return;
-        this.animTime += delta;
+        if(!this.texture || this.animState === 'FIXED') return;
         
         if(this.animState === 'IDLE') {
-            // 待機中：フレーム1と2を交互
+            this.animTime += delta;
+            // 待機中：フレーム1(0.75)と2(0.5)を交互
             const frame = (Math.floor(this.animTime / this.animSpeed) % 2) + 1;
-            this.updateUV(frame);
+            this.setFrame(frame);
         }
-        // 他のステート（ATTACK, HURT）は、攻撃や被弾時に外部から設定する
     }
 
-    // ★UV座標（フレーム）の切り替え★
-    updateUV(frameNum) {
+    // フレーム直接指定（1:待機, 2:足上げ, 3:攻撃, 4:やられ）
+    setFrame(num) {
         if(!this.texture) return;
-        // 縦に4つ積み上げている場合のオフセット計算（下から上への0〜1座標）
-        // 1(Stand): 0.75, 2(Foot): 0.5, 3(Atk): 0.25, 4(Hurt): 0.0
-        let offsetY = 0.0;
-        switch(frameNum) {
-            case 1: offsetY = 0.75; break; // 立ち姿
-            case 2: offsetY = 0.50; break; // 足上げ
-            case 3: offsetY = 0.25; break; // 攻撃
-            case 4: offsetY = 0.00; break; // 被弾
-            default: offsetY = 0.75; // デフォルトは立ち
-        }
-        this.texture.offset.y = offsetY;
+        const offsets = { 1: 0.75, 2: 0.50, 3: 0.25, 4: 0.00 };
+        this.texture.offset.y = offsets[num] || 0.75;
     }
 };
 
