@@ -12,10 +12,6 @@ window.Unit = class {
     }
 };
 
-window.player = new window.Unit("ティラノ", "🦖", 12, 15, 30, 10, 15, 10, 5, 8, 4, 3, true);
-window.enemy  = new window.Unit("ブラキオサウルス", "🦕", 12, 3, 20, 5, 12, 12, 4, 2, 4, 2, false);
-window.units = [window.player, window.enemy];
-
 window.getUnitAt = function(x, z) {
     return window.units.find(u => u.x === x && u.z === z && u.hp > 0);
 };
