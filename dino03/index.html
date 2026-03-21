@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v8.2.0)</title>
+    <title>ちびっこティラノ：タクティクス (v8.4.0)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -12,7 +12,7 @@
 <body>
 
 <div id="loading-screen"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.2.0 (The Final Polish)</div>
+<div id="version-display">v8.4.0 (UX & Battle Fix)</div>
 
 <div id="stage-overlay" class="big-text-overlay">
     <div id="chapter-num" class="cool-text"></div>
@@ -62,6 +62,7 @@
     <button id="cmd-move" class="cmd-btn" onclick="window.execCommand('move')">🚶 <ruby>移動<rt>いどう</rt></ruby></button>
     <button id="cmd-attack" class="cmd-btn" onclick="window.execCommand('attack')">⚔️ <ruby>攻撃<rt>こうげき</rt></ruby></button>
     <button id="cmd-wait" class="cmd-btn" onclick="window.execCommand('wait')">⏳ <ruby>待機<rt>たいき</rt></ruby></button>
+    <button id="cmd-cancel" class="cmd-btn" style="color:#aaa; border-top:1px dashed #555;" onclick="window.resetToIdle()">↩ <ruby>戻<rt>もど</rt></ruby>る</button>
 </div>
 
 <div id="target-ui" class="rpg-window">
