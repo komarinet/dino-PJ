@@ -14,22 +14,20 @@ window.Unit = class {
         // アニメーション制御
         this.texture = texture;
         this.animTime = 0;
-        this.animSpeed = 500; // 0.5秒
-        this.animState = 'IDLE'; // IDLE, ATTACK, HURT, FIXED
+        this.animSpeed = 500; // 0.5秒ごとに切り替え
+        this.animState = 'IDLE'; // IDLE, FIXED
 
         if(this.texture) { this.initTextureSprite(); }
     }
 
     initTextureSprite() {
-        // スプライトシートとして設定（縦4枚）
         this.texture.repeat.set(1, 0.25);
         this.texture.magFilter = THREE.NearestFilter;
         
         this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true });
         this.sprite = new THREE.Sprite(this.material);
-        this.sprite.center.set(0.5, 0.0); // 足元を基準に
+        this.sprite.center.set(0.5, 0.0); // 足元基準
         
-        // 150pxの高さにスケーリング
         const h = 150;
         this.sprite.scale.set(h * (352/250), h, 1);
         this.sprite.userData = { isUnit: true, unit: this };
@@ -41,15 +39,15 @@ window.Unit = class {
         
         if(this.animState === 'IDLE') {
             this.animTime += delta;
-            // 待機中：フレーム1(0.75)と2(0.5)を交互
+            // 待機中：フレーム1(立ち)と2(足上げ)を交互
             const frame = (Math.floor(this.animTime / this.animSpeed) % 2) + 1;
             this.setFrame(frame);
         }
     }
 
-    // フレーム直接指定（1:待機, 2:足上げ, 3:攻撃, 4:やられ）
     setFrame(num) {
         if(!this.texture) return;
+        // 縦4コマの下から上へのオフセット
         const offsets = { 1: 0.75, 2: 0.50, 3: 0.25, 4: 0.00 };
         this.texture.offset.y = offsets[num] || 0.75;
     }
