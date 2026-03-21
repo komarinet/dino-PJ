@@ -1,4 +1,4 @@
-let scene, camera, renderer, controls;
+let scene, camera, renderer, controls, clock;
 window.gameState = 'INIT'; 
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
@@ -6,12 +6,21 @@ window.raycastTargets = []; window.talkIndex = 0;
 let hasBattleStarted = false;
 
 window.addEventListener('load', () => {
+    // 時間計測用
+    clock = new THREE.Clock();
+    
+    // ★テクスチャロード待ちにフローを変更★
+    const texLoader = new THREE.TextureLoader();
     const sheetImg = new Image();
-    sheetImg.src = 'img/plate01.png';
+    sheetImg.src = 'img/plate01.png'; // 地形用
+
     sheetImg.onload = () => {
-        const loader = document.getElementById('loading-screen');
-        loader.style.opacity = '0';
-        setTimeout(() => { loader.style.display = 'none'; init(sheetImg); }, 500);
+        // ★ブラキオサウルスのスプライトテクスチャ（img/bra.png）をロード★
+        texLoader.load('img/bra.png', (braTex) => {
+            const loader = document.getElementById('loading-screen');
+            loader.style.opacity = '0';
+            setTimeout(() => { loader.style.display = 'none'; init(sheetImg, braTex); }, 500);
+        });
     };
 });
 
@@ -29,7 +38,8 @@ window.hideAllUI = function() {
 window.showStatus = function(unit) {
     window.setMsg("");
     document.getElementById('status-ui').style.display = 'block';
-    document.getElementById('st-name').innerText = `${unit.emoji} ${unit.id}`;
+    // ドット絵表示の場合は絵文字は不要。名前のみ。
+    document.getElementById('st-name').innerText = unit.id;
     document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
     document.getElementById('st-hp-bar').style.width = `${(unit.hp/unit.maxHp)*100}%`;
     document.getElementById('st-mp').innerText = `${unit.mp}/${unit.maxMp}`;
@@ -208,30 +218,20 @@ window.answerConfirm = function(isYes) {
     }
 }
 
-// ★第1話の完結シーケンス（シネマティック版）★
 function checkVictory() {
     if(window.enemy.hp <= 0 && window.gameState !== 'FINISHED') {
         window.gameState = 'FINISHED'; 
         setTimeout(() => {
             // 敵を一旦復活（会話のため）
-            gsap.to(window.enemy.sprite.scale, { x: window.TILE_SIZE * 1.5, y: window.TILE_SIZE * 1.5, duration: 0.1 });
+            gsap.to(window.enemy.sprite.scale, { x: 200 * (352/250), y: 200, duration: 0.1 }); // ドット絵サイズに合わせる
 
-            // 会話データを分割（最後の一行以外を取得）
             const mainTalk = window.StageData.postBattleTalk.slice(0, -1);
             const lastLine = [window.StageData.postBattleTalk[window.StageData.postBattleTalk.length - 1]];
 
-            // 1. メインの会話進行
             window.startEvent(mainTalk, () => {
-                // 2. ティラノ退場演出：1マス0.5秒（2マス/秒）で移動、カメラ追従
-                const exitPath = [
-                    {x:12, z:17, h:1}, {x:12, z:19, h:1}, {x:12, z:21, h:0}, {x:12, z:23, h:0}, {x:12, z:25, h:0}
-                ];
-                
+                const exitPath = [{x:12, z:20, h:1}, {x:12, z:22, h:0}];
                 executeSlowExit(window.player, exitPath, () => {
-                    // ティラノ消滅
                     gsap.to(window.player.sprite.scale, {x:0, y:0, duration:0.5});
-
-                    // 3. カメラをブラキオサウルスへ戻す（1.5秒かけて移動）
                     gsap.to(controls.target, {
                         x: window.enemy.sprite.position.x,
                         y: window.enemy.sprite.position.y,
@@ -239,9 +239,7 @@ function checkVictory() {
                         duration: 1.5,
                         ease: "power2.inOut",
                         onComplete: () => {
-                            // 4. ブラキオの最後の一言
                             window.startEvent(lastLine, () => {
-                                // 5. ステージクリア表示
                                 showBigEpisodeClear();
                             });
                         }
@@ -252,26 +250,17 @@ function checkVictory() {
     }
 }
 
-// ★退場専用：低速移動＆カメラ追従★
 function executeSlowExit(unit, path, onComplete) {
-    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2;
-    const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
+    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const tl = gsap.timeline({ onComplete });
-
     path.forEach(step => {
-        const tX = (step.x * window.TILE_SIZE) - offsetX;
-        const tZ = (step.z * window.TILE_SIZE) - offsetZ;
+        const tX = (step.x * window.TILE_SIZE) - offsetX; const tZ = (step.z * window.TILE_SIZE) - offsetZ;
         const tY = (step.h * window.H_STEP) + (window.TILE_SIZE * 0.5);
-
-        // 1マスあたり0.5秒（2マス一秒のペース）
         tl.to(unit.sprite.position, {
             x: tX, z: tZ, y: tY,
             duration: 0.5,
             ease: "none",
-            onUpdate: () => {
-                // カメラの注視点をユニットに同期
-                controls.target.copy(unit.sprite.position);
-            }
+            onUpdate: () => { controls.target.copy(unit.sprite.position); }
         });
     });
 }
@@ -306,9 +295,7 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
         defender.hp -= damage;
         window.showFloatingText(defender, damage, 'damage');
         if(defender.hp <= 0) {
-            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: () => {
-                checkVictory(); 
-            }});
+            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: () => { checkVictory(); }});
         } else {
             const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
             if(allowCounter && dist === 1) {
@@ -358,7 +345,8 @@ window.endPlayerTurn = function() {
     }, 1000);
 }
 
-function init(sheetImg) {
+// ★引数 braTex を追加★
+function init(sheetImg, braTex) {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene(); 
     window.mapData = window.StageData.generateLayout();
@@ -375,13 +363,23 @@ function init(sheetImg) {
     window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
     window.raycastTargets = [...window.interactableTiles]; 
     window.units = window.StageData.units.map(u => {
-        const unit = new window.Unit(u.id, u.emoji, Number(u.x), Number(u.z), u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer);
+        // ★ユニット作成時にbraTexを渡す（現状は敵にのみテクスチャありと仮定）★
+        const tex = (u.id === 'ブラキオサウルス') ? braTex : null;
+        
+        const unit = new window.Unit(u.id, u.emoji, Number(u.x), Number(u.z), u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, tex);
+        
+        // テクスチャがないユニット（現状のティラノ）は現状維持
+        if(!u.texture) {
+            const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
+            const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
+            unit.material = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) });
+            unit.sprite = new THREE.Sprite(unit.material);
+            unit.sprite.scale.set(window.TILE_SIZE * 1.6, window.TILE_SIZE * 1.6, 1); // 判定拡大
+            unit.sprite.userData = { isUnit: true, unit: unit };
+        }
+        
         unit.h = window.mapData[unit.z][unit.x].h;
-        const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
-        const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
-        unit.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
-        unit.sprite.scale.set(window.TILE_SIZE * 1.6, window.TILE_SIZE * 1.6, 1); 
-        unit.sprite.userData = { isUnit: true, unit: unit }; window.raycastTargets.push(unit.sprite);
+        window.raycastTargets.push(unit.sprite);
         scene.add(unit.sprite); window.updateUnitPosInstantly(unit);
         if(unit.isPlayer) window.player = unit; else window.enemy = unit;
         return unit;
@@ -410,12 +408,15 @@ window.clearHighlights = function() {
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
     if (window.gameState === 'TALKING') { window.onGlobalTap(); return; }
+    
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(window.raycastTargets);
+    
     if (intersects.length > 0) {
         let data = intersects[0].object.userData;
         if(data.isUnit) data = { x: data.unit.x, z: data.unit.z, h: data.unit.h };
+        
         if(window.gameState === 'IDLE') {
             const u = window.getUnitAt(data.x, data.z);
             if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } else { window.resetToIdle(); }
@@ -427,7 +428,7 @@ function onPointerClick(event) {
                 tile.material[2].color.setHex(0xffff00); window.selectorMesh.position.copy(tile.position); window.selectorMesh.visible = true;
                 document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
-                document.getElementById('command-ui').style.display = 'none';
+                document.getElementById('command-ui').style.display = 'none'; 
                 document.getElementById('confirm-ui').style.display = 'block';
             }
         } 
@@ -462,4 +463,12 @@ window.panCamera = function(dx, dy) {
     gsap.to(controls.target, { x: controls.target.x + moveX, z: controls.target.z + moveZ, duration: 0.3 });
 }
 window.zoomCamera = function(amount) { camera.zoom = Math.max(0.5, camera.zoom + (amount > 0 ? -0.2 : 0.2)); camera.updateProjectionMatrix(); }
-function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+
+// ★animate()内でユニットのアニメーションを更新★
+function animate() {
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta() * 1000; // msに変換
+    if(window.units) { window.units.forEach(u => u.updateAnimation && u.updateAnimation(delta)); }
+    controls.update();
+    renderer.render(scene, camera);
+}
