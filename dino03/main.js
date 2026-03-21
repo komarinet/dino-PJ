@@ -3,6 +3,7 @@ window.gameState = 'INIT';
 window.walkableTiles = []; window.attackableTiles = [];
 window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
 window.raycastTargets = []; window.talkIndex = 0;
+let hasBattleStarted = false;
 
 window.addEventListener('load', () => {
     const sheetImg = new Image();
@@ -27,7 +28,8 @@ window.hideAllUI = function() {
 
 window.showStatus = function(unit) {
     window.setMsg("");
-    document.getElementById('status-ui').style.display = 'block';
+    const ui = document.getElementById('status-ui');
+    ui.style.display = 'block';
     document.getElementById('st-name').innerText = `${unit.emoji} ${unit.id}`;
     document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
     document.getElementById('st-hp-bar').style.width = `${(unit.hp/unit.maxHp)*100}%`;
@@ -47,6 +49,7 @@ window.toggleDetail = function() {
 window.showCommandMenu = function() {
     document.getElementById('command-ui').style.display = 'block';
     document.getElementById('cmd-move').style.display = window.player.hasMoved ? 'none' : 'block';
+    document.getElementById('cmd-cancel').style.display = 'block'; 
 }
 
 function playStageTitle(callback) {
@@ -59,6 +62,8 @@ function playStageTitle(callback) {
 }
 
 function playBattleStart() {
+    if(hasBattleStarted) return;
+    hasBattleStarted = true;
     const overlay = document.getElementById('battle-start-overlay');
     gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, ease:"back.out", onComplete: () => {
         gsap.to(overlay, { opacity:0, delay:1.0, duration:0.5, onComplete: () => {
@@ -98,6 +103,7 @@ function renderTalkLine(data) {
 }
 
 window.startPlayerTurn = function() {
+    if(window.enemy.hp <= 0) return; // 敵が死んでいたらターン開始しない
     window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
     window.setMsg("あなたの<ruby>番<rt>ばん</rt></ruby>です！<br><ruby>仲間<rt>なかま</rt></ruby>をタップしてね", "#00ff00");
 }
@@ -105,10 +111,10 @@ window.startPlayerTurn = function() {
 window.resetToIdle = function() {
     window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
     window.setMsg(""); 
+    if(window.selectorMesh) window.selectorMesh.visible = false;
 }
 
 window.execCommand = function(cmd) {
-    document.getElementById('command-ui').style.display = 'none';
     if(cmd === 'move') {
         window.gameState = 'SELECTING_MOVE'; 
         window.clearHighlights();
@@ -117,6 +123,10 @@ window.execCommand = function(cmd) {
             const tile = window.tilesMeshMap[`${Number(node.x)},${Number(node.z)}`];
             if(tile) tile.material[2].color.setHex(0x55ff55); 
         });
+        document.getElementById('command-ui').style.display = 'block'; // キャンセルボタン出すため
+        document.getElementById('cmd-move').style.display = 'none';
+        document.getElementById('cmd-attack').style.display = 'none';
+        document.getElementById('cmd-wait').style.display = 'none';
     } else if (cmd === 'attack') {
         let targets = window.getAttackableEnemies(window.player);
         if(targets.length === 0) {
@@ -134,11 +144,13 @@ window.execCommand = function(cmd) {
             listDiv.appendChild(btn);
             window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555); 
         });
+        document.getElementById('command-ui').style.display = 'none';
         document.getElementById('target-ui').style.display = 'block';
     } else if (cmd === 'wait') {
         window.gameState = 'CONFIRMING'; window.confirmMode = 'WAIT';
         document.getElementById('confirm-text').innerHTML = "<ruby>行動<rt>こうどう</rt></ruby>を終了しますか？";
         document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
+        document.getElementById('command-ui').style.display = 'none';
         document.getElementById('confirm-ui').style.display = 'block';
     }
 }
@@ -189,17 +201,19 @@ window.answerConfirm = function(isYes) {
 }
 
 function checkVictory() {
-    if(window.enemy.hp <= 0) {
-        // 敵を一旦復活させて会話へ（GSAPで確実に表示）
-        gsap.to(window.enemy.sprite.scale, { x: window.TILE_SIZE * 1.5, y: window.TILE_SIZE * 1.5, duration: 0 });
-        window.startEvent(window.StageData.postBattleTalk, () => {
-            // ティラノ退場演出：堀を越える
-            const exitPath = [{x:12, z:16, h:1}, {x:12, z:17, h:0}];
-            window.executeMovement(window.player, exitPath, () => {
-                gsap.to(window.player.sprite.scale, {x:0, y:0, duration:0.5});
-                showBigEpisodeClear();
+    // ★反撃でも敵ターンでも、ブラキオが倒れたら即時発動
+    if(window.enemy.hp <= 0 && window.gameState !== 'TALKING' && window.gameState !== 'FINISHED') {
+        window.gameState = 'FINISHED'; // 重複防止
+        setTimeout(() => {
+            gsap.to(window.enemy.sprite.scale, { x: window.TILE_SIZE * 1.5, y: window.TILE_SIZE * 1.5, duration: 0.1 });
+            window.startEvent(window.StageData.postBattleTalk, () => {
+                const exitPath = [{x:12, z:16, h:1}, {x:12, z:22, h:0}];
+                window.executeMovement(window.player, exitPath, () => {
+                    gsap.to(window.player.sprite.scale, {x:0, y:0, duration:0.5});
+                    showBigEpisodeClear();
+                });
             });
-        });
+        }, 800);
     }
 }
 
@@ -228,15 +242,21 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const heightBonus = (attacker.h - defender.h) * 2;
     const damage = Math.max(1, (attacker.str - defender.def) + heightBonus);
     const origX = attacker.sprite.position.x; const origZ = attacker.sprite.position.z;
+
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
         window.showFloatingText(defender, damage, 'damage');
         if(defender.hp <= 0) {
-            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete});
+            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: () => {
+                checkVictory(); // ★ここで勝利判定
+            }});
         } else {
             const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
             if(allowCounter && dist === 1) {
-                setTimeout(() => { window.setMsg("COUNTER!", "#ff0000"); window.executeAttack(defender, attacker, false, onComplete); }, 800);
+                setTimeout(() => { 
+                    window.setMsg("COUNTER!", "#ff0000"); 
+                    window.executeAttack(defender, attacker, false, onComplete); 
+                }, 800);
             } else { onComplete(); }
         }
     }});
@@ -260,8 +280,8 @@ window.executeMovement = function(unit, path, onComplete) {
 }
 
 window.endPlayerTurn = function() {
+    if(window.enemy.hp <= 0) { checkVictory(); return; }
     window.player.hasMoved = false; window.player.hasAttacked = false; window.hideAllUI();
-    if(window.enemy.hp <= 0) return;
     window.gameState = 'ENEMY_TURN'; window.setMsg("<ruby>敵<rt>てき</rt></ruby>の番です...", "#ff5555");
     setTimeout(() => {
         let routes = window.getWalkableNodes(window.enemy);
@@ -269,7 +289,11 @@ window.endPlayerTurn = function() {
         routes.forEach(r => { let d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z); if(d < minD) { minD = d; bestRoute = r; } });
         if(bestRoute && bestRoute.path.length > 0) {
             window.executeMovement(window.enemy, bestRoute.path, () => {
-                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { window.executeAttack(window.enemy, window.player, true, () => { window.startPlayerTurn(); }); } else { window.startPlayerTurn(); }
+                if(window.getAttackableEnemies(window.enemy).includes(window.player)) { 
+                    window.executeAttack(window.enemy, window.player, true, () => { 
+                        if(window.player.hp <= 0) { window.setMsg("GAME OVER", "#ff0000"); } else { window.startPlayerTurn(); }
+                    }); 
+                } else { window.startPlayerTurn(); }
             });
         } else { window.startPlayerTurn(); }
     }, 1000);
@@ -297,7 +321,7 @@ function init(sheetImg) {
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
         const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
         unit.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
-        unit.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
+        unit.sprite.scale.set(window.TILE_SIZE * 1.6, window.TILE_SIZE * 1.6, 1); // 判定拡大
         unit.sprite.userData = { isUnit: true, unit: unit }; window.raycastTargets.push(unit.sprite);
         scene.add(unit.sprite); window.updateUnitPosInstantly(unit);
         if(unit.isPlayer) window.player = unit; else window.enemy = unit;
@@ -344,8 +368,9 @@ function onPointerClick(event) {
                 tile.material[2].color.setHex(0xffff00); window.selectorMesh.position.copy(tile.position); window.selectorMesh.visible = true;
                 document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
+                document.getElementById('command-ui').style.display = 'none';
                 document.getElementById('confirm-ui').style.display = 'block';
-            } else { window.resetToIdle(); } 
+            }
         } 
     }
 }
