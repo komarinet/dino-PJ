@@ -3,7 +3,7 @@ body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-se
 
 #version-display { position: absolute; top: 5px; right: 5px; color: rgba(255, 255, 255, 0.4); font-size: 0.7rem; font-family: monospace; z-index: 9999; pointer-events: none; }
 
-/* ふりがな（ルビ）設定 */
+/* ルビ配置の完全修正 */
 ruby { display: inline-flex; flex-direction: column-reverse; vertical-align: bottom; align-items: center; }
 rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-align: center; margin-bottom: 2px; }
 
@@ -18,19 +18,20 @@ rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-alig
     width: 96vw; height: 160px; z-index: 4000; flex-direction: row; padding: 12px;
 }
 .ev-left { width: 100px; display: flex; flex-direction: column; align-items: center; border-right: 1px solid #444; }
-#ev-portrait { font-size: 70px; height: 80px; display: center; align-items: center; }
+#ev-portrait { font-size: 70px; height: 80px; display: flex; align-items: center; justify-content: center; }
 #ev-name-plate { font-size: 0.85rem; color: #ffcc00; margin-top: 5px; text-align: center; }
 .ev-right { flex: 1; padding-left: 15px; position: relative; }
 #ev-text { font-size: 1.1rem; line-height: 1.8; margin: 0; color: #fff; }
 #ev-click-hint { position: absolute; bottom: 0; right: 5px; animation: blink 1s infinite; color: #ffcc00; }
 
+/* ロゴ演出：発光と黒縁で見やすく */
 .big-text-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 5000; text-align: center; pointer-events: none; opacity: 0; width: 100%; }
 .cool-text { color: #fff !important; text-shadow: 0 0 10px #000, 0 0 20px #000, 2px 2px 0 #000; }
-#chapter-num { font-size: 1.8rem; }
-#stage-title { font-size: 2.8rem; color: #ffcc00 !important; margin-top: 10px; }
+#chapter-num { font-size: 1.8rem; color: #ffcc00 !important; }
+#stage-title { font-size: 2.8rem; margin-top: 10px; }
 
-.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff, 0 0 10px #000; }
-.clear-text { font-size: 3rem; color: #00ff00 !important; text-shadow: 0 0 20px #fff, 0 0 10px #000; }
+.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff, 0 0 10px #000, 2px 2px 0 #000; }
+.clear-text { font-size: 3.5rem; font-weight: bold; color: #00ff00 !important; text-shadow: 0 0 20px #000, 0 0 10px #fff, 2px 2px 0 #000; }
 
 #status-ui { top: 10px; left: 10px; width: 170px; display: none; }
 .unit-name { font-size: 1.1rem; border-bottom: 1px solid #777; margin-bottom: 5px; }
