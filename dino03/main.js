@@ -114,7 +114,7 @@ window.execCommand = function(cmd) {
         window.clearHighlights();
         window.walkableTiles = window.getWalkableNodes(window.player);
         window.walkableTiles.forEach(node => { 
-            const tile = window.tilesMeshMap[`${node.x},${node.z}`];
+            const tile = window.tilesMeshMap[`${Number(node.x)},${Number(node.z)}`];
             if(tile) tile.material[2].color.setHex(0x55ff55); 
         });
     } else if (cmd === 'attack') {
@@ -190,9 +190,11 @@ window.answerConfirm = function(isYes) {
 
 function checkVictory() {
     if(window.enemy.hp <= 0) {
-        window.enemy.sprite.scale.set(window.TILE_SIZE * 1.5, window.TILE_SIZE * 1.5, 1);
+        // 敵を一旦復活させて会話へ（GSAPで確実に表示）
+        gsap.to(window.enemy.sprite.scale, { x: window.TILE_SIZE * 1.5, y: window.TILE_SIZE * 1.5, duration: 0 });
         window.startEvent(window.StageData.postBattleTalk, () => {
-            const exitPath = [{x:12, z:20, h:1}, {x:12, z:25, h:0}];
+            // ティラノ退場演出：堀を越える
+            const exitPath = [{x:12, z:16, h:1}, {x:12, z:17, h:0}];
             window.executeMovement(window.player, exitPath, () => {
                 gsap.to(window.player.sprite.scale, {x:0, y:0, duration:0.5});
                 showBigEpisodeClear();
@@ -290,7 +292,7 @@ function init(sheetImg) {
     window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
     window.raycastTargets = [...window.interactableTiles]; 
     window.units = window.StageData.units.map(u => {
-        const unit = new window.Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer);
+        const unit = new window.Unit(u.id, u.emoji, Number(u.x), Number(u.z), u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer);
         unit.h = window.mapData[unit.z][unit.x].h;
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
         const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
