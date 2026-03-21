@@ -11,11 +11,7 @@ window.Unit = class {
         this.hasMoved = false; this.hasAttacked = false;
     }
 };
-
-window.getUnitAt = function(x, z) {
-    return window.units.find(u => u.x === x && u.z === z && u.hp > 0);
-};
-
+window.getUnitAt = function(x, z) { return window.units.find(u => u.x === x && u.z === z && u.hp > 0); };
 window.getAttackableEnemies = function(unit) {
     let targets = [];
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
