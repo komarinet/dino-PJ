@@ -97,7 +97,7 @@ function renderTalkLine(data) {
 
 window.startPlayerTurn = function() {
     window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
-    window.setMsg("あなたの<ruby>順番<rt>ターン</rt></ruby>！<br><ruby>ユニット<rt>仲間</rt></ruby>をタップしてね", "#00ff00");
+    window.setMsg("あなたの<ruby>番<rt>ばん</rt></ruby>です！<br><ruby>仲間<rt>なかま</rt></ruby>をタップしてね", "#00ff00");
 }
 
 window.resetToIdle = function() {
@@ -109,7 +109,7 @@ window.execCommand = function(cmd) {
     document.getElementById('command-ui').style.display = 'none';
     if(cmd === 'move') {
         window.gameState = 'SELECTING_MOVE'; 
-        window.clearHighlights(); // ★修正：全マスの色を確実にリセット
+        window.clearHighlights(); // 色を一度全リセット
         window.walkableTiles = window.getWalkableNodes(window.player);
         window.walkableTiles.forEach(node => { 
             const tile = window.tilesMeshMap[`${node.x},${node.z}`];
@@ -224,7 +224,7 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const dx = ((defender.x * window.TILE_SIZE) - offsetX) - attacker.sprite.position.x;
     const dz = ((defender.z * window.TILE_SIZE) - offsetZ) - attacker.sprite.position.z;
     
-    // ★高低差ダメージ補正
+    // 高低差ダメージ補正
     const heightBonus = (attacker.h - defender.h) * 2;
     const damage = Math.max(1, (attacker.str - defender.def) + heightBonus);
     
@@ -302,6 +302,8 @@ function init(sheetImg) {
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
     window.centerCameraInstantly(window.player); 
+    
+    // 会話モード中はどこをタップしても進む
     renderer.domElement.addEventListener('pointerup', onPointerClick);
     
     playStageTitle(() => {
@@ -325,6 +327,8 @@ window.clearHighlights = function() {
 
 function onPointerClick(event) {
     if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
+    
+    // 全画面タップ対応
     if (window.gameState === 'TALKING') { window.onGlobalTap(); return; }
 
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
