@@ -12,7 +12,6 @@ window.Unit = class {
     }
 };
 
-// ユニット生成
 window.player = new window.Unit("ティラノ", "🦖", 12, 15, 30, 10, 15, 10, 5, 8, 4, 3, true);
 window.enemy  = new window.Unit("ブラキオサウルス", "🦕", 12, 3, 20, 5, 12, 12, 4, 2, 4, 2, false);
 window.units = [window.player, window.enemy];
