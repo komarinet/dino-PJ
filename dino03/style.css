@@ -1,12 +1,11 @@
 body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; user-select: none; }
 #canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
-/* バージョン表示の復活 */
 #version-display { position: absolute; top: 5px; right: 5px; color: rgba(255, 255, 255, 0.4); font-size: 0.7rem; font-family: monospace; z-index: 9999; pointer-events: none; }
 
-/* ★ルビ表示の修正（漢字の真上に配置）★ */
+/* ★ルビ配置を漢字の真上に固定★ */
 ruby { display: inline-flex; flex-direction: column-reverse; vertical-align: bottom; align-items: center; }
-rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ccc; text-align: center; margin-bottom: 2px; }
+rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-align: center; margin-bottom: 2px; }
 
 .rpg-window {
     position: absolute; background: rgba(0, 15, 60, 0.96); color: white;
@@ -22,13 +21,17 @@ rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ccc; text-alig
 #ev-portrait { font-size: 70px; height: 80px; display: flex; align-items: center; }
 #ev-name-plate { font-size: 0.85rem; color: #ffcc00; margin-top: 5px; text-align: center; }
 .ev-right { flex: 1; padding-left: 15px; position: relative; }
-#ev-text { font-size: 1.1rem; line-height: 1.8; margin: 0; }
+#ev-text { font-size: 1.1rem; line-height: 1.8; margin: 0; color: #fff; }
 #ev-click-hint { position: absolute; bottom: 0; right: 5px; animation: blink 1s infinite; color: #ffcc00; }
 
+/* 巨大ロゴ演出：文字色をハッキリさせる */
 .big-text-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 5000; text-align: center; pointer-events: none; opacity: 0; width: 100%; }
-#stage-title { font-size: 2.5rem; text-shadow: 0 0 10px #ffcc00; color: #fff; margin-top: 10px; }
-.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff; }
-.clear-text { font-size: 3rem; color: #00ff00; text-shadow: 0 0 20px #fff; }
+.cool-text { color: #fff !important; text-shadow: 0 0 10px #000, 0 0 20px #000, 2px 2px 0 #000; }
+#chapter-num { font-size: 1.8rem; }
+#stage-title { font-size: 2.8rem; color: #ffcc00 !important; margin-top: 10px; }
+
+.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff, 0 0 10px #000; }
+.clear-text { font-size: 3rem; color: #00ff00 !important; text-shadow: 0 0 20px #fff, 0 0 10px #000; }
 
 #status-ui { top: 10px; left: 10px; width: 170px; display: none; }
 .unit-name { font-size: 1.1rem; border-bottom: 1px solid #777; margin-bottom: 5px; }
@@ -53,8 +56,8 @@ rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ccc; text-alig
 #msg-ui { top: 15px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 1.1rem; display: none; pointer-events: none; }
 #confirm-ui { display: none; top: 20%; left: 50%; transform: translateX(-50%); text-align: center; z-index: 4500; width: 260px; }
 .confirm-btns { display: flex; justify-content: center; gap: 15px; margin-top: 15px; }
-.btn-yes { background: #4caf50; color: white; border: none; padding: 8px 25px; border-radius: 4px; font-weight: bold; }
-.btn-no { background: #f44336; color: white; border: none; padding: 8px 25px; border-radius: 4px; font-weight: bold; }
+.btn-yes { background: #4caf50; color: white; border: none; padding: 10px 30px; border-radius: 6px; font-weight: bold; }
+.btn-no { background: #f44336; color: white; border: none; padding: 10px 30px; border-radius: 6px; font-weight: bold; }
 
 #loading-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; justify-content: center; align-items: center; transition: opacity 0.5s ease; }
 .loader-text { color: #fff; font-size: 1.5rem; animation: blink 1.5s infinite; }
