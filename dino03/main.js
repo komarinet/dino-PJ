@@ -28,8 +28,7 @@ window.hideAllUI = function() {
 
 window.showStatus = function(unit) {
     window.setMsg("");
-    const ui = document.getElementById('status-ui');
-    ui.style.display = 'block';
+    document.getElementById('status-ui').style.display = 'block';
     document.getElementById('st-name').innerText = `${unit.emoji} ${unit.id}`;
     document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
     document.getElementById('st-hp-bar').style.width = `${(unit.hp/unit.maxHp)*100}%`;
@@ -47,9 +46,12 @@ window.toggleDetail = function() {
 }
 
 window.showCommandMenu = function() {
-    document.getElementById('command-ui').style.display = 'block';
+    const ui = document.getElementById('command-ui');
+    ui.style.display = 'block';
     document.getElementById('cmd-move').style.display = window.player.hasMoved ? 'none' : 'block';
-    document.getElementById('cmd-cancel').style.display = 'block'; 
+    document.getElementById('cmd-attack').style.display = 'block';
+    document.getElementById('cmd-wait').style.display = 'block';
+    document.getElementById('cmd-cancel').style.display = 'none';
 }
 
 function playStageTitle(callback) {
@@ -103,7 +105,7 @@ function renderTalkLine(data) {
 }
 
 window.startPlayerTurn = function() {
-    if(window.enemy.hp <= 0) return; // 敵が死んでいたらターン開始しない
+    if(window.enemy.hp <= 0) return;
     window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
     window.setMsg("あなたの<ruby>番<rt>ばん</rt></ruby>です！<br><ruby>仲間<rt>なかま</rt></ruby>をタップしてね", "#00ff00");
 }
@@ -112,6 +114,12 @@ window.resetToIdle = function() {
     window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
     window.setMsg(""); 
     if(window.selectorMesh) window.selectorMesh.visible = false;
+}
+
+window.cancelMove = function() {
+    window.gameState = 'IDLE';
+    window.clearHighlights();
+    window.showCommandMenu();
 }
 
 window.execCommand = function(cmd) {
@@ -123,10 +131,10 @@ window.execCommand = function(cmd) {
             const tile = window.tilesMeshMap[`${Number(node.x)},${Number(node.z)}`];
             if(tile) tile.material[2].color.setHex(0x55ff55); 
         });
-        document.getElementById('command-ui').style.display = 'block'; // キャンセルボタン出すため
         document.getElementById('cmd-move').style.display = 'none';
         document.getElementById('cmd-attack').style.display = 'none';
         document.getElementById('cmd-wait').style.display = 'none';
+        document.getElementById('cmd-cancel').style.display = 'block';
     } else if (cmd === 'attack') {
         let targets = window.getAttackableEnemies(window.player);
         if(targets.length === 0) {
@@ -190,6 +198,7 @@ window.answerConfirm = function(isYes) {
             window.gameState = 'SELECTING_MOVE';
             window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0x55ff55); 
             if(window.selectorMesh) window.selectorMesh.visible = false;
+            document.getElementById('command-ui').style.display = 'block';
         } else if(window.confirmMode === 'ATTACK') {
             window.gameState = 'SELECTING_ATTACK_TARGET';
             document.getElementById('target-ui').style.display = 'block';
@@ -197,24 +206,74 @@ window.answerConfirm = function(isYes) {
             window.showCommandMenu();
         }
     }
-    if(!isYes) { window.pendingData = null; window.selectedTileKey = null; }
 }
 
+// ★第1話の完結シーケンス（シネマティック版）★
 function checkVictory() {
-    // ★反撃でも敵ターンでも、ブラキオが倒れたら即時発動
-    if(window.enemy.hp <= 0 && window.gameState !== 'TALKING' && window.gameState !== 'FINISHED') {
-        window.gameState = 'FINISHED'; // 重複防止
+    if(window.enemy.hp <= 0 && window.gameState !== 'FINISHED') {
+        window.gameState = 'FINISHED'; 
         setTimeout(() => {
+            // 敵を一旦復活（会話のため）
             gsap.to(window.enemy.sprite.scale, { x: window.TILE_SIZE * 1.5, y: window.TILE_SIZE * 1.5, duration: 0.1 });
-            window.startEvent(window.StageData.postBattleTalk, () => {
-                const exitPath = [{x:12, z:16, h:1}, {x:12, z:22, h:0}];
-                window.executeMovement(window.player, exitPath, () => {
+
+            // 会話データを分割（最後の一行以外を取得）
+            const mainTalk = window.StageData.postBattleTalk.slice(0, -1);
+            const lastLine = [window.StageData.postBattleTalk[window.StageData.postBattleTalk.length - 1]];
+
+            // 1. メインの会話進行
+            window.startEvent(mainTalk, () => {
+                // 2. ティラノ退場演出：1マス0.5秒（2マス/秒）で移動、カメラ追従
+                const exitPath = [
+                    {x:12, z:17, h:1}, {x:12, z:19, h:1}, {x:12, z:21, h:0}, {x:12, z:23, h:0}, {x:12, z:25, h:0}
+                ];
+                
+                executeSlowExit(window.player, exitPath, () => {
+                    // ティラノ消滅
                     gsap.to(window.player.sprite.scale, {x:0, y:0, duration:0.5});
-                    showBigEpisodeClear();
+
+                    // 3. カメラをブラキオサウルスへ戻す（1.5秒かけて移動）
+                    gsap.to(controls.target, {
+                        x: window.enemy.sprite.position.x,
+                        y: window.enemy.sprite.position.y,
+                        z: window.enemy.sprite.position.z,
+                        duration: 1.5,
+                        ease: "power2.inOut",
+                        onComplete: () => {
+                            // 4. ブラキオの最後の一言
+                            window.startEvent(lastLine, () => {
+                                // 5. ステージクリア表示
+                                showBigEpisodeClear();
+                            });
+                        }
+                    });
                 });
             });
-        }, 800);
+        }, 600);
     }
+}
+
+// ★退場専用：低速移動＆カメラ追従★
+function executeSlowExit(unit, path, onComplete) {
+    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2;
+    const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
+    const tl = gsap.timeline({ onComplete });
+
+    path.forEach(step => {
+        const tX = (step.x * window.TILE_SIZE) - offsetX;
+        const tZ = (step.z * window.TILE_SIZE) - offsetZ;
+        const tY = (step.h * window.H_STEP) + (window.TILE_SIZE * 0.5);
+
+        // 1マスあたり0.5秒（2マス一秒のペース）
+        tl.to(unit.sprite.position, {
+            x: tX, z: tZ, y: tY,
+            duration: 0.5,
+            ease: "none",
+            onUpdate: () => {
+                // カメラの注視点をユニットに同期
+                controls.target.copy(unit.sprite.position);
+            }
+        });
+    });
 }
 
 function showBigEpisodeClear() {
@@ -248,7 +307,7 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
         window.showFloatingText(defender, damage, 'damage');
         if(defender.hp <= 0) {
             gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: () => {
-                checkVictory(); // ★ここで勝利判定
+                checkVictory(); 
             }});
         } else {
             const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
@@ -321,7 +380,7 @@ function init(sheetImg) {
         const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
         const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
         unit.sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
-        unit.sprite.scale.set(window.TILE_SIZE * 1.6, window.TILE_SIZE * 1.6, 1); // 判定拡大
+        unit.sprite.scale.set(window.TILE_SIZE * 1.6, window.TILE_SIZE * 1.6, 1); 
         unit.sprite.userData = { isUnit: true, unit: unit }; window.raycastTargets.push(unit.sprite);
         scene.add(unit.sprite); window.updateUnitPosInstantly(unit);
         if(unit.isPlayer) window.player = unit; else window.enemy = unit;
@@ -361,7 +420,7 @@ function onPointerClick(event) {
             const u = window.getUnitAt(data.x, data.z);
             if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } else { window.resetToIdle(); }
         } else if (window.gameState === 'SELECTING_MOVE') {
-            const route = window.walkableTiles.find(n => n.x === Math.round(data.x) && n.z === Math.round(data.z));
+            const route = window.walkableTiles.find(n => Math.abs(n.x - data.x) < 0.5 && Math.abs(n.z - data.z) < 0.5);
             if (route) {
                 window.clearHighlights(); window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${route.x},${route.z}`;
                 const tile = window.tilesMeshMap[window.selectedTileKey];
