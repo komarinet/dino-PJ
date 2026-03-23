@@ -2,8 +2,10 @@ window.Unit = class {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
         this.id = id; this.emoji = emoji;
         this.x = x; this.z = z; this.h = 0;
+        
+        // ★ レベルアップのステータス ★
         this.level = level;
-        this.exp = 0; // 100溜まるとレベルアップ
+        this.exp = 0; 
         
         this.maxHp = hp; this.hp = hp;
         this.maxMp = mp; this.mp = mp;
@@ -26,11 +28,11 @@ window.Unit = class {
         if(this.texture) { this.initTextureSprite(); }
     }
 
-    // ★レベルアップ機構★
+    // ★ レベルアップ処理 ★
     levelUp() {
         this.level++;
-        this.exp = 0; // 超過分は切り捨ててリセット
-        this.maxHp += 10; this.hp = this.maxHp; // 全回復
+        this.exp = 0; 
+        this.maxHp += 10; this.hp = this.maxHp; 
         this.maxMp += 5;  this.mp = this.maxMp;
         this.str += 4;
         this.def += 3;
@@ -42,7 +44,7 @@ window.Unit = class {
         this.texture.repeat.set(1 / conf.cols, 1 / conf.rows);
         this.texture.magFilter = THREE.NearestFilter;
         
-        // ★めり込み修正：alphaTest: 0.5 で透明部分の奥行き判定を消す★
+        // ★ めり込み修正: alphaTest: 0.5 ★
         this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true, alphaTest: 0.5 });
         this.sprite = new THREE.Sprite(this.material);
         this.sprite.center.set(0.5, 0.0); 
@@ -50,7 +52,6 @@ window.Unit = class {
         const cellW = conf.w / conf.cols;
         const cellH = conf.h / conf.rows;
         
-        // 高さは ティラノ/コンプが60、ブラキオが90
         const h = (conf.type === 'bra') ? 90 : 60; 
         this.baseScaleX = h * (cellW / cellH);
         
@@ -91,7 +92,7 @@ window.Unit = class {
                 const row = Math.floor(f / 4);
                 this.setRawFrame(col, row);
             } else if(this.spriteConfig.type === 'comp') {
-                // コンプは歩行1(0,0)と歩行2(1,0)を交互に
+                // コンプソグナトゥス: 歩行1(0,0)と歩行2(1,0)のループ
                 const col = (Math.floor(this.animTime / 200) % 2);
                 this.setRawFrame(col, 0);
             }
@@ -117,6 +118,7 @@ window.Unit = class {
             else if(action === 'HURT') this.setRawFrame(0, 3);  
             else if(action === 'DOWN') this.setRawFrame(2, 3);  
         } else if(this.spriteConfig.type === 'comp') {
+            // ★ コンプソグナトゥスのアクション割り当て
             if(action === 'ATTACK') this.setRawFrame(2, 0); 
             else if(action === 'HURT') this.setRawFrame(0, 1);  
             else if(action === 'DOWN') this.setRawFrame(1, 1);  
