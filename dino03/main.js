@@ -12,22 +12,24 @@ window.addEventListener('load', () => {
     sheetImg.src = 'img/plate01.png';
 
     sheetImg.onload = () => {
-        texLoader.load('img/bra.png', 
-            (braTex) => {
-                const loader = document.getElementById('loading-screen');
-                loader.style.opacity = '0';
-                setTimeout(() => { loader.style.display = 'none'; init(sheetImg, braTex); }, 500);
-            },
-            undefined,
-            (err) => {
-                console.error("画像が見つかりません。絵文字で代用します。");
-                const loader = document.getElementById('loading-screen');
-                loader.style.opacity = '0';
-                setTimeout(() => { loader.style.display = 'none'; init(sheetImg, null); }, 500);
-            }
-        );
+        // 全ての画像を安全に読み込むフロー
+        texLoader.load('img/bra.png', (braTex) => {
+            texLoader.load('img/tactyrano01.png', (rexTex) => {
+                startGame(sheetImg, braTex, rexTex);
+            }, () => startGame(sheetImg, braTex, null));
+        }, undefined, () => {
+            texLoader.load('img/tactyrano01.png', (rexTex) => {
+                startGame(sheetImg, null, rexTex);
+            }, () => startGame(sheetImg, null, null));
+        });
     };
 });
+
+function startGame(sheetImg, braTex, rexTex) {
+    const loader = document.getElementById('loading-screen');
+    loader.style.opacity = '0';
+    setTimeout(() => { loader.style.display = 'none'; init(sheetImg, braTex, rexTex); }, 500);
+}
 
 window.setMsg = function(txt, color="#ffffff") { 
     const el = document.getElementById('msg-ui');
@@ -110,8 +112,14 @@ function renderTalkLine(data) {
     const textArea = document.getElementById('ev-text');
     
     const speakerUnit = window.units.find(u => u.id === data.name);
-    if (speakerUnit && speakerUnit.texture) {
-        portrait.innerHTML = `<div style="width: 88px; height: 62px; background-image: url('img/bra.png'); background-size: 88px 250px; background-position: 0 0;"></div>`;
+    
+    // サムネイル画像の表示（それぞれ計算された切り抜き位置を使用）
+    if (speakerUnit && speakerUnit.spriteConfig) {
+        if (speakerUnit.spriteConfig.type === 'bra') {
+            portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;"></div>`;
+        } else if (speakerUnit.spriteConfig.type === 'rex') {
+            portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
+        }
     } else {
         portrait.innerHTML = `<span>${data.face}</span>`;
     }
@@ -232,29 +240,19 @@ function checkVictory() {
     if(window.enemy.hp <= 0 && window.gameState !== 'FINISHED') {
         window.gameState = 'FINISHED'; 
         setTimeout(() => {
-            if(window.enemy.texture) {
-                window.enemy.animState = 'FIXED';
-                window.enemy.setFrame(4);
-            }
-            const h = 90;
-            gsap.to(window.enemy.sprite.scale, { x: window.enemy.baseScaleX * window.enemy.facing, y: h, duration: 0.1 }); 
-
+            if(window.enemy.texture) { window.enemy.setAction('HURT'); }
+            
             const mainTalk = window.StageData.postBattleTalk.slice(0, -1);
             const lastLine = [window.StageData.postBattleTalk[window.StageData.postBattleTalk.length - 1]];
 
-            // ★お互いを見つめ合う★
             window.player.lookAtNode(window.enemy.x, window.enemy.z);
             window.enemy.lookAtNode(window.player.x, window.player.z);
 
             window.startEvent(mainTalk, () => {
-                // ★自然な歩行での退場：マップの端（z=17）までピョンピョン歩いていく
                 const exitPath = [{x:12, z:16, h:0}, {x:12, z:17, h:0}];
                 
-                // executeMovementを使って歩くように移動（カメラ追従フラグtrue）
                 window.executeMovement(window.player, exitPath, () => {
-                    // ★端に到達した瞬間にスッと消える
                     gsap.to(window.player.sprite.scale, {x:0, y:0, duration:0.5});
-                    
                     gsap.to(controls.target, {
                         x: window.enemy.sprite.position.x,
                         y: window.enemy.sprite.position.y,
@@ -299,22 +297,22 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     const damage = Math.max(1, (attacker.str - defender.def) + heightBonus);
     const origX = attacker.sprite.position.x; const origZ = attacker.sprite.position.z;
 
-    // ★攻撃時：互いに向き合う★
     attacker.lookAtNode(defender.x, defender.z);
     defender.lookAtNode(attacker.x, attacker.z);
 
-    if(attacker.texture) { attacker.animState = 'FIXED'; attacker.setFrame(3); }
-    if(defender.texture) { defender.animState = 'FIXED'; defender.setFrame(4); }
+    if(attacker.texture) attacker.setAction('ATTACK');
+    if(defender.texture) defender.setAction('HURT');
 
     const tl = gsap.timeline({ onComplete: () => {
         defender.hp -= damage;
         window.showFloatingText(defender, damage, 'damage');
         
-        if(attacker.texture) attacker.animState = 'IDLE';
-        if(defender.texture && defender.hp > 0) defender.animState = 'IDLE';
+        if(attacker.texture) attacker.setIdle();
+        if(defender.texture && defender.hp > 0) defender.setIdle();
 
         if(defender.hp <= 0) {
-            gsap.to(defender.sprite.scale, {x:0, y:0, duration:0.5, onComplete: () => { checkVictory(); }});
+            if(defender.texture) defender.setAction('DOWN');
+            gsap.to(defender.sprite.scale, {delay: 0.2, x:0, y:0, duration:0.5, onComplete: () => { checkVictory(); }});
         } else {
             const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
             if(allowCounter && dist === 1) {
@@ -330,7 +328,6 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
     tl.to(attacker.sprite.position, { x: origX, z: origZ, duration: 0.2, ease: "power2.out" }); 
 }
 
-// ★引数 followCamera を追加し、歩くたびに向きを変えるように修正★
 window.executeMovement = function(unit, path, onComplete, followCamera = false) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
     const tl = gsap.timeline({ onComplete: () => {
@@ -345,7 +342,6 @@ window.executeMovement = function(unit, path, onComplete, followCamera = false) 
         const tZ = (step.z * window.TILE_SIZE) - offsetZ;
         const tY = (step.h * window.H_STEP) + (window.TILE_SIZE * 0.5);
         
-        // ★移動する方向に体を向ける
         tl.call(() => { unit.lookAtNode(step.x, step.z); });
 
         tl.to(unit.sprite.position, { 
@@ -371,7 +367,10 @@ window.endPlayerTurn = function() {
             window.executeMovement(window.enemy, bestRoute.path, () => {
                 if(window.getAttackableEnemies(window.enemy).includes(window.player)) { 
                     window.executeAttack(window.enemy, window.player, true, () => { 
-                        if(window.player.hp <= 0) { window.setMsg("GAME OVER", "#ff0000"); } else { window.startPlayerTurn(); }
+                        if(window.player.hp <= 0) { 
+                            if(window.player.texture) window.player.setAction('DOWN');
+                            window.setMsg("GAME OVER", "#ff0000"); 
+                        } else { window.startPlayerTurn(); }
                     }); 
                 } else { window.startPlayerTurn(); }
             });
@@ -379,7 +378,7 @@ window.endPlayerTurn = function() {
     }, 1000);
 }
 
-function init(sheetImg, braTex) {
+function init(sheetImg, braTex, rexTex) {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene(); 
     window.mapData = window.StageData.generateLayout();
@@ -396,12 +395,18 @@ function init(sheetImg, braTex) {
     window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
     window.raycastTargets = [...window.interactableTiles]; 
     window.units = window.StageData.units.map(u => {
-        const tex = (u.id === 'ブラキオサウルス' && braTex) ? braTex.clone() : null;
-        if(tex) tex.needsUpdate = true;
+        let conf = null;
+        if(u.id === 'ブラキオサウルス' && braTex) {
+            conf = { tex: braTex.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
+            conf.tex.needsUpdate = true;
+        } else if (u.id === 'ティラノ' && rexTex) {
+            conf = { tex: rexTex.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
+            conf.tex.needsUpdate = true;
+        }
 
-        const unit = new window.Unit(u.id, u.emoji, Number(u.x), Number(u.z), u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, tex);
+        const unit = new window.Unit(u.id, u.emoji, Number(u.x), Number(u.z), u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf);
         
-        if(!tex) {
+        if(!conf) {
             const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 128;
             const ctx = canvas.getContext('2d'); ctx.font = '90px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(unit.emoji, 64, 64);
             unit.material = new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) });
@@ -421,7 +426,6 @@ function init(sheetImg, braTex) {
     window.centerCameraInstantly(window.player); 
     renderer.domElement.addEventListener('pointerup', onPointerClick);
     
-    // ★戦闘開始前に互いを見つめ合う
     window.player.lookAtNode(window.enemy.x, window.enemy.z);
     window.enemy.lookAtNode(window.player.x, window.player.z);
     
