@@ -1,4 +1,4 @@
-export const VERSION = "8.17.3";
+export const VERSION = "8.17.5";
 
 export const StageData = {
     info: { chapter: "第一章", name: "<ruby>母<rt>はは</rt></ruby>を<ruby>訪<rt>たず</rt></ruby>ねて" },
@@ -10,14 +10,13 @@ export const StageData = {
         { id: "コンプソグナトゥスD", emoji: "🦎", x: 15, z: 6, hp: 15, mp: 0, str: 8, def: 5, spd: 6, mag: 0, move: 5, jump: 4, isPlayer: false, level: 1 },
         { id: "ブラキオサウルス", emoji: "🦕", x: 12, z: 3, hp: 60, mp: 10, str: 20, def: 15, spd: 4, mag: 2, move: 4, jump: 2, isPlayer: false, level: 5 }
     ],
-    // ★ 会話テキストにルビ（ふりがな）を完全追加
     preBattleTalk: [
         { name: "ティラノ", face: "🦖", text: "<ruby>探<rt>さが</rt></ruby>したぞッ！　お<ruby>前<rt>まえ</rt></ruby>たちが『ブラキーズ』か！" },
         { name: "コンプソグナトゥスA", face: "🦎", text: "なんだァ、お<ruby>前<rt>まえ</rt></ruby>" },
         { name: "ティラノ", face: "🦖", text: "お<ruby>前<rt>まえ</rt></ruby>たちに<ruby>連<rt>つ</rt></ruby>れさらわれたティラノサウルスの<ruby>息子<rt>むすこ</rt></ruby>だ。<br>お<ruby>母<rt>かあ</rt></ruby>さんをどこに<ruby>連<rt>つ</rt></ruby>れて<ruby>行<rt>い</rt></ruby>った！" },
         { name: "ブラキオサウルス", face: "🦕", text: "ふん。我らが<ruby>毎日<rt>まいにち</rt></ruby><ruby>何頭<rt>なんとう</rt></ruby>の<ruby>恐竜<rt>きょうりゅう</rt></ruby>を<ruby>攫<rt>さら</rt></ruby>ってると思う？" },
         { name: "ブラキオサウルス", face: "🦕", text: "お<ruby>前<rt>まえ</rt></ruby>の<ruby>母親<rt>ははおや</rt></ruby>などいちいち<ruby>覚<rt>おぼ</rt></ruby>えておらんわ" },
-        { name: "ティラノ", face: "🦖", text: "じゃあ、<ruby>連<rt>つ</rt></ruby>れて<ruby>行<rt>い</rt></ruby>った<ruby>恐竜<rt>きょうりゅう</rt></ruby>たちの<ruby>居場所<rt>いばしょ</rt></ruby>はどこだ！" },
+        { name: "ティラノ", face: "🦖", text: "じゃア、<ruby>連<rt>つ</rt></ruby>れて<ruby>行<rt>い</rt></ruby>った<ruby>恐竜<rt>きょうりゅう</rt></ruby>たちの<ruby>居場所<rt>いばしょ</rt></ruby>はどこだ！" },
         { name: "コンプソグナトゥスB", face: "🦎", text: "バーカ。<ruby>教<rt>おし</rt></ruby>えるわけないだろ" },
         { name: "コンプソグナトゥスC", face: "🦎", text: "<ruby>痛<rt>いた</rt></ruby>い<ruby>目<rt>め</rt></ruby>みる<ruby>前<rt>まえ</rt></ruby>にさっさと<ruby>帰<rt>かえ</rt></ruby>りな、<ruby>坊<rt>ぼう</rt></ruby>や" },
         { name: "ティラノ", face: "🦖", text: "あくまでも<ruby>言<rt>い</rt></ruby>わないつもりかっ！<br>だったら<ruby>力<rt>ちから</rt></ruby>ずくで<ruby>聞<rt>き</rt></ruby>き<ruby>出<rt>だ</rt></ruby>してやる！" }
@@ -37,16 +36,34 @@ export const StageData = {
         for(let z=0;z<25;z++){ 
             d[z]=[]; 
             for(let x=0;x<25;x++){
-                let h=2, t=0; 
-                if(z>=16){ h=0; t=4; } 
-                if(z<16)h=2; 
-                if(z<14)h=3; 
-                if(z<=10){h=5;t=5;} 
-                if(z<=6){h=7;t=5;}
-                if(z<=3 && x>=8 && x<=16){h=9;t=3;} 
-                if(x>=11&&x<=13){ if(z===11)h=4; if(z===10)h=5; if(z===7)h=6; if(z===6)h=7; t=3;}
-                if(z===15){h=1;t=2;} 
-                d[z][x]={h,type:t};
+                let h=2, t=0; // デフォルト：高さ2、草原(0)
+                
+                // 奥の低い水場
+                if(z>=16){ h=0; t=4; } // 4: 水場
+                
+                if(z<16) h=2; // 草原
+                if(z<14) h=3; // 高い草原
+                
+                // ★ 修正：t=5 を 2(苔の岩場) に変更
+                if(z<=10){ h=5; t=2; } 
+                if(z<=6){ h=7; t=2; }
+                
+                // 最奥の高い岩場
+                if(z<=3 && x>=8 && x<=16){ h=9; t=3; } // 3: 岩場
+                
+                // 中央の岩の道
+                if(x>=11 && x<=13){ 
+                    if(z===11) h=4; 
+                    if(z===10) h=5; 
+                    if(z===7) h=6; 
+                    if(z===6) h=7; 
+                    t=3; // 3: 岩場
+                }
+                
+                // 水場手前の土
+                if(z===15){ h=1; t=1; } // 1: 土壌
+                
+                d[z][x]={h, type:t};
             }
         } 
         return d;
