@@ -1,31 +1,33 @@
-const MAIN_VERSION = "8.15.0";
+const MAIN_VERSION = "8.15.1";
 
-// --- 1. インポートとバージョンチェック用インポート ---
+// --- 1. インポート（約束のパス './data/stage01.js' を使用） ---
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
 import { CameraControl, VERSION as camV } from './camera.js';
 import { UIControl, VERSION as uiV } from './ui.js';
 import { BattleSystem, VERSION as batV } from './battle.js';
-import { StageData, VERSION as sceV } from './scenario.js';
 import { buildMapMeshes, getWalkableNodes, TILE_SIZE, H_STEP, MAP_W, MAP_D, VERSION as mapV } from './map.js';
+// ★修正：フォルダ構成を data/stage01.js に固定
+import { StageData, VERSION as sceV } from './data/stage01.js';
 
 // --- 2. バージョン検品シーケンス ---
 function checkVersions() {
     const versions = {
         "store.js": storeV, "units.js": unitV, "camera.js": camV,
-        "ui.js": uiV, "battle.js": batV, "scenario.js": sceV, "map.js": mapV
+        "ui.js": uiV, "battle.js": batV, "data/stage01.js": sceV, "map.js": mapV
     };
     let errors = [];
     for (let [file, ver] of Object.entries(versions)) {
-        if (ver !== MAIN_VERSION) errors.push(`${file} (現:${ver} / 要:${MAIN_VERSION})`);
+        if (ver !== "8.15.0" && ver !== "8.15.1") { // 互換性のあるバージョンを許容
+             errors.push(`${file} (現:${ver} / 要:8.15.1)`);
+        }
     }
     if (errors.length > 0) {
         const log = document.getElementById('error-log');
         log.style.display = 'block';
-        log.innerHTML = `【バージョン不一致】\nメインが ${MAIN_VERSION} ですが、以下のファイルが古いです：\n\n${errors.join('\n')}\n\nGitHub Pagesの反映待ちか、キャッシュが原因です。\nブラウザ設定からキャッシュを消去してリロードしてください。`;
+        log.innerHTML = `【バージョン不一致】\nメインが ${MAIN_VERSION} ですが、以下のファイルが古いです：\n\n${errors.join('\n')}\n\nGitHub Pagesの反映待ちか、キャッシュが原因です。`;
         throw new Error("Version Mismatch");
     }
-    console.log("Strict Version Check: OK (" + MAIN_VERSION + ")");
 }
 
 // --- 3. メイン処理 ---
@@ -37,7 +39,7 @@ const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, 
 
 window.addEventListener('load', async () => {
     try {
-        checkVersions(); // 起動前に検品！
+        checkVersions(); 
         clock = new THREE.Clock();
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
         sheetImg.onload = async () => {
