@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v8.12.0)</title>
+    <title>ちびっこティラノ：タクティクス (v8.14.0)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -12,7 +12,7 @@
 <body>
 
 <div id="loading-screen"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.12.0 (Modern Zustand & Comp AI)</div>
+<div id="version-display">v8.14.0 (Module Architecture)</div>
 
 <div id="stage-overlay" class="big-text-overlay">
     <div id="chapter-num" class="cool-text"></div>
@@ -48,7 +48,7 @@
     <div class="bar-bg"><div id="st-hp-bar" class="hp-bar"></div></div>
     <div style="font-size:0.8rem;"><ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp"></span></div>
     <div class="bar-bg"><div id="st-mp-bar" class="mp-bar"></div></div>
-    <button class="btn-detail" onclick="window.toggleDetail()"><ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼</button>
+    <button class="btn-detail" id="btn-toggle-detail"><ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼</button>
 </div>
 
 <div id="detail-ui" class="rpg-window">
@@ -60,45 +60,42 @@
 </div>
 
 <div id="command-ui" class="rpg-window">
-    <button id="cmd-move" class="cmd-btn" onclick="window.execCommand('move')">🚶 <ruby>移動<rt>いどう</rt></ruby></button>
-    <button id="cmd-attack" class="cmd-btn" onclick="window.execCommand('attack')">⚔️ <ruby>攻撃<rt>こうげき</rt></ruby></button>
-    <button id="cmd-wait" class="cmd-btn" onclick="window.execCommand('wait')">⏳ <ruby>待機<rt>たいき</rt></ruby></button>
-    <button id="cmd-cancel" class="cmd-btn" style="color:#ff8888; border-top:1px dashed #555;" onclick="window.cancelMove()">↩ <ruby>戻<rt>もど</rt></ruby>る</button>
+    <button id="cmd-move" class="cmd-btn">🚶 <ruby>移動<rt>いどう</rt></ruby></button>
+    <button id="cmd-attack" class="cmd-btn">⚔️ <ruby>攻撃<rt>こうげき</rt></ruby></button>
+    <button id="cmd-wait" class="cmd-btn">⏳ <ruby>待機<rt>たいき</rt></ruby></button>
+    <button id="cmd-cancel" class="cmd-btn" style="color:#ff8888; border-top:1px dashed #555;">↩ <ruby>戻<rt>もど</rt></ruby>る</button>
 </div>
 
 <div id="target-ui" class="rpg-window">
     <div class="unit-name">誰を<ruby>攻撃<rt>こうげき</rt></ruby>する？</div>
     <div id="target-list"></div>
-    <button class="cmd-btn btn-cancel" onclick="window.cancelAttack()">❌ キャンセル</button>
+    <button class="cmd-btn" id="btn-cancel-attack">❌ キャンセル</button>
 </div>
 
 <div id="confirm-ui" class="rpg-window">
     <p id="confirm-text"></p>
     <div class="confirm-btns">
         <button class="btn-yes">はい</button>
-        <button class="btn-no" onclick="window.answerConfirm(false)">いいえ</button>
+        <button class="btn-no">いいえ</button>
     </div>
 </div>
 
 <div id="camera-ui" class="rpg-window collapsed">
-    <div id="ui-header" onclick="document.getElementById('camera-ui').classList.toggle('collapsed');">📷 カメラ<ruby>操作<rt>そうさ</rt></ruby> (<ruby>開閉<rt>かいへい</rt></ruby>)</div>
+    <div id="ui-header">📷 カメラ<ruby>操作<rt>そうさ</rt></ruby> (<ruby>開閉<rt>かいへい</rt></ruby>)</div>
     <div class="ui-grid">
-        <button class="ui-btn" onclick="window.rotateCam(-90)"><ruby>回<rt>まわ</rt></ruby>す ◀</button>
-        <button class="ui-btn" onclick="window.panCamera(0, -1)"><ruby>上<rt>うえ</rt></ruby></button>
-        <button class="ui-btn" onclick="window.rotateCam(90)">▶ <ruby>回<rt>まわ</rt></ruby>す</button>
-        <button class="ui-btn" onclick="window.panCamera(-1, 0)"><ruby>左<rt>ひだり</rt></ruby></button>
-        <button class="ui-btn" onclick="window.centerCamera()"><ruby>中心<rt>ちゅうしん</rt></ruby></button>
-        <button class="ui-btn" onclick="window.panCamera(1, 0)"><ruby>右<rt>みぎ</rt></ruby></button>
-        <button class="ui-btn" onclick="window.zoomCamera(-50)"><ruby>寄<rt>よ</rt></ruby>る ＋</button>
-        <button class="ui-btn" onclick="window.panCamera(0, 1)"><ruby>下<rt>した</rt></ruby></button>
-        <button class="ui-btn" onclick="window.zoomCamera(50)">ー <ruby>引<rt>ひ</rt></ruby>く</button>
+        <button class="ui-btn" data-cam="rotate-left"><ruby>回<rt>まわ</rt></ruby>す ◀</button>
+        <button class="ui-btn" data-cam="pan-up"><ruby>上<rt>うえ</rt></ruby></button>
+        <button class="ui-btn" data-cam="rotate-right">▶ <ruby>回<rt>まわ</rt></ruby>す</button>
+        <button class="ui-btn" data-cam="pan-left"><ruby>左<rt>ひだり</rt></ruby></button>
+        <button class="ui-btn" data-cam="center"><ruby>中心<rt>ちゅうしん</rt></ruby></button>
+        <button class="ui-btn" data-cam="pan-right"><ruby>右<rt>みぎ</rt></ruby></button>
+        <button class="ui-btn" data-cam="zoom-in"><ruby>寄<rt>よ</rt></ruby>る ＋</button>
+        <button class="ui-btn" data-cam="pan-down"><ruby>下<rt>した</rt></ruby></button>
+        <button class="ui-btn" data-cam="zoom-out">ー <ruby>引<rt>ひ</rt></ruby>く</button>
     </div>
 </div>
 
-<script src="units.js?v=812" defer></script>
-<script src="map.js?v=812" defer></script>
-<script src="data/stage01.js?v=812" defer></script>
-<script type="module" src="main.js?v=812"></script>
+<script type="module" src="main.js?v=814"></script>
 
 </body>
 </html>
