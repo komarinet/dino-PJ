@@ -1,4 +1,4 @@
-export const VERSION = "8.16.1";
+export const VERSION = "8.17.0";
 
 export const StageData = {
     info: { chapter: "第一章", name: "母を訪ねて" },
@@ -31,6 +31,7 @@ export const StageData = {
         { name: "ティラノ", face: "🦖", text: "僕はお母さんを助けたいだけだ" },
         { name: "ブラキオサウルス", face: "🦕", text: "母親か・・・" }
     ],
+    // ★ 豊かな地形データに完全復旧 ★
     generateLayout: function() {
         let d = []; 
         for(let z=0;z<25;z++){ 
