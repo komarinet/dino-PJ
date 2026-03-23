@@ -1,5 +1,5 @@
 window.Unit = class {
-    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, texture) {
+    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig) {
         this.id = id; this.emoji = emoji;
         this.x = x; this.z = z; this.h = 0;
         this.hp = hp; this.maxHp = hp;
@@ -11,12 +11,11 @@ window.Unit = class {
         this.sprite = null; this.material = null;
         this.hasMoved = false; this.hasAttacked = false;
 
-        this.texture = texture;
+        this.spriteConfig = spriteConfig;
+        this.texture = spriteConfig ? spriteConfig.tex : null;
         this.animTime = 0;
-        this.animSpeed = 500; 
         this.animState = 'IDLE'; 
 
-        // ★新システム：向きの管理（1:右向き, -1:左向き）★
         this.facing = 1; 
         this.baseScaleX = 1; 
 
@@ -24,21 +23,28 @@ window.Unit = class {
     }
 
     initTextureSprite() {
-        this.texture.repeat.set(1, 0.25);
+        const conf = this.spriteConfig;
+        // マトリクスに合わせてテクスチャを分割
+        this.texture.repeat.set(1 / conf.cols, 1 / conf.rows);
         this.texture.magFilter = THREE.NearestFilter;
         
         this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true });
         this.sprite = new THREE.Sprite(this.material);
         this.sprite.center.set(0.5, 0.0); 
         
-        const h = 90;
-        this.baseScaleX = h * (352/250);
+        // 1コマのサイズを計算
+        const cellW = conf.w / conf.cols;
+        const cellH = conf.h / conf.rows;
+        
+        // ユニットのゲーム内サイズ
+        const h = (conf.type === 'bra') ? 90 : 60; // ブラキオサウルスは90、ティラノは60
+        this.baseScaleX = h * (cellW / cellH);
+        
         this.sprite.scale.set(this.baseScaleX * this.facing, h, 1);
         this.sprite.userData = { isUnit: true, unit: this };
-        this.setFrame(1);
+        this.setIdle();
     }
 
-    // ★ベースの大きさを保存（絵文字用）★
     setBaseScale(w) {
         this.baseScaleX = w;
         if(this.sprite) {
@@ -46,12 +52,11 @@ window.Unit = class {
         }
     }
 
-    // ★ターゲットの方向を向く機能★
     lookAtNode(targetX, targetZ) {
-        if (targetX > this.x) this.facing = 1;      // 右へ
-        else if (targetX < this.x) this.facing = -1; // 左へ
-        else if (targetZ < this.z) this.facing = 1;  // 奥（上）へ
-        else if (targetZ > this.z) this.facing = -1; // 手前（下）へ
+        if (targetX > this.x) this.facing = 1;      
+        else if (targetX < this.x) this.facing = -1; 
+        else if (targetZ < this.z) this.facing = 1;  
+        else if (targetZ > this.z) this.facing = -1; 
         
         if (this.sprite) {
             this.sprite.scale.x = this.baseScaleX * this.facing;
@@ -63,15 +68,45 @@ window.Unit = class {
         
         if(this.animState === 'IDLE') {
             this.animTime += delta;
-            const frame = (Math.floor(this.animTime / this.animSpeed) % 2) + 1;
-            this.setFrame(frame);
+            if(this.spriteConfig.type === 'bra') {
+                const frame = (Math.floor(this.animTime / 500) % 2); // 0 or 1
+                this.setRawFrame(0, frame);
+            } else if(this.spriteConfig.type === 'rex') {
+                const f = Math.floor(this.animTime / 150) % 12; // 12コマ歩行をループ
+                const col = f % 4;
+                const row = Math.floor(f / 4);
+                this.setRawFrame(col, row);
+            }
         }
     }
 
-    setFrame(num) {
+    // (col, row) は 0始まり。row=0が一番上。
+    setRawFrame(col, row) {
         if(!this.texture) return;
-        const offsets = { 1: 0.75, 2: 0.50, 3: 0.25, 4: 0.00 };
-        this.texture.offset.y = offsets[num] || 0.75;
+        const conf = this.spriteConfig;
+        this.texture.offset.x = col / conf.cols;
+        // WebGLはY座標が下から上のため反転
+        this.texture.offset.y = 1.0 - ((row + 1) / conf.rows);
+    }
+
+    // 状況に応じたモーションセット
+    setAction(action) {
+        if(!this.texture) return;
+        this.animState = 'FIXED';
+        if(this.spriteConfig.type === 'bra') {
+            if(action === 'ATTACK') this.setRawFrame(0, 2);
+            else if(action === 'HURT') this.setRawFrame(0, 3);
+            else if(action === 'DOWN') this.setRawFrame(0, 3); // ブラキオのダウンはやられを流用
+        } else if(this.spriteConfig.type === 'rex') {
+            if(action === 'ATTACK') this.setRawFrame(1, 3); // 4行目2列
+            else if(action === 'HURT') this.setRawFrame(0, 3);  // 4行目1列
+            else if(action === 'DOWN') this.setRawFrame(2, 3);  // 4行目3列
+        }
+    }
+
+    setIdle() {
+        this.animState = 'IDLE';
+        this.setRawFrame(0, 0); // 初期位置
     }
 };
 
