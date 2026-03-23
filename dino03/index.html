@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v8.9.2)</title>
+    <title>ちびっこティラノ：タクティクス (v8.10.0)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -12,7 +12,7 @@
 <body>
 
 <div id="loading-screen"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.9.2 (Gravity & Height Fix)</div>
+<div id="version-display">v8.10.0 (Level System & Multiple AI)</div>
 
 <div id="stage-overlay" class="big-text-overlay">
     <div id="chapter-num" class="cool-text"></div>
@@ -43,6 +43,7 @@
 
 <div id="status-ui" class="rpg-window">
     <div id="st-name" class="unit-name"></div>
+    <div class="stat-row" style="border:none; margin-bottom:0;"><span>🌟 Lv</span><span id="st-lv"></span></div>
     <div style="font-size:0.8rem;"><ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id="st-hp"></span></div>
     <div class="bar-bg"><div id="st-hp-bar" class="hp-bar"></div></div>
     <div style="font-size:0.8rem;"><ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp"></span></div>
@@ -94,10 +95,10 @@
     </div>
 </div>
 
-<script src="units.js?v=892" defer></script>
-<script src="map.js?v=892" defer></script>
-<script src="data/stage01.js?v=892" defer></script>
-<script src="main.js?v=892" defer></script>
+<script src="units.js?v=810" defer></script>
+<script src="map.js?v=810" defer></script>
+<script src="data/stage01.js?v=810" defer></script>
+<script src="main.js?v=810" defer></script>
 
 </body>
 </html>
