@@ -1,4 +1,4 @@
-export const VERSION = "8.16.0";
+export const VERSION = "8.16.1";
 
 export class CameraControl {
     constructor(camera, controls) {
