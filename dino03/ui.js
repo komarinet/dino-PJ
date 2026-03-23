@@ -1,66 +1,104 @@
-export const VERSION = "8.16.1";
+export const VERSION = "8.17.6";
 
 export class UIControl {
     constructor(cameraControl) {
         this.cameraControl = cameraControl;
+        
+        // ★ プロの最適化（DOMキャッシュ）
+        // 起動時に一度だけHTMLの要素を探して記憶しておくことで、毎回の検索負荷をゼロにします。
+        this.dom = {
+            msg: document.getElementById('msg-ui'),
+            statusUi: document.getElementById('status-ui'),
+            stName: document.getElementById('st-name'),
+            stLv: document.getElementById('st-lv'),
+            stHpLabel: document.getElementById('st-hp-label'),
+            stHp: document.getElementById('st-hp'),
+            stHpBar: document.getElementById('st-hp-bar'),
+            stMpLabel: document.getElementById('st-mp-label'),
+            stMp: document.getElementById('st-mp'),
+            stMpBar: document.getElementById('st-mp-bar'),
+            btnToggleDetail: document.querySelector('#status-ui .btn-toggle-detail'),
+            detailUi: document.getElementById('detail-ui'),
+            dtStr: document.getElementById('dt-str'),
+            dtDef: document.getElementById('dt-def'),
+            dtSpd: document.getElementById('dt-spd'),
+            dtMag: document.getElementById('dt-mag'),
+            commandUi: document.getElementById('command-ui'),
+            targetUi: document.getElementById('target-ui'),
+            confirmUi: document.getElementById('confirm-ui'),
+            eventUi: document.getElementById('event-ui'),
+            evPortrait: document.getElementById('ev-portrait'),
+            evNamePlate: document.getElementById('ev-name-plate'),
+            evText: document.getElementById('ev-text'),
+            evTextArea: document.getElementById('ev-text-area')
+        };
     }
 
     setMsg(txt, color = "#ffffff") {
-        const el = document.getElementById('msg-ui');
         if (!txt) {
-            el.style.display = 'none';
+            this.dom.msg.style.display = 'none';
         } else {
-            el.style.display = 'block';
-            el.innerHTML = txt;
-            el.style.color = color;
+            this.dom.msg.style.display = 'block';
+            this.dom.msg.innerHTML = txt;
+            this.dom.msg.style.color = color;
         }
     }
 
     hideAll() {
-        ['status-ui', 'detail-ui', 'command-ui', 'confirm-ui', 'target-ui', 'event-ui'].forEach(id => {
-            const el = document.getElementById(id);
+        // キャッシュしたUI要素をまとめて非表示にする
+        const windows = [
+            this.dom.statusUi, this.dom.detailUi, this.dom.commandUi, 
+            this.dom.confirmUi, this.dom.targetUi, this.dom.eventUi
+        ];
+        windows.forEach(el => {
             if (el) el.style.display = 'none';
         });
     }
 
     showStatus(unit) {
         this.setMsg("");
-        document.getElementById('status-ui').style.display = 'block';
-        document.getElementById('st-name').innerText = unit.id;
-        document.getElementById('st-lv').innerText = unit.level;
-        document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
-        document.getElementById('st-hp-bar').style.width = `${(unit.hp / unit.maxHp) * 100}%`;
-        document.getElementById('st-mp').innerText = `${unit.mp}/${unit.maxMp}`;
-        document.getElementById('st-mp-bar').style.width = `${(unit.mp / unit.maxMp) * 100}%`;
+        this.dom.statusUi.style.display = 'block';
         
-        // 詳細ステータスの設定
-        document.getElementById('dt-str').innerText = unit.str;
-        document.getElementById('dt-def').innerText = unit.def;
-        document.getElementById('dt-spd').innerText = unit.spd;
-        document.getElementById('dt-mag').innerText = unit.mag;
+        this.dom.stName.innerText = unit.id;
+        this.dom.stLv.innerText = unit.level;
+        
+        this.dom.stHpLabel.innerHTML = `<ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id="st-hp"></span>`;
+        this.dom.stMpLabel.innerHTML = `<ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp"></span>`;
+        if(this.dom.btnToggleDetail) this.dom.btnToggleDetail.innerHTML = `<ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼`;
+
+        // 上でinnerHTMLを書き換えたため、内部のspanを再取得して値をいれる
+        document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
+        this.dom.stHpBar.style.width = `${(unit.hp / unit.maxHp) * 100}%`;
+        
+        document.getElementById('st-mp').innerText = `${unit.mp}/${unit.maxMp}`;
+        this.dom.stMpBar.style.width = `${(unit.mp / unit.maxMp) * 100}%`;
+        
+        this.dom.dtStr.innerText = unit.str;
+        this.dom.dtDef.innerText = unit.def;
+        this.dom.dtSpd.innerText = unit.spd;
+        this.dom.dtMag.innerText = unit.mag;
     }
 
     renderTalkLine(data, units, player) {
-        const portrait = document.getElementById('ev-portrait');
-        const textArea = document.getElementById('ev-text');
-        document.getElementById('ev-name-plate').innerText = data.name;
-        textArea.innerHTML = data.text;
+        this.dom.evNamePlate.innerText = data.name;
+        this.dom.evText.innerHTML = data.text;
+        this.dom.evTextArea.scrollTop = 0;
 
         const speaker = units.find(u => u.id === data.name);
         if (speaker && speaker.spriteConfig) {
             const conf = speaker.spriteConfig;
             if (conf.type === 'bra') {
-                portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;"></div>`;
+                this.dom.evPortrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;"></div>`;
             } else if (conf.type === 'rex') {
-                portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
+                this.dom.evPortrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
             } else if (conf.type === 'comp') {
-                portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/comp.png'); background-size: 300% 200%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
+                this.dom.evPortrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/comp.png'); background-size: 300% 200%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
             }
         } else {
-            portrait.innerHTML = `<span>${data.face}</span>`;
+            this.dom.evPortrait.innerHTML = `<span style="font-size: 3rem;">${data.face || '🦖'}</span>`;
         }
 
-        if (speaker && speaker.hp > 0) {
+        if (speaker && speaker.hp > 0 && speaker.sprite) {
             this.cameraControl.centerOn(speaker.sprite.position, 0.8);
             if (speaker !== player) {
                 speaker.lookAtNode(player.x, player.z);
@@ -70,12 +108,14 @@ export class UIControl {
     }
 
     showFloatingText(unit, text, type, camera) {
+        if(!unit.sprite) return;
         const vector = unit.sprite.position.clone();
         vector.y += unit.sprite.scale.y + 10;
         vector.project(camera);
         const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
         const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
         
+        // 浮かび上がるテキストだけは毎回新しく作るのでDOM生成をそのまま使用
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
