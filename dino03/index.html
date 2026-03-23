@@ -3,32 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v8.14.2)</title>
+    <title>ちびっこティラノ：タクティクス (v8.15.0)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
     <style>
-        /* エラー表示用のスタイル */
-        #error-log {
-            position: fixed; top: 0; left: 0; width: 100%; background: rgba(255,0,0,0.9);
-            color: white; z-index: 10000; font-family: monospace; padding: 10px;
-            display: none; white-space: pre-wrap; font-size: 12px;
-        }
+        #error-log { position: fixed; top: 0; left: 0; width: 100%; background: #ff0000; color: #fff; z-index: 10000; font-family: monospace; padding: 15px; display: none; white-space: pre-wrap; font-weight: bold; border-bottom: 5px solid #fff; }
     </style>
 </head>
 <body>
-
 <div id="error-log"></div>
 <div id="loading-screen"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.14.2 (Debug Mode)</div>
-
-<div id="stage-overlay" class="big-text-overlay">
-    <div id="chapter-num" class="cool-text"></div>
-    <div id="stage-title" class="cool-text"></div>
-</div>
-<div id="battle-start-overlay" class="big-text-overlay"><div class="battle-text">BATTLE START！</div></div>
-<div id="episode-clear-overlay" class="big-text-overlay"><div class="clear-text">第1話 クリア</div></div>
+<div id="version-display">v8.15.0 (Strict Version Check)</div>
 
 <div id="canvas-container"></div>
 <div id="msg-ui" class="rpg-window"></div>
@@ -63,7 +50,6 @@
 </div>
 
 <div id="target-ui" class="rpg-window">
-    <div class="unit-name">誰を攻撃する？</div>
     <div id="target-list"></div>
     <button class="cmd-btn" id="btn-cancel-attack">❌ キャンセル</button>
 </div>
@@ -82,15 +68,21 @@
     </div>
 </div>
 
+<div id="stage-overlay" class="big-text-overlay">
+    <div id="chapter-num" class="cool-text"></div>
+    <div id="stage-title" class="cool-text"></div>
+</div>
+<div id="battle-start-overlay" class="big-text-overlay"><div class="battle-text">BATTLE START！</div></div>
+<div id="episode-clear-overlay" class="big-text-overlay"><div class="clear-text">第1話 クリア</div></div>
+
 <script>
     window.onerror = function(msg, url, lineNo, columnNo, error) {
         const log = document.getElementById('error-log');
         log.style.display = 'block';
-        log.innerHTML += `ERROR: ${msg}\nAT: ${url} (L:${lineNo}, C:${columnNo})\n\n`;
+        log.innerHTML = `【致命的エラー】\n内容: ${msg}\n場所: ${url}\n\n※古いファイルが残っている可能性があります。\n設定から「ブラウザキャッシュ」を消去してリロードしてください。`;
         return false;
     };
 </script>
-<script type="module" src="main.js?v=8142"></script>
-
+<script type="module" src="main.js?v=8150"></script>
 </body>
 </html>
