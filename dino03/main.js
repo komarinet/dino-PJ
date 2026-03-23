@@ -1,4 +1,4 @@
-export const VERSION = "8.15.3";
+export const VERSION = "8.15.4";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -6,14 +6,25 @@ import { CameraControl, VERSION as camV } from './camera.js';
 import { UIControl, VERSION as uiV } from './ui.js';
 import { BattleSystem, VERSION as batV } from './battle.js';
 import { buildMapMeshes, getWalkableNodes, TILE_SIZE, H_STEP, MAP_W, MAP_D, VERSION as mapV } from './map.js';
-// ★約束通り data/stage01.js をインポート
 import { StageData, VERSION as sceV } from './data/stage01.js';
 
-const REQUIRED_VER = "8.15.3";
+/**
+ * ★ 柔軟な検品ロジック ★
+ * 各ファイルが「最低限このバージョン以上ならOK」というリストを作成
+ */
+const MIN_VERSIONS = {
+    "store.js": "8.15.0",
+    "units.js": "8.15.0",
+    "camera.js": "8.15.0",
+    "ui.js": "8.15.3",   // UI崩れ修正が入った回
+    "battle.js": "8.15.0",
+    "map.js": "8.15.3",  // テクスチャ崩れ修正が入った回
+    "data/stage01.js": "8.15.1"
+};
 
 function checkSystems() {
     const list = document.getElementById('ver-list');
-    const versions = {
+    const currentVersions = {
         "main.js": VERSION, "store.js": storeV, "units.js": unitV, 
         "camera.js": camV, "ui.js": uiV, "battle.js": batV, 
         "map.js": mapV, "data/stage01.js": sceV
@@ -22,25 +33,38 @@ function checkSystems() {
     let allOk = true;
     list.innerHTML = "";
     
-    for (let [file, ver] of Object.entries(versions)) {
-        const isOk = (ver === REQUIRED_VER);
+    for (let [file, curVer] of Object.entries(currentVersions)) {
+        const minVer = MIN_VERSIONS[file] || "8.15.0";
+        // 簡易的なバージョン比較（8.15.X の X 部分を比較）
+        const curPatch = parseInt(curVer.split('.')[2] || 0);
+        const minPatch = parseInt(minVer.split('.')[2] || 0);
+        
+        const isOk = (curPatch >= minPatch);
         if (!isOk) allOk = false;
-        list.innerHTML += `<div style="color:${isOk ? '#0f0' : '#f00'}">${file.padEnd(16)}: ver ${ver || '---'} [${isOk ? 'OK' : 'OLD'}]</div>`;
+        
+        list.innerHTML += `<div style="color:${isOk ? '#0f0' : '#f00'}">${file.padEnd(16)}: ver ${curVer || '---'} [${isOk ? 'OK' : 'OLD'}]</div>`;
     }
 
     if (allOk) {
         document.getElementById('btn-start-game').style.display = 'block';
+        list.innerHTML += `<div style="color:#0f0; margin-top:10px; font-weight:bold;">READY TO START!</div>`;
     } else {
-        list.innerHTML += `<div style="color:#f00; margin-top:10px; font-weight:bold;">! 互換性のないファイルがあります。リロードしてください。</div>`;
+        list.innerHTML += `<div style="color:#f00; margin-top:10px; font-weight:bold;">! 一部のファイルが古すぎます。更新してください。</div>`;
     }
 }
 
+// --- ゲーム実行部分（ロジックは変更なし） ---
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 const mapData = StageData.generateLayout();
 
 window.addEventListener('load', () => {
     checkSystems();
-    document.getElementById('btn-clear-data').onclick = () => { localStorage.clear(); location.reload(); };
+    document.getElementById('btn-clear-data').onclick = () => { 
+        if(confirm("以前のデータを完全に消去してリロードしますか？")) {
+            localStorage.clear(); 
+            location.reload(); 
+        }
+    };
     document.getElementById('btn-start-game').onclick = () => {
         document.getElementById('boot-screen').style.display = 'none';
         document.getElementById('loading-screen').style.display = 'flex';
@@ -54,7 +78,6 @@ async function runGame() {
         const texLoader = new THREE.TextureLoader();
         const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
-        
         sheetImg.onload = async () => {
             const [braTex, rexTex, compTex] = await Promise.all([loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png')]);
             init(sheetImg, braTex, rexTex, compTex);
@@ -71,34 +94,24 @@ function init(sheetImg, braTex, rexTex, compTex) {
     renderer = new THREE.WebGLRenderer({ antialias: false }); renderer.setSize(w, h); renderer.setClearColor(0x1a1a1a);
     container.appendChild(renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    
-    // ★ グラフィック崩壊対策：map.jsへ直接mapDataを渡す
     buildMapMeshes(scene, sheetImg, mapData);
-
     cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
-
     window.units = StageData.units.map(u => {
         let conf = null;
         if(u.id === 'ブラキオサウルス') conf = { tex: braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
         else if (u.id === 'ティラノ') conf = { tex: rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
         else if (u.id.includes('コンプ')) conf = { tex: compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
         if(conf && conf.tex) conf.tex.needsUpdate = true;
-        
         const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
-        unit.h = mapData[unit.z][unit.x].h;
-        scene.add(unit.sprite);
+        unit.h = mapData[unit.z][unit.x].h; scene.add(unit.sprite);
         const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
         unit.sprite.position.set((unit.x * TILE_SIZE) - offX, unit.h * H_STEP, (unit.z * TILE_SIZE) - offZ);
-        if(unit.isPlayer) window.player = unit;
-        return unit;
+        if(unit.isPlayer) window.player = unit; return unit;
     });
-
     setupEventListeners();
     animate();
-
-    // 演出開始
     const o = document.getElementById('stage-overlay');
     document.getElementById('chapter-num').innerText = StageData.info.chapter;
     document.getElementById('stage-title').innerHTML = StageData.info.name;
@@ -106,10 +119,7 @@ function init(sheetImg, braTex, rexTex, compTex) {
         gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
             const boss = window.units.find(u => u.id === 'ブラキオサウルス');
             cameraCtrl.centerOn(boss.sprite.position, 3.0);
-            setTimeout(() => {
-                cameraCtrl.centerOn(window.player.sprite.position, 2.0);
-                setTimeout(() => startDialogue(), 1500);
-            }, 3500);
+            setTimeout(() => { cameraCtrl.centerOn(window.player.sprite.position, 2.0); setTimeout(() => startDialogue(), 1500); }, 3500);
         }});
     }});
 }
@@ -125,8 +135,7 @@ function startDialogue() {
             uiCtrl.renderTalkLine(StageData.preBattleTalk[idx], window.units, window.player);
         } else {
             document.getElementById('event-ui').style.display = 'none';
-            cameraCtrl.setZoom(1.5);
-            gameStore.setState({ gameState: 'IDLE' });
+            cameraCtrl.setZoom(1.5); gameStore.setState({ gameState: 'IDLE' });
             const overlay = document.getElementById('battle-start-overlay');
             gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
                 gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
@@ -146,7 +155,6 @@ function setupEventListeners() {
     document.getElementById('btn-cancel-attack').onclick = () => { document.getElementById('target-ui').style.display = 'none'; document.getElementById('command-ui').style.display = 'block'; };
     document.querySelector('.btn-yes').onclick = () => answerConfirm(true);
     document.querySelector('.btn-no').onclick = () => answerConfirm(false);
-    
     const camUI = document.getElementById('camera-ui');
     document.getElementById('ui-header').onclick = () => camUI.classList.toggle('collapsed');
     camUI.querySelectorAll('.ui-btn').forEach(btn => {
@@ -165,15 +173,12 @@ function onPointerClick(event) {
     const store = getStore();
     if (store.gameState === 'ANIMATING' || store.gameState === 'ENEMY_TURN') return;
     if (store.gameState === 'TALKING') { if(window.onGlobalTap) window.onGlobalTap(); return; }
-
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects([...window.interactableTiles, ...window.units.map(u => u.sprite)]);
-
     if (intersects.length > 0) {
         const obj = intersects[0].object;
         const data = obj.userData.isUnit ? { x: obj.userData.unit.x, z: obj.userData.unit.z } : obj.userData;
-        
         if(store.gameState === 'IDLE') {
             const u = getUnitAt(window.units, data.x, data.z);
             if(u) { uiCtrl.showStatus(u); if(u.isPlayer) document.getElementById('command-ui').style.display = 'block'; }
@@ -194,10 +199,7 @@ function execCommand(cmd) {
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, window.player, mapData);
         gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
-        tiles.forEach(node => { 
-            const tile = window.tilesMeshMap[`${node.x},${node.z}`];
-            if(tile) tile.material[2].color.setHex(0x55ff55); 
-        });
+        tiles.forEach(node => { const tile = window.tilesMeshMap[`${node.x},${node.z}`]; if(tile) tile.material[2].color.setHex(0x55ff55); });
         document.getElementById('command-ui').style.display = 'none';
     } else if(cmd === 'attack') {
         const targets = getAttackableEnemies(window.units, window.player);
@@ -209,13 +211,11 @@ function execCommand(cmd) {
             btn.onclick = () => selectTarget(t); list.appendChild(btn);
             window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555);
         });
-        document.getElementById('command-ui').style.display = 'none';
-        document.getElementById('target-ui').style.display = 'block';
+        document.getElementById('command-ui').style.display = 'none'; document.getElementById('target-ui').style.display = 'block';
     } else if(cmd === 'wait') {
         gameStore.setState({ confirmMode: 'WAIT', pendingData: null });
         document.getElementById('confirm-text').innerText = "行動を終了しますか？";
-        document.getElementById('confirm-ui').style.display = 'block';
-        document.getElementById('command-ui').style.display = 'none';
+        document.getElementById('confirm-ui').style.display = 'block'; document.getElementById('command-ui').style.display = 'none';
     }
 }
 
@@ -227,26 +227,18 @@ function selectTarget(t) {
 }
 
 function answerConfirm(isYes) {
-    const store = getStore();
-    document.getElementById('confirm-ui').style.display = 'none';
-    if(!isYes) {
-        if(store.confirmMode === 'ATTACK') return execCommand('attack');
-        uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
-    }
+    const store = getStore(); document.getElementById('confirm-ui').style.display = 'none';
+    if(!isYes) { if(store.confirmMode === 'ATTACK') return execCommand('attack'); uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return; }
     gameStore.setState({ gameState: 'ANIMATING' });
-    if(store.confirmMode === 'MOVE') {
-        battleSys.executeMovement(window.player, store.pendingData, () => { window.player.hasMoved = true; gameStore.setState({ gameState: 'IDLE' }); document.getElementById('command-ui').style.display = 'block'; });
-    } else if(store.confirmMode === 'ATTACK') {
-        battleSys.executeAttack(window.player, store.pendingData, window.units, camera, endPlayerTurn);
-    } else { endPlayerTurn(); }
+    if(store.confirmMode === 'MOVE') { battleSys.executeMovement(window.player, store.pendingData, () => { window.player.hasMoved = true; gameStore.setState({ gameState: 'IDLE' }); document.getElementById('command-ui').style.display = 'block'; }); } 
+    else if(store.confirmMode === 'ATTACK') { battleSys.executeAttack(window.player, store.pendingData, window.units, camera, endPlayerTurn); } 
+    else { endPlayerTurn(); }
 }
 
 function endPlayerTurn() {
-    const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-    if(boss.hp <= 0) return checkVictory();
+    const boss = window.units.find(u => u.id === 'ブラキオサウルス'); if(boss.hp <= 0) return checkVictory();
     window.player.hasMoved = false; window.player.hasAttacked = false;
-    gameStore.setState({ gameState: 'ENEMY_TURN' });
-    uiCtrl.setMsg("敵の番です...", "#ff5555");
+    gameStore.setState({ gameState: 'ENEMY_TURN' }); uiCtrl.setMsg("敵の番です...", "#ff5555");
     setTimeout(processEnemyAI, 1000);
 }
 
@@ -267,19 +259,8 @@ async function processEnemyAI() {
     gameStore.setState({ gameState: 'IDLE' }); uiCtrl.hideAll(); clearHighlights(); uiCtrl.setMsg("あなたの番です！", "#00ff00");
 }
 
-function checkVictory() {
-    gameStore.setState({ gameState: 'FINISHED' });
-    startDialogue();
-}
-
-function animate() {
-    requestAnimationFrame(animate);
-    const delta = clock.getDelta() * 1000;
-    window.units.forEach(u => u.updateAnimation && u.updateAnimation(delta));
-    cameraCtrl.controls.update();
-    renderer.render(scene, camera);
-}
-
+function checkVictory() { gameStore.setState({ gameState: 'FINISHED' }); startDialogue(); }
+function animate() { requestAnimationFrame(animate); const delta = clock.getDelta() * 1000; window.units.forEach(u => u.updateAnimation && u.updateAnimation(delta)); cameraCtrl.controls.update(); renderer.render(scene, camera); }
 function clearHighlights() {
     window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff));
     window.units.forEach(u => { if(u.hp > 0) { const t = window.tilesMeshMap[`${u.x},${u.z}`]; if(t) t.material[2].color.setHex(u.isPlayer ? 0x88ccff : 0xff8888); } });
