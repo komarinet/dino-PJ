@@ -1,17 +1,15 @@
-// ★ Zustand Store のセットアップ ★
-const { createStore } = window.zustandVanilla;
+// ★ モダンな ES モジュールとして Zustand をインポート ★
+import { createStore } from 'https://esm.sh/zustand/vanilla';
 
 window.gameStore = createStore((set) => ({
-    // --- 状態 (State) ---
-    gameState: 'INIT',         // ゲームの進行状態 ('IDLE', 'ENEMY_TURN' など)
-    walkableTiles: [],         // 移動可能なタイルの配列
-    confirmMode: '',           // 確認ダイアログのモード ('MOVE', 'ATTACK', 'WAIT')
-    pendingData: null,         // 保留中のデータ (攻撃対象のユニットなど)
-    selectedTileKey: null,     // 選択されたタイルの座標キー
-    talkIndex: 0,              // 会話の進行インデックス
-    hasBattleStarted: false,   // バトル開始演出を見たかどうかのフラグ
+    gameState: 'INIT',         
+    walkableTiles: [],         
+    confirmMode: '',           
+    pendingData: null,         
+    selectedTileKey: null,     
+    talkIndex: 0,              
+    hasBattleStarted: false,   
 
-    // --- 更新関数 (Actions) ---
     setGameState: (state) => set({ gameState: state }),
     setWalkableTiles: (tiles) => set({ walkableTiles: tiles }),
     setConfirmData: (mode, data, tileKey = null) => set({ confirmMode: mode, pendingData: data, selectedTileKey: tileKey }),
@@ -20,7 +18,6 @@ window.gameStore = createStore((set) => ({
     setBattleStarted: (isStarted) => set({ hasBattleStarted: isStarted })
 }));
 
-// コードを短く書くためのヘルパー関数
 window.getStore = () => window.gameStore.getState();
 
 let scene, camera, renderer, controls, clock;
@@ -32,6 +29,7 @@ function loadTex(texLoader, url) {
     });
 }
 
+// 読み込み完了後にゲーム初期化
 window.addEventListener('load', () => {
     clock = new THREE.Clock();
     const texLoader = new THREE.TextureLoader();
@@ -39,6 +37,7 @@ window.addEventListener('load', () => {
     sheetImg.src = 'img/plate01.png';
 
     sheetImg.onload = () => {
+        // 全画像を並行して読み込む
         Promise.all([
             loadTex(texLoader, 'img/bra.png'),
             loadTex(texLoader, 'img/tactyrano01.png'),
@@ -66,7 +65,7 @@ window.showStatus = function(unit) {
     window.setMsg("");
     document.getElementById('status-ui').style.display = 'block';
     document.getElementById('st-name').innerText = unit.id;
-    document.getElementById('st-lv').innerText = unit.level;
+    document.getElementById('st-lv').innerText = unit.level; // レベル更新
     document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
     document.getElementById('st-hp-bar').style.width = `${(unit.hp/unit.maxHp)*100}%`;
     document.getElementById('st-mp').innerText = `${unit.mp}/${unit.maxMp}`;
@@ -116,6 +115,7 @@ window.startEvent = function(talkData, callback) {
     document.getElementById('event-ui').style.display = 'flex';
     window.getStore().setTalkIndex(0);
     
+    // UIタップで会話を進める
     window.onGlobalTap = () => {
         const store = window.getStore();
         store.setTalkIndex(store.talkIndex + 1);
@@ -136,6 +136,7 @@ function renderTalkLine(data) {
     
     const speakerUnit = window.units.find(u => u.id === data.name || (data.name.includes("コンプソグナトゥス") && u.id.includes("コンプソグナトゥス")));
     
+    // ★ UI顔グラフィックの表示（CSS背景切り抜き） ★
     if (speakerUnit && speakerUnit.spriteConfig) {
         if (speakerUnit.spriteConfig.type === 'bra') {
             portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;"></div>`;
@@ -153,6 +154,7 @@ function renderTalkLine(data) {
     
     if(speakerUnit && speakerUnit.hp > 0) {
         gsap.to(controls.target, { x: speakerUnit.sprite.position.x, z: speakerUnit.sprite.position.z, duration: 0.6 });
+        // 会話時にお互いを向く
         if (speakerUnit !== window.player) {
             speakerUnit.lookAtNode(window.player.x, window.player.z);
             window.player.lookAtNode(speakerUnit.x, speakerUnit.z);
@@ -354,6 +356,7 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
         if(defender.hp <= 0) {
             if(defender.texture) defender.setAction('DOWN');
             
+            // ★ 敵を倒した時のレベルアップ処理 ★
             if(attacker.isPlayer) {
                 attacker.exp += 100;
                 if(attacker.exp >= 100) { 
@@ -411,6 +414,7 @@ window.executeMovement = function(unit, path, onComplete, followCamera = false) 
     });
 }
 
+// ★ 敵のAI（順番に行動する）の実装 ★
 window.endPlayerTurn = function() {
     let boss = window.units.find(u => u.id === 'ブラキオサウルス');
     if(boss && boss.hp <= 0) { checkVictory(); return; }
@@ -431,8 +435,10 @@ window.endPlayerTurn = function() {
             if (e.id === 'コンプソグナトゥスA' || e.id === 'コンプソグナトゥスB') {
                 actingEnemies.push(e); 
             } else if (e.id === 'コンプソグナトゥスC' || e.id === 'コンプソグナトゥスD') {
+                // A・B全滅、またはプレイヤーが近い場合のみ動く
                 if (!compAB_alive || distToPlayer <= 5) actingEnemies.push(e); 
             } else if (e.id === 'ブラキオサウルス') {
+                // 部下が全滅するまで動かない
                 if (!anyComp_alive) actingEnemies.push(e); 
             }
         });
