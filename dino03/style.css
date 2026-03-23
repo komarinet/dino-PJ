@@ -1,71 +1,22 @@
-body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; user-select: none; }
-#canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+/* ...既存のスタイルに上書き... */
+#status-ui { top: 10px; left: 10px; width: 170px; display: none; padding: 12px; }
+#detail-ui { top: 10px; left: 190px; width: 150px; display: none; padding: 10px; }
 
-#version-display { position: absolute; top: 5px; right: 5px; color: rgba(255, 255, 255, 0.4); font-size: 0.7rem; font-family: monospace; z-index: 9999; pointer-events: none; }
-
-ruby { display: inline-flex; flex-direction: column-reverse; vertical-align: bottom; align-items: center; }
-rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-align: center; margin-bottom: 2px; }
-
-.rpg-window {
-    position: absolute; background: rgba(0, 15, 60, 0.96); color: white;
-    border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
-    padding: 10px; z-index: 1000; box-sizing: border-box; pointer-events: auto; font-weight: bold;
+.stat-row { 
+    display: flex; 
+    justify-content: space-between; 
+    align-items: center; 
+    border-bottom: 1px dotted #555; 
+    padding: 4px 0;
+    min-height: 20px;
 }
+.stat-row span:first-child { text-align: left; font-size: 0.85rem; }
+.stat-row span:last-child { text-align: right; font-family: monospace; font-size: 1rem; color: #fff; }
 
-#event-ui {
-    display: none; bottom: 10px; left: 50%; transform: translateX(-50%);
-    width: 96vw; height: 160px; z-index: 4000; flex-direction: row; padding: 12px;
+#event-ui { 
+    height: auto; 
+    min-height: 140px; 
+    padding: 15px; 
 }
-.ev-left { width: 100px; display: flex; flex-direction: column; align-items: center; border-right: 1px solid #444; }
-#ev-portrait { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
-#ev-portrait img { max-width: 100%; max-height: 100%; image-rendering: pixelated; }
-#ev-portrait span { font-size: 70px; }
-
-#ev-name-plate { font-size: 0.85rem; color: #ffcc00; margin-top: 5px; text-align: center; }
-.ev-right { flex: 1; padding-left: 15px; position: relative; }
-#ev-text { font-size: 1.1rem; line-height: 1.8; margin: 0; color: #fff; }
-#ev-click-hint { position: absolute; bottom: 0; right: 5px; animation: blink 1s infinite; color: #ffcc00; }
-
-.big-text-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 5000; text-align: center; pointer-events: none; opacity: 0; width: 100%; }
-.cool-text { color: #fff !important; text-shadow: 0 0 10px #000, 0 0 20px #000, 2px 2px 0 #000; }
-#chapter-num { font-size: 1.8rem; color: #ffcc00 !important; }
-#stage-title { font-size: 2.8rem; margin-top: 10px; }
-
-.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff, 0 0 10px #000; }
-.clear-text { font-size: 3.5rem; font-weight: bold; color: #00ff00 !important; text-shadow: 2px 2px 4px #000, 0 0 20px #000, 0 0 10px #fff; }
-
-#status-ui { top: 10px; left: 10px; width: 170px; display: none; }
-.unit-name { font-size: 1.1rem; border-bottom: 1px solid #777; margin-bottom: 5px; }
-.bar-bg { width: 100%; background: #333; height: 8px; border-radius: 4px; margin: 4px 0; overflow: hidden; }
-.hp-bar { height: 100%; background: #4caf50; transition: width 0.3s; }
-.mp-bar { height: 100%; background: #2196f3; transition: width 0.3s; }
-.btn-detail { background: #444; color: white; border: 1px solid #888; width: 100%; margin-top: 5px; padding: 4px 0; border-radius: 4px; font-size: 0.8rem;}
-
-/* ★パラメータのインデントを左右にピシッと揃える★ */
-.stat-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dotted #555; padding: 2px 0; }
-.stat-row span:first-child { text-align: left; }
-.stat-row span:last-child { text-align: right; font-family: monospace; font-size: 1.1rem; color: #fff; }
-
-#command-ui { bottom: 10px; left: 10px; width: 120px; display: none; }
-.cmd-btn { display: block; width: 100%; background: transparent; color: white; border: none; text-align: left; padding: 12px 8px; font-size: 1.1rem; border-bottom: 1px solid #444; }
-.cmd-btn:hover { background: rgba(255,255,255,0.15); }
-.cmd-btn:disabled { display: none; }
-
-#target-ui { display: none; top: 15%; left: 50%; transform: translateX(-50%); width: 280px; z-index: 1800; }
-#camera-ui { bottom: 10px; right: 10px; width: 195px; transition: transform 0.3s ease; z-index: 1500; font-size: 0.8rem; }
-#camera-ui.collapsed { transform: translateY(calc(100% - 34px)); }
-#ui-header { font-weight: bold; text-align: center; cursor: pointer; padding-bottom: 5px; border-bottom: 1px solid #555; margin-bottom: 5px;}
-.ui-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
-.ui-btn { background: #eee; border: none; border-radius: 4px; padding: 6px 1px; font-weight: bold; box-shadow: 0 2px #999; }
-.ui-btn:active { transform: translateY(2px); box-shadow: 0 0 #999; }
-
-#msg-ui { top: 15px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 1.1rem; display: none; pointer-events: none; }
-#confirm-ui { display: none; top: 20%; left: 50%; transform: translateX(-50%); text-align: center; z-index: 4500; width: 260px; }
-.confirm-btns { display: flex; justify-content: center; gap: 15px; margin-top: 15px; }
-.btn-yes { background: #4caf50; color: white; border: none; padding: 10px 30px; border-radius: 6px; font-weight: bold; }
-.btn-no { background: #f44336; color: white; border: none; padding: 10px 30px; border-radius: 6px; font-weight: bold; }
-
-#loading-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 9999; display: flex; justify-content: center; align-items: center; transition: opacity 0.5s ease; }
-.loader-text { color: #fff; font-size: 1.5rem; animation: blink 1.5s infinite; }
-@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-.floating-text { position: absolute; font-size: 2.2rem; font-weight: bold; font-family: Impact, sans-serif; text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; pointer-events: none; z-index: 3000; transform: translate(-50%, -50%); }
+#ev-portrait { width: 85px; height: 60px; flex-shrink: 0; }
+#ev-text { font-size: 1.1rem; line-height: 1.6; }
