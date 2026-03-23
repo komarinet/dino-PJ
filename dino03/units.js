@@ -14,6 +14,8 @@ window.Unit = class {
         this.spriteConfig = spriteConfig;
         this.texture = spriteConfig ? spriteConfig.tex : null;
         this.animTime = 0;
+        // ★修正：ティラノの歩行速度（1コマ150ms）をUnitクラスで管理★
+        this.animSpeed = 150; 
         this.animState = 'IDLE'; 
 
         this.facing = 1; 
@@ -24,7 +26,6 @@ window.Unit = class {
 
     initTextureSprite() {
         const conf = this.spriteConfig;
-        // マトリクスに合わせてテクスチャを分割
         this.texture.repeat.set(1 / conf.cols, 1 / conf.rows);
         this.texture.magFilter = THREE.NearestFilter;
         
@@ -32,12 +33,10 @@ window.Unit = class {
         this.sprite = new THREE.Sprite(this.material);
         this.sprite.center.set(0.5, 0.0); 
         
-        // 1コマのサイズを計算
         const cellW = conf.w / conf.cols;
         const cellH = conf.h / conf.rows;
         
-        // ユニットのゲーム内サイズ
-        const h = (conf.type === 'bra') ? 90 : 60; // ブラキオサウルスは90、ティラノは60
+        const h = (conf.type === 'bra') ? 90 : 60; 
         this.baseScaleX = h * (cellW / cellH);
         
         this.sprite.scale.set(this.baseScaleX * this.facing, h, 1);
@@ -72,7 +71,9 @@ window.Unit = class {
                 const frame = (Math.floor(this.animTime / 500) % 2); // 0 or 1
                 this.setRawFrame(0, frame);
             } else if(this.spriteConfig.type === 'rex') {
-                const f = Math.floor(this.animTime / 150) % 12; // 12コマ歩行をループ
+                // ★修正箇所：歩行アニメーションのループ順序を逆転させる★
+                // 増加する animTime に基づいて 11, 10, 9, ..., 0, 11, ... と減少させる
+                const f = 11 - (Math.floor(this.animTime / this.animSpeed) % 12); 
                 const col = f % 4;
                 const row = Math.floor(f / 4);
                 this.setRawFrame(col, row);
@@ -80,33 +81,30 @@ window.Unit = class {
         }
     }
 
-    // (col, row) は 0始まり。row=0が一番上。
     setRawFrame(col, row) {
         if(!this.texture) return;
         const conf = this.spriteConfig;
         this.texture.offset.x = col / conf.cols;
-        // WebGLはY座標が下から上のため反転
         this.texture.offset.y = 1.0 - ((row + 1) / conf.rows);
     }
 
-    // 状況に応じたモーションセット
     setAction(action) {
         if(!this.texture) return;
         this.animState = 'FIXED';
         if(this.spriteConfig.type === 'bra') {
             if(action === 'ATTACK') this.setRawFrame(0, 2);
             else if(action === 'HURT') this.setRawFrame(0, 3);
-            else if(action === 'DOWN') this.setRawFrame(0, 3); // ブラキオのダウンはやられを流用
+            else if(action === 'DOWN') this.setRawFrame(0, 3);
         } else if(this.spriteConfig.type === 'rex') {
-            if(action === 'ATTACK') this.setRawFrame(1, 3); // 4行目2列
-            else if(action === 'HURT') this.setRawFrame(0, 3);  // 4行目1列
-            else if(action === 'DOWN') this.setRawFrame(2, 3);  // 4行目3列
+            if(action === 'ATTACK') this.setRawFrame(1, 3); 
+            else if(action === 'HURT') this.setRawFrame(0, 3);  
+            else if(action === 'DOWN') this.setRawFrame(2, 3);  
         }
     }
 
     setIdle() {
         this.animState = 'IDLE';
-        this.setRawFrame(0, 0); // 初期位置
+        this.setRawFrame(0, 0); 
     }
 };
 
