@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v8.15.1)</title>
+    <title>ちびっこティラノ：タクティクス (v8.15.2)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -15,7 +15,7 @@
 <body>
 <div id="error-log"></div>
 <div id="loading-screen"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.15.1 (Fixed Scenario Path)</div>
+<div id="version-display">v8.15.2 (Engine Stability Fix)</div>
 
 <div id="canvas-container"></div>
 <div id="msg-ui" class="rpg-window"></div>
@@ -27,26 +27,26 @@
 <div id="status-ui" class="rpg-window">
     <div id="st-name" class="unit-name"></div>
     <div class="stat-row" style="border:none; margin-bottom:0;"><span>🌟 Lv</span><span id="st-lv"></span></div>
-    <div style="font-size:0.8rem;"><ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id="st-hp"></span></div>
+    <div style="font-size:0.8rem;">体力 (HP): <span id="st-hp"></span></div>
     <div class="bar-bg"><div id="st-hp-bar" class="hp-bar"></div></div>
-    <div style="font-size:0.8rem;"><ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp"></span></div>
+    <div style="font-size:0.8rem;">恐竜力 (MP): <span id="st-mp"></span></div>
     <div class="bar-bg"><div id="st-mp-bar" class="mp-bar"></div></div>
-    <button class="btn-detail" id="btn-toggle-detail"><ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼</button>
+    <button class="btn-detail" id="btn-toggle-detail">詳細を見る ▼</button>
 </div>
 
 <div id="detail-ui" class="rpg-window">
-    <div class="unit-name"><ruby>能力値<rt>のうりょくち</rt></ruby></div>
-    <div class="stat-row"><span>💪 <ruby>力<rt>ちから</rt></ruby></span><span id="dt-str"></span></div>
-    <div class="stat-row"><span>🛡️ <ruby>防御<rt>ぼうぎょ</rt></ruby></span><span id="dt-def"></span></div>
-    <div class="stat-row"><span>👟 <ruby>速度<rt>そくど</rt></ruby></span><span id="dt-spd"></span></div>
-    <div class="stat-row"><span>✨ <ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby></span><span id="dt-mag"></span></div>
+    <div class="unit-name">能力値</div>
+    <div class="stat-row"><span>💪 力</span><span id="dt-str"></span></div>
+    <div class="stat-row"><span>🛡️ 防御</span><span id="dt-def"></span></div>
+    <div class="stat-row"><span>👟 速度</span><span id="dt-spd"></span></div>
+    <div class="stat-row"><span>✨ 恐竜力</span><span id="dt-mag"></span></div>
 </div>
 
 <div id="command-ui" class="rpg-window">
-    <button id="cmd-move" class="cmd-btn">🚶 <ruby>移動<rt>いどう</rt></ruby></button>
-    <button id="cmd-attack" class="cmd-btn">⚔️ <ruby>攻撃<rt>こうげき</rt></ruby></button>
-    <button id="cmd-wait" class="cmd-btn">⏳ <ruby>待機<rt>たいき</rt></ruby></button>
-    <button id="cmd-cancel" class="cmd-btn" style="color:#ff8888; border-top:1px dashed #555;">↩ <ruby>戻<rt>もど</rt></ruby>る</button>
+    <button id="cmd-move" class="cmd-btn">🚶 移動</button>
+    <button id="cmd-attack" class="cmd-btn">⚔️ 攻撃</button>
+    <button id="cmd-wait" class="cmd-btn">⏳ 待機</button>
+    <button id="cmd-cancel" class="cmd-btn" style="color:#ff8888; border-top:1px dashed #555;">↩ 戻る</button>
 </div>
 
 <div id="target-ui" class="rpg-window">
@@ -79,10 +79,10 @@
     window.onerror = function(msg, url, lineNo, columnNo, error) {
         const log = document.getElementById('error-log');
         log.style.display = 'block';
-        log.innerHTML = `【致命的エラー】\n内容: ${msg}\n場所: ${url}\n\n※「data/stage01.js」がないか、キャッシュが古い可能性があります。`;
+        log.innerHTML = `【エラー】\n${msg}\nAT: ${url}`;
         return false;
     };
 </script>
-<script type="module" src="main.js?v=8151"></script>
+<script type="module" src="main.js?v=8152"></script>
 </body>
 </html>
