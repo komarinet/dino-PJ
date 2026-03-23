@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ちびっこティラノ：タクティクス (v8.14.0)</title>
+    <title>ちびっこティラノ：タクティクス (v8.14.1)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -12,33 +12,20 @@
 <body>
 
 <div id="loading-screen"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.14.0 (Module Architecture)</div>
+<div id="version-display">v8.14.1 (Pure Module System)</div>
 
 <div id="stage-overlay" class="big-text-overlay">
     <div id="chapter-num" class="cool-text"></div>
     <div id="stage-title" class="cool-text"></div>
 </div>
-
-<div id="battle-start-overlay" class="big-text-overlay">
-    <div class="battle-text">BATTLE START！</div>
-</div>
-
-<div id="episode-clear-overlay" class="big-text-overlay">
-    <div class="clear-text">第1話 クリア</div>
-</div>
+<div id="battle-start-overlay" class="big-text-overlay"><div class="battle-text">BATTLE START！</div></div>
+<div id="episode-clear-overlay" class="big-text-overlay"><div class="clear-text">第1話 クリア</div></div>
 
 <div id="canvas-container"></div>
 <div id="msg-ui" class="rpg-window"></div>
-
 <div id="event-ui" class="rpg-window">
-    <div class="ev-left">
-        <div id="ev-portrait"></div>
-        <div id="ev-name-plate"></div>
-    </div>
-    <div class="ev-right">
-        <div id="ev-text-area"><p id="ev-text"></p></div>
-        <div id="ev-click-hint">▲</div>
-    </div>
+    <div class="ev-left"><div id="ev-portrait"></div><div id="ev-name-plate"></div></div>
+    <div class="ev-right"><div id="ev-text-area"><p id="ev-text"></p></div><div id="ev-click-hint">▲</div></div>
 </div>
 
 <div id="status-ui" class="rpg-window">
@@ -74,28 +61,18 @@
 
 <div id="confirm-ui" class="rpg-window">
     <p id="confirm-text"></p>
-    <div class="confirm-btns">
-        <button class="btn-yes">はい</button>
-        <button class="btn-no">いいえ</button>
-    </div>
+    <div class="confirm-btns"><button class="btn-yes">はい</button><button class="btn-no">いいえ</button></div>
 </div>
 
 <div id="camera-ui" class="rpg-window collapsed">
     <div id="ui-header">📷 カメラ<ruby>操作<rt>そうさ</rt></ruby> (<ruby>開閉<rt>かいへい</rt></ruby>)</div>
     <div class="ui-grid">
-        <button class="ui-btn" data-cam="rotate-left"><ruby>回<rt>まわ</rt></ruby>す ◀</button>
-        <button class="ui-btn" data-cam="pan-up"><ruby>上<rt>うえ</rt></ruby></button>
-        <button class="ui-btn" data-cam="rotate-right">▶ <ruby>回<rt>まわ</rt></ruby>す</button>
-        <button class="ui-btn" data-cam="pan-left"><ruby>左<rt>ひだり</rt></ruby></button>
-        <button class="ui-btn" data-cam="center"><ruby>中心<rt>ちゅうしん</rt></ruby></button>
-        <button class="ui-btn" data-cam="pan-right"><ruby>右<rt>みぎ</rt></ruby></button>
-        <button class="ui-btn" data-cam="zoom-in"><ruby>寄<rt>よ</rt></ruby>る ＋</button>
-        <button class="ui-btn" data-cam="pan-down"><ruby>下<rt>した</rt></ruby></button>
-        <button class="ui-btn" data-cam="zoom-out">ー <ruby>引<rt>ひ</rt></ruby>く</button>
+        <button class="ui-btn" data-cam="rotate-left">◀</button><button class="ui-btn" data-cam="pan-up">▲</button><button class="ui-btn" data-cam="rotate-right">▶</button>
+        <button class="ui-btn" data-cam="pan-left">◀</button><button class="ui-btn" data-cam="center">●</button><button class="ui-btn" data-cam="pan-right">▶</button>
+        <button class="ui-btn" data-cam="zoom-in">＋</button><button class="ui-btn" data-cam="pan-down">▼</button><button class="ui-btn" data-cam="zoom-out">ー</button>
     </div>
 </div>
 
 <script type="module" src="main.js?v=814"></script>
-
 </body>
 </html>
