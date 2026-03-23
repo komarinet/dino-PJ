@@ -1,4 +1,4 @@
-export const VERSION = "8.16.0";
+export const VERSION = "8.16.1";
 
 export class UIControl {
     constructor(cameraControl) {
@@ -24,18 +24,20 @@ export class UIControl {
     }
 
     showStatus(unit) {
+        this.setMsg("");
         document.getElementById('status-ui').style.display = 'block';
         document.getElementById('st-name').innerText = unit.id;
         document.getElementById('st-lv').innerText = unit.level;
         document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
         document.getElementById('st-hp-bar').style.width = `${(unit.hp / unit.maxHp) * 100}%`;
+        document.getElementById('st-mp').innerText = `${unit.mp}/${unit.maxMp}`;
+        document.getElementById('st-mp-bar').style.width = `${(unit.mp / unit.maxMp) * 100}%`;
         
-        // 詳細パラメータの更新
-        document.getElementById('detail-stats').innerHTML = `
-            <div class="stat-row"><span>💪 力</span><span>${unit.str}</span></div>
-            <div class="stat-row"><span>🛡️ 防御</span><span>${unit.def}</span></div>
-            <div class="stat-row"><span>👟 速度</span><span>${unit.spd}</span></div>
-        `;
+        // 詳細ステータスの設定
+        document.getElementById('dt-str').innerText = unit.str;
+        document.getElementById('dt-def').innerText = unit.def;
+        document.getElementById('dt-spd').innerText = unit.spd;
+        document.getElementById('dt-mag').innerText = unit.mag;
     }
 
     renderTalkLine(data, units, player) {
@@ -47,16 +49,15 @@ export class UIControl {
         const speaker = units.find(u => u.id === data.name);
         if (speaker && speaker.spriteConfig) {
             const conf = speaker.spriteConfig;
-            // CSS背景切り抜き（アトラス対応）
             if (conf.type === 'bra') {
-                portrait.innerHTML = `<div style="width:85px;height:60px;background:url('img/bra.png') 0 100% / 100% 500% no-repeat;image-rendering:pixelated;"></div>`;
+                portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;"></div>`;
             } else if (conf.type === 'rex') {
-                portrait.innerHTML = `<div style="width:85px;height:60px;background:url('img/tactyrano01.png') 100% 100% / 400% 400% no-repeat;image-rendering:pixelated;"></div>`;
+                portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
             } else if (conf.type === 'comp') {
-                portrait.innerHTML = `<div style="width:85px;height:60px;background:url('img/comp.png') 100% 100% / 300% 200% no-repeat;image-rendering:pixelated;"></div>`;
+                portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/comp.png'); background-size: 300% 200%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
             }
         } else {
-            portrait.innerHTML = `<span>${data.face || '🦖'}</span>`;
+            portrait.innerHTML = `<span>${data.face}</span>`;
         }
 
         if (speaker && speaker.hp > 0) {
@@ -69,7 +70,6 @@ export class UIControl {
     }
 
     showFloatingText(unit, text, type, camera) {
-        if (!unit.sprite) return;
         const vector = unit.sprite.position.clone();
         vector.y += unit.sprite.scale.y + 10;
         vector.project(camera);
@@ -84,6 +84,6 @@ export class UIControl {
         el.style.top = `${y}px`;
         document.body.appendChild(el);
         
-        gsap.to(el, { y: y - 100, opacity: 0, duration: 1.5, onComplete: () => el.remove() });
+        gsap.to(el, { y: y - 100, opacity: 0, duration: 1.5, ease: "power2.out", onComplete: () => el.remove() });
     }
 }
