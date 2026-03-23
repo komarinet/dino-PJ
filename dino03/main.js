@@ -1,4 +1,4 @@
-export const VERSION = "8.16.1";
+export const VERSION = "8.17.0";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -8,7 +8,6 @@ import { BattleSystem, VERSION as batV } from './battle.js';
 import { buildMapMeshes, getWalkableNodes, TILE_SIZE, H_STEP, MAP_W, MAP_D, VERSION as mapV } from './map.js';
 import { StageData, VERSION as sceV } from './data/stage01.js';
 
-// --- バージョン検品 ---
 function checkSystems() {
     const list = document.getElementById('ver-list');
     const currentVersions = {
@@ -21,8 +20,7 @@ function checkSystems() {
     list.innerHTML = "";
     
     for (let [file, curVer] of Object.entries(currentVersions)) {
-        // v8.16.1 を基準に判定
-        const isOk = curVer && curVer.startsWith("8.16");
+        const isOk = curVer && (curVer.startsWith("8.16") || curVer.startsWith("8.17"));
         if (!isOk) allOk = false;
         list.innerHTML += `<div style="color:${isOk ? '#0f0' : '#f00'}">${file.padEnd(16)}: ver ${curVer || '---'} [${isOk ? 'OK' : 'OLD'}]</div>`;
     }
@@ -76,7 +74,6 @@ function init(sheetImg, braTex, rexTex, compTex) {
     container.appendChild(renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     
-    // マップ描画
     buildMapMeshes(scene, sheetImg, mapData);
 
     cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
@@ -102,17 +99,19 @@ function init(sheetImg, braTex, rexTex, compTex) {
     setupEventListeners();
     animate();
 
+    // ★ 追加：ゲーム開始前に、最初から斜め見下ろしアングルに設定しておく
+    cameraCtrl.setInitialAngle(window.player.sprite.position);
+
     const o = document.getElementById('stage-overlay');
     document.getElementById('chapter-num').innerText = StageData.info.chapter;
     document.getElementById('stage-title').innerHTML = StageData.info.name;
     gsap.to(o, { opacity: 1, duration: 1.5, onComplete: () => {
         gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
             const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-            cameraCtrl.centerOn(boss.sprite.position, 2.5);
-            setTimeout(() => { 
-                cameraCtrl.centerOn(window.player.sprite.position, 1.5); 
-                setTimeout(() => startDialogue(), 1200); 
-            }, 3000);
+            // ★ 鳥の視点でのオープニング演出開始
+            cameraCtrl.playOpening(boss, window.player, () => {
+                startDialogue();
+            });
         }});
     }});
 }
