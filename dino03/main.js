@@ -1,89 +1,281 @@
 export const VERSION = "8.16.1";
-export const TILE_SIZE = 60;
-export const H_STEP = 30;
-export const MAP_W = 25;
-export const MAP_D = 25;
 
-export function buildMapMeshes(scene, sheetImg, mapData) {
-    if(!mapData) return;
+import { gameStore, getStore, VERSION as storeV } from './store.js';
+import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
+import { CameraControl, VERSION as camV } from './camera.js';
+import { UIControl, VERSION as uiV } from './ui.js';
+import { BattleSystem, VERSION as batV } from './battle.js';
+import { buildMapMeshes, getWalkableNodes, TILE_SIZE, H_STEP, MAP_W, MAP_D, VERSION as mapV } from './map.js';
+import { StageData, VERSION as sceV } from './data/stage01.js';
 
-    const mapTex = new THREE.CanvasTexture(sheetImg);
-    mapTex.magFilter = THREE.NearestFilter;
-    mapTex.minFilter = THREE.NearestFilter;
-
-    // ★ プロの最適化：マテリアル（絵の具）をタイプごとにキャッシュ（使い回す）
-    // これにより数千個のテクスチャが生成されるのを防ぎ、メモリ爆発を完全に無くします。
-    const materialCache = {};
-
-    function getMaterialsForType(type) {
-        if (materialCache[type]) return materialCache[type];
-        
-        const mats = [];
-        for (let i = 0; i < 6; i++) {
-            const tex = mapTex.clone();
-            tex.repeat.set(1/8, 1/8);
-            // i===2 は天面(草など), それ以外は側面(土など)
-            if (i === 2) {
-                tex.offset.set(type/8, 1 - 1/8); 
-            } else {
-                tex.offset.set(type/8, 1 - 2/8); 
-            }
-            mats.push(new THREE.MeshLambertMaterial({ map: tex, transparent: true }));
-        }
-        materialCache[type] = mats;
-        return mats;
+// --- バージョン検品 ---
+function checkSystems() {
+    const list = document.getElementById('ver-list');
+    const currentVersions = {
+        "main.js": VERSION, "store.js": storeV, "units.js": unitV, 
+        "camera.js": camV, "ui.js": uiV, "battle.js": batV, 
+        "map.js": mapV, "data/stage01.js": sceV
+    };
+    
+    let allOk = true;
+    list.innerHTML = "";
+    
+    for (let [file, curVer] of Object.entries(currentVersions)) {
+        // v8.16.1 を基準に判定
+        const isOk = curVer && curVer.startsWith("8.16");
+        if (!isOk) allOk = false;
+        list.innerHTML += `<div style="color:${isOk ? '#0f0' : '#f00'}">${file.padEnd(16)}: ver ${curVer || '---'} [${isOk ? 'OK' : 'OLD'}]</div>`;
     }
 
-    const offsetX = (MAP_W * TILE_SIZE) / 2;
-    const offsetZ = (MAP_D * TILE_SIZE) / 2;
+    if (allOk) {
+        document.getElementById('btn-start-game').style.display = 'block';
+        list.innerHTML += `<div style="color:#0f0; margin-top:10px; font-weight:bold;">READY TO START!</div>`;
+    } else {
+        list.innerHTML += `<div style="color:#f00; margin-top:10px; font-weight:bold;">! 一部のファイルが古いです。キャッシュを消去してリロードしてください。</div>`;
+    }
+}
 
-    window.tilesMeshMap = {};
-    window.interactableTiles = [];
+let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
+const mapData = StageData.generateLayout();
 
-    for (let z = 0; z < MAP_D; z++) {
-        for (let x = 0; x < MAP_W; x++) {
-            const cell = mapData[z][x];
-            const h = Math.max(1, cell.h) * H_STEP; // 高さが0でもエラーにならないよう最低1を確保
-            const geo = new THREE.BoxGeometry(TILE_SIZE, h, TILE_SIZE);
-            
-            // ★ キャッシュされたマテリアルを使い回す
-            const mats = getMaterialsForType(cell.type);
+window.addEventListener('load', () => {
+    checkSystems();
+    document.getElementById('btn-clear-data').onclick = () => { 
+        if(confirm("以前のデータを完全に消去してリロードしますか？")) {
+            localStorage.clear(); 
+            location.reload(); 
+        }
+    };
+    document.getElementById('btn-start-game').onclick = () => {
+        document.getElementById('boot-screen').style.display = 'none';
+        document.getElementById('loading-screen').style.display = 'flex';
+        runGame();
+    };
+});
 
-            const mesh = new THREE.Mesh(geo, mats);
-            mesh.position.set(x * TILE_SIZE - offsetX, h / 2, z * TILE_SIZE - offsetZ);
-            mesh.userData = { x, z, h: cell.h };
-            scene.add(mesh);
+async function runGame() {
+    try {
+        clock = new THREE.Clock();
+        const texLoader = new THREE.TextureLoader();
+        const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
+        const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
+        sheetImg.onload = async () => {
+            const [braTex, rexTex, compTex] = await Promise.all([loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png')]);
+            init(sheetImg, braTex, rexTex, compTex);
+            document.getElementById('loading-screen').style.display = 'none';
+        };
+    } catch (e) { console.error(e); }
+}
 
-            window.tilesMeshMap[`${x},${z}`] = mesh;
-            window.interactableTiles.push(mesh);
+function init(sheetImg, braTex, rexTex, compTex) {
+    const container = document.getElementById('canvas-container');
+    scene = new THREE.Scene();
+    const w = container.clientWidth, h = container.clientHeight;
+    camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000); camera.zoom = 1.5; camera.updateProjectionMatrix();
+    renderer = new THREE.WebGLRenderer({ antialias: false }); renderer.setSize(w, h); renderer.setClearColor(0x1a1a1a);
+    container.appendChild(renderer.domElement);
+    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    
+    // マップ描画
+    buildMapMeshes(scene, sheetImg, mapData);
+
+    cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
+    uiCtrl = new UIControl(cameraCtrl);
+    battleSys = new BattleSystem(uiCtrl, cameraCtrl);
+
+    window.units = StageData.units.map(u => {
+        let conf = null;
+        if(u.id === 'ブラキオサウルス') conf = { tex: braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
+        else if (u.id === 'ティラノ') conf = { tex: rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
+        else if (u.id.includes('コンプ')) conf = { tex: compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
+        if(conf && conf.tex) conf.tex.needsUpdate = true;
+        
+        const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
+        unit.h = mapData[unit.z][unit.x].h; 
+        scene.add(unit.sprite);
+        const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
+        unit.sprite.position.set((unit.x * TILE_SIZE) - offX, unit.h * H_STEP, (unit.z * TILE_SIZE) - offZ);
+        if(unit.isPlayer) window.player = unit; 
+        return unit;
+    });
+
+    setupEventListeners();
+    animate();
+
+    const o = document.getElementById('stage-overlay');
+    document.getElementById('chapter-num').innerText = StageData.info.chapter;
+    document.getElementById('stage-title').innerHTML = StageData.info.name;
+    gsap.to(o, { opacity: 1, duration: 1.5, onComplete: () => {
+        gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
+            const boss = window.units.find(u => u.id === 'ブラキオサウルス');
+            cameraCtrl.centerOn(boss.sprite.position, 2.5);
+            setTimeout(() => { 
+                cameraCtrl.centerOn(window.player.sprite.position, 1.5); 
+                setTimeout(() => startDialogue(), 1200); 
+            }, 3000);
+        }});
+    }});
+}
+
+function startDialogue() {
+    gameStore.setState({ gameState: 'TALKING', talkIndex: 0 });
+    uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
+    document.getElementById('event-ui').style.display = 'flex';
+    window.onGlobalTap = () => {
+        const idx = getStore().talkIndex + 1;
+        if(idx < StageData.preBattleTalk.length) {
+            gameStore.setState({ talkIndex: idx });
+            uiCtrl.renderTalkLine(StageData.preBattleTalk[idx], window.units, window.player);
+        } else {
+            document.getElementById('event-ui').style.display = 'none';
+            cameraCtrl.setZoom(1.5); gameStore.setState({ gameState: 'IDLE' });
+            const overlay = document.getElementById('battle-start-overlay');
+            gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
+                gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
+            }});
+        }
+    };
+    uiCtrl.renderTalkLine(StageData.preBattleTalk[0], window.units, window.player);
+}
+
+function setupEventListeners() {
+    renderer.domElement.addEventListener('pointerup', onPointerClick);
+    document.getElementById('btn-toggle-detail').onclick = () => { const d = document.getElementById('detail-ui'); d.style.display = (d.style.display === 'block' ? 'none' : 'block'); };
+    document.getElementById('cmd-move').onclick = () => execCommand('move');
+    document.getElementById('cmd-attack').onclick = () => execCommand('attack');
+    document.getElementById('cmd-wait').onclick = () => execCommand('wait');
+    document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); };
+    document.getElementById('btn-cancel-attack').onclick = () => { document.getElementById('target-ui').style.display = 'none'; document.getElementById('command-ui').style.display = 'block'; };
+    document.querySelector('.btn-yes').onclick = () => answerConfirm(true);
+    document.querySelector('.btn-no').onclick = () => answerConfirm(false);
+    
+    const camUI = document.getElementById('camera-ui');
+    document.getElementById('ui-header').onclick = () => camUI.classList.toggle('collapsed');
+    camUI.querySelectorAll('.ui-btn').forEach(btn => {
+        btn.onclick = () => {
+            const t = btn.dataset.cam;
+            if(t === 'rotate-left') cameraCtrl.rotate(-90); if(t === 'rotate-right') cameraCtrl.rotate(90);
+            if(t === 'pan-up') cameraCtrl.pan(0, -1); if(t === 'pan-down') cameraCtrl.pan(0, 1);
+            if(t === 'pan-left') cameraCtrl.pan(-1, 0); if(t === 'pan-right') cameraCtrl.pan(1, 0);
+            if(t === 'center') cameraCtrl.centerOn(window.player.sprite.position);
+            if(t === 'zoom-in') cameraCtrl.setZoom(camera.zoom + 0.3); if(t === 'zoom-out') cameraCtrl.setZoom(camera.zoom - 0.3);
+        };
+    });
+}
+
+function onPointerClick(event) {
+    const store = getStore();
+    if (store.gameState === 'ANIMATING' || store.gameState === 'ENEMY_TURN') return;
+    if (store.gameState === 'TALKING') { if(window.onGlobalTap) window.onGlobalTap(); return; }
+    
+    const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
+    const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
+    const intersects = raycaster.intersectObjects([...window.interactableTiles, ...window.units.map(u => u.sprite)]);
+    
+    if (intersects.length > 0) {
+        const obj = intersects[0].object;
+        const data = obj.userData.isUnit ? { x: obj.userData.unit.x, z: obj.userData.unit.z } : obj.userData;
+        
+        if(store.gameState === 'IDLE') {
+            const u = getUnitAt(window.units, data.x, data.z);
+            if(u) { uiCtrl.showStatus(u); if(u.isPlayer) document.getElementById('command-ui').style.display = 'block'; }
+            else { uiCtrl.hideAll(); }
+        } else if (store.gameState === 'SELECTING_MOVE') {
+            const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
+            if(route) {
+                clearHighlights();
+                gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'MOVE', pendingData: route.path, selectedTileKey: `${route.x},${route.z}` });
+                document.getElementById('confirm-text').innerText = "ここへ移動しますか？";
+                document.getElementById('confirm-ui').style.display = 'block';
+            }
         }
     }
 }
 
-export function getWalkableNodes(units, unit, mapData) {
-    const nodes = [];
-    const openList = [{ x: unit.x, z: unit.z, d: 0, path: [] }];
-    const visited = new Set();
-    visited.add(`${unit.x},${unit.z}`);
+function execCommand(cmd) {
+    if(cmd === 'move') {
+        const tiles = getWalkableNodes(window.units, window.player, mapData);
+        gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
+        tiles.forEach(node => { const tile = window.tilesMeshMap[`${node.x},${node.z}`]; if(tile) tile.material[2].color.setHex(0x55ff55); });
+        document.getElementById('command-ui').style.display = 'none';
+    } else if(cmd === 'attack') {
+        const targets = getAttackableEnemies(window.units, window.player);
+        if(targets.length === 0) return uiCtrl.setMsg("範囲内に敵がいません");
+        gameStore.setState({ gameState: 'SELECTING_ATTACK_TARGET' });
+        const list = document.getElementById('target-list'); list.innerHTML = '';
+        targets.forEach(t => {
+            const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
+            btn.onclick = () => selectTarget(t); list.appendChild(btn);
+            window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555);
+        });
+        document.getElementById('command-ui').style.display = 'none'; document.getElementById('target-ui').style.display = 'block';
+    } else if(cmd === 'wait') {
+        gameStore.setState({ confirmMode: 'WAIT', pendingData: null });
+        document.getElementById('confirm-text').innerText = "行動を終了しますか？";
+        document.getElementById('confirm-ui').style.display = 'block'; document.getElementById('command-ui').style.display = 'none';
+    }
+}
 
-    while (openList.length > 0) {
-        const current = openList.shift();
-        if (current.d > unit.move) continue;
-        nodes.push(current);
+function selectTarget(t) {
+    gameStore.setState({ confirmMode: 'ATTACK', pendingData: t });
+    document.getElementById('target-ui').style.display = 'none';
+    document.getElementById('confirm-text').innerText = `${t.id} を攻撃しますか？`; document.getElementById('confirm-ui').style.display = 'block';
+}
 
-        for (const dir of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
-            const nx = current.x + dir[0], nz = current.z + dir[1];
-            if (nx < 0 || nx >= MAP_W || nz < 0 || nz >= MAP_D || visited.has(`${nx},${nz}`)) continue;
+function answerConfirm(isYes) {
+    const store = getStore(); document.getElementById('confirm-ui').style.display = 'none';
+    if(!isYes) {
+        if(store.confirmMode === 'ATTACK') return execCommand('attack');
+        uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
+    }
+    gameStore.setState({ gameState: 'ANIMATING' });
+    if(store.confirmMode === 'MOVE') {
+        battleSys.executeMovement(window.player, store.pendingData, () => { window.player.hasMoved = true; gameStore.setState({ gameState: 'IDLE' }); document.getElementById('command-ui').style.display = 'block'; });
+    } else if(store.confirmMode === 'ATTACK') {
+        battleSys.executeAttack(window.player, store.pendingData, window.units, camera, endPlayerTurn, scene);
+    } else { endPlayerTurn(); }
+}
 
-            const targetH = mapData[nz][nx].h;
-            if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
-            
-            const blocker = units.find(u => u.x === nx && u.z === nz && u.hp > 0);
-            if (blocker && blocker.isPlayer !== unit.isPlayer) continue;
+function endPlayerTurn() {
+    const boss = window.units.find(u => u.id === 'ブラキオサウルス');
+    if(boss && boss.hp <= 0) return checkVictory();
+    window.player.hasMoved = false; window.player.hasAttacked = false;
+    gameStore.setState({ gameState: 'ENEMY_TURN' });
+    uiCtrl.setMsg("敵の番です...", "#ff5555");
+    setTimeout(processEnemyAI, 1000);
+}
 
-            visited.add(`${nx},${nz}`);
-            openList.push({ x: nx, z: nz, d: current.d + 1, path: [...current.path, { x: nx, z: nz, h: targetH }] });
+async function processEnemyAI() {
+    const enemies = battleSys.decideEnemyAI(window.units, window.player);
+    for(const enemy of enemies) {
+        const routes = getWalkableNodes(window.units, enemy, mapData);
+        let best = null, minD = 999;
+        routes.forEach(r => { const d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z); if(d < minD){ minD=d; best=r; } });
+        if(best && best.path.length > 0) {
+            await new Promise(res => battleSys.executeMovement(enemy, best.path, res));
+            if(getAttackableEnemies(window.units, enemy).includes(window.player)) {
+                await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
+                if(window.player.hp <= 0) return uiCtrl.setMsg("GAME OVER", "#ff0000");
+            }
         }
     }
-    return nodes;
+    gameStore.setState({ gameState: 'IDLE' }); uiCtrl.hideAll(); clearHighlights(); uiCtrl.setMsg("あなたの番です！", "#00ff00");
+}
+
+function checkVictory() {
+    gameStore.setState({ gameState: 'FINISHED' });
+    startDialogue(); // 本来は戦後会話
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    const delta = clock.getDelta() * 1000;
+    window.units.forEach(u => u.updateAnimation && u.updateAnimation(delta));
+    cameraCtrl.controls.update();
+    renderer.render(scene, camera);
+}
+
+function clearHighlights() {
+    window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff));
+    window.units.forEach(u => { if(u.hp > 0) { const t = window.tilesMeshMap[`${u.x},${u.z}`]; if(t) t.material[2].color.setHex(u.isPlayer ? 0x88ccff : 0xff8888); } });
 }
