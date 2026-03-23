@@ -1,22 +1,32 @@
-/* ...既存のスタイルに上書き... */
-#status-ui { top: 10px; left: 10px; width: 170px; display: none; padding: 12px; }
-#detail-ui { top: 10px; left: 190px; width: 150px; display: none; padding: 10px; }
+body { margin: 0; overflow: hidden; background-color: #000; font-family: sans-serif; touch-action: none; }
+#canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
 
-.stat-row { 
-    display: flex; 
-    justify-content: space-between; 
-    align-items: center; 
-    border-bottom: 1px dotted #555; 
-    padding: 4px 0;
-    min-height: 20px;
+.rpg-window {
+    position: absolute; background: rgba(0, 15, 60, 0.96); color: white;
+    border: 2px solid #ddd; border-radius: 8px; padding: 10px; z-index: 1000; box-sizing: border-box;
 }
-.stat-row span:first-child { text-align: left; font-size: 0.85rem; }
-.stat-row span:last-child { text-align: right; font-family: monospace; font-size: 1rem; color: #fff; }
 
-#event-ui { 
-    height: auto; 
-    min-height: 140px; 
-    padding: 15px; 
-}
-#ev-portrait { width: 85px; height: 60px; flex-shrink: 0; }
-#ev-text { font-size: 1.1rem; line-height: 1.6; }
+#status-ui { top: 10px; left: 10px; width: 160px; }
+#detail-ui { top: 10px; left: 180px; width: 150px; display: none; }
+
+.stat-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dotted #555; padding: 4px 0; }
+.unit-name { font-size: 1.1rem; border-bottom: 1px solid #777; margin-bottom: 5px; font-weight: bold; }
+
+.bar-bg { width: 100%; background: #333; height: 8px; border-radius: 4px; margin: 4px 0; overflow: hidden; }
+.hp-bar { height: 100%; background: #4caf50; transition: width 0.3s; }
+
+.btn-detail { background: #444; color: white; border: 1px solid #888; width: 100%; margin-top: 5px; padding: 5px; border-radius: 4px; font-size: 0.8rem; cursor: pointer;}
+
+#command-ui { bottom: 20px; left: 10px; width: 120px; display: none; }
+.cmd-btn { display: block; width: 100%; background: transparent; color: white; border: none; text-align: left; padding: 12px 8px; font-size: 1.1rem; border-bottom: 1px solid #444; cursor: pointer; }
+
+#event-ui { display: none; bottom: 10px; left: 50%; transform: translateX(-50%); width: 96vw; min-height: 140px; padding: 15px; }
+
+#loading-screen { position: fixed; inset: 0; background: #000; z-index: 15000; display: flex; justify-content: center; align-items: center; }
+.loader-text { color: #fff; font-size: 1.5rem; animation: blink 1.5s infinite; }
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+#version-display { position: absolute; top: 5px; right: 5px; color: rgba(255,255,255,0.4); font-size: 0.7rem; z-index: 999; }
+.floating-text { position: absolute; font-size: 2rem; font-weight: bold; text-shadow: 2px 2px 0 #000; pointer-events: none; z-index: 3000; transform: translate(-50%, -50%); }
+.big-text-overlay { position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); z-index: 5000; text-align: center; pointer-events: none; opacity: 0; width: 100%; }
+.cool-text { color: #fff; text-shadow: 0 0 10px #000, 2px 2px 0 #000; font-size: 2.5rem; font-weight: bold; }
