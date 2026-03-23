@@ -1,4 +1,4 @@
-export const VERSION = "8.16.1";
+export const VERSION = "8.17.1";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -10,6 +10,7 @@ export class Unit {
         this.move = move; this.jump = jump;
         this.isPlayer = isPlayer;
         this.sprite = null; this.material = null;
+        this.shadow = null; // ★ 影オブジェクト用の変数
         this.hasMoved = false; this.hasAttacked = false;
         this.spriteConfig = spriteConfig;
         this.texture = spriteConfig ? spriteConfig.tex : null;
@@ -40,14 +41,26 @@ export class Unit {
         this.sprite.scale.set(this.baseScaleX * this.facing, h, 1);
         this.sprite.userData = { isUnit: true, unit: this };
         this.setIdle();
+
+        // ★ ドロップシャドウ（足元の影）の生成
+        const shadowGeo = new THREE.CircleGeometry(this.baseScaleX * 0.4, 32);
+        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
+        this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        this.shadow.rotation.x = -Math.PI / 2; // 地面に寝かせる
     }
 
-    // 物理的に削除する（メモリリーク対策）
     dispose(scene) {
         if(this.sprite) {
             scene.remove(this.sprite);
             if(this.material) this.material.dispose();
             this.sprite = null;
+        }
+        // ★ 影も一緒に消す
+        if(this.shadow) {
+            scene.remove(this.shadow);
+            this.shadow.geometry.dispose();
+            this.shadow.material.dispose();
+            this.shadow = null;
         }
     }
 
