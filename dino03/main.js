@@ -1,6 +1,5 @@
-export const VERSION = "8.17.1";
+export const VERSION = "8.17.6";
 
-// ★ 他のファイルは古いバージョン（8.16.x や 8.17.x）のままでOKです
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
 import { CameraControl, VERSION as camV } from './camera.js';
@@ -36,6 +35,12 @@ function checkSystems() {
 
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 const mapData = StageData.generateLayout();
+
+// ★ 追加：ハイライト用のパネルを管理する配列とマテリアル
+let highlightMeshes = [];
+const moveHighlightMat = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.5, depthWrite: false });
+const attackHighlightMat = new THREE.MeshBasicMaterial({ color: 0xff5555, transparent: true, opacity: 0.5, depthWrite: false });
+const highlightGeo = new THREE.PlaneGeometry(TILE_SIZE * 0.9, TILE_SIZE * 0.9);
 
 window.addEventListener('load', () => {
     checkSystems();
@@ -92,7 +97,6 @@ function init(sheetImg, braTex, rexTex, compTex) {
         unit.h = mapData[unit.z][unit.x].h; 
         scene.add(unit.sprite);
         
-        // ★ 影をシーンに追加
         if (unit.shadow) scene.add(unit.shadow);
 
         const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
@@ -195,11 +199,32 @@ function onPointerClick(event) {
     }
 }
 
+// ★ 変更：ハイライトの表示処理を「パネルを置く」方式に変更
+function showHighlight(nodeList, mat) {
+    clearHighlights();
+    const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
+    nodeList.forEach(node => {
+        const mesh = new THREE.Mesh(highlightGeo, mat);
+        mesh.rotation.x = -Math.PI / 2;
+        // マスの中央、少しだけ浮かせた位置に配置
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 2, (node.z * TILE_SIZE) - offZ);
+        scene.add(mesh);
+        highlightMeshes.push(mesh);
+    });
+}
+
+// ★ 変更：ハイライトを消す処理（パネルをシーンから取り除く）
+function clearHighlights() {
+    highlightMeshes.forEach(mesh => scene.remove(mesh));
+    highlightMeshes = [];
+}
+
 function execCommand(cmd) {
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, window.player, mapData);
         gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
-        tiles.forEach(node => { const tile = window.tilesMeshMap[`${node.x},${node.z}`]; if(tile) tile.material[2].color.setHex(0x55ff55); });
+        // ★ 変更：新方式のハイライト関数を呼び出す
+        showHighlight(tiles, moveHighlightMat);
         document.getElementById('command-ui').style.display = 'none';
     } else if(cmd === 'attack') {
         const targets = getAttackableEnemies(window.units, window.player);
@@ -209,8 +234,9 @@ function execCommand(cmd) {
         targets.forEach(t => {
             const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
             btn.onclick = () => selectTarget(t); list.appendChild(btn);
-            window.tilesMeshMap[`${t.x},${t.z}`].material[2].color.setHex(0xff5555);
         });
+        // ★ 変更：新方式のハイライト関数を呼び出す（敵のいるマスだけ赤く）
+        showHighlight(targets, attackHighlightMat);
         document.getElementById('command-ui').style.display = 'none'; document.getElementById('target-ui').style.display = 'block';
     } else if(cmd === 'wait') {
         gameStore.setState({ confirmMode: 'WAIT', pendingData: null });
@@ -276,19 +302,13 @@ function animate() {
     
     window.units.forEach(u => {
         if (u.updateAnimation) u.updateAnimation(delta);
-        // ★ 影の追従処理：毎フレーム、キャラのXとZに影をくっつける（Yは地面に固定）
         if (u.shadow && u.sprite) {
             u.shadow.position.x = u.sprite.position.x;
             u.shadow.position.z = u.sprite.position.z;
-            u.shadow.position.y = u.h * H_STEP + 1; // 地面から1pxだけ浮かせる
+            u.shadow.position.y = u.h * H_STEP + 1; 
         }
     });
 
     cameraCtrl.controls.update();
     renderer.render(scene, camera);
-}
-
-function clearHighlights() {
-    window.interactableTiles.forEach(t => t.material[2].color.setHex(0xffffff));
-    window.units.forEach(u => { if(u.hp > 0) { const t = window.tilesMeshMap[`${u.x},${u.z}`]; if(t) t.material[2].color.setHex(u.isPlayer ? 0x88ccff : 0xff8888); } });
 }
