@@ -1,8 +1,6 @@
+export const VERSION = "8.15.1";
 export const StageData = {
-    info: {
-        chapter: "第一章",
-        name: "<ruby>母<rt>はは</rt></ruby>を<ruby>訪<rt>たず</rt></ruby>ねて"
-    },
+    info: { chapter: "第一章", name: "<ruby>母<rt>はは</rt></ruby>を<ruby>訪<rt>たず</rt></ruby>ねて" },
     units: [
         { id: "ティラノ", emoji: "🦖", x: 12, z: 15, hp: 30, mp: 10, str: 10, def: 8, spd: 5, mag: 5, move: 4, jump: 3, isPlayer: true, level: 1 },
         { id: "コンプソグナトゥスA", emoji: "🦎", x: 10, z: 10, hp: 15, mp: 0, str: 8, def: 5, spd: 6, mag: 0, move: 5, jump: 4, isPlayer: false, level: 1 },
@@ -33,28 +31,10 @@ export const StageData = {
         { name: "ブラキオサウルス", face: "🦕", text: "母親か・・・" }
     ],
     generateLayout: function() {
-        const MAP_W = 25, MAP_D = 25;
-        let data = [];
-        for (let z = 0; z < MAP_D; z++) {
-            data[z] = [];
-            for (let x = 0; x < MAP_W; x++) {
-                let h = 2; let type = 0;
-                if (z >= 16) { h = 0; type = 4; }
-                if (z < 16) { h = 2; type = 0; }
-                if (z < 14) { h = 3; }
-                if (z <= 10) { h = 5; type = 5; }
-                if (z <= 6) { h = 7; type = 5; }
-                if (z <= 3 && x >= 8 && x <= 16) { h = 9; type = 3; }
-                if (x >= 11 && x <= 13) {
-                    if (z === 11) { h = 4; type = 3; }
-                    if (z === 10) { h = 5; type = 3; }
-                    if (z === 7)  { h = 6; type = 3; }
-                    if (z === 6)  { h = 7; type = 3; }
-                }
-                if (z === 15) { h = 1; type = 2; }
-                data[z][x] = { h, type };
-            }
-        }
-        return data;
+        let d = []; for(let z=0;z<25;z++){ d[z]=[]; for(let x=0;x<25;x++){
+            let h=2, t=0; if(z>=16){ h=0; t=4; } if(z<16)h=2; if(z<14)h=3; if(z<=10){h=5;t=5;} if(z<=6){h=7;t=5;}
+            if(z<=3 && x>=8 && x<=16){h=9;t=3;} if(x>=11&&x<=13){ if(z===11)h=4; if(z===10)h=5; if(z===7)h=6; if(z===6)h=7; t=3;}
+            if(z===15){h=1;t=2;} d[z][x]={h,type:t};
+        }} return d;
     }
 };
