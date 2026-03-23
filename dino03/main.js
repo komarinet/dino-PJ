@@ -1,5 +1,6 @@
-export const VERSION = "8.17.0";
+export const VERSION = "8.17.1";
 
+// ★ 他のファイルは古いバージョン（8.16.x や 8.17.x）のままでOKです
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
 import { CameraControl, VERSION as camV } from './camera.js';
@@ -90,8 +91,13 @@ function init(sheetImg, braTex, rexTex, compTex) {
         const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
         unit.h = mapData[unit.z][unit.x].h; 
         scene.add(unit.sprite);
+        
+        // ★ 影をシーンに追加
+        if (unit.shadow) scene.add(unit.shadow);
+
         const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
         unit.sprite.position.set((unit.x * TILE_SIZE) - offX, unit.h * H_STEP, (unit.z * TILE_SIZE) - offZ);
+        
         if(unit.isPlayer) window.player = unit; 
         return unit;
     });
@@ -99,7 +105,6 @@ function init(sheetImg, braTex, rexTex, compTex) {
     setupEventListeners();
     animate();
 
-    // ★ 追加：ゲーム開始前に、最初から斜め見下ろしアングルに設定しておく
     cameraCtrl.setInitialAngle(window.player.sprite.position);
 
     const o = document.getElementById('stage-overlay');
@@ -108,7 +113,6 @@ function init(sheetImg, braTex, rexTex, compTex) {
     gsap.to(o, { opacity: 1, duration: 1.5, onComplete: () => {
         gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
             const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-            // ★ 鳥の視点でのオープニング演出開始
             cameraCtrl.playOpening(boss, window.player, () => {
                 startDialogue();
             });
@@ -263,13 +267,23 @@ async function processEnemyAI() {
 
 function checkVictory() {
     gameStore.setState({ gameState: 'FINISHED' });
-    startDialogue(); // 本来は戦後会話
+    startDialogue();
 }
 
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta() * 1000;
-    window.units.forEach(u => u.updateAnimation && u.updateAnimation(delta));
+    
+    window.units.forEach(u => {
+        if (u.updateAnimation) u.updateAnimation(delta);
+        // ★ 影の追従処理：毎フレーム、キャラのXとZに影をくっつける（Yは地面に固定）
+        if (u.shadow && u.sprite) {
+            u.shadow.position.x = u.sprite.position.x;
+            u.shadow.position.z = u.sprite.position.z;
+            u.shadow.position.y = u.h * H_STEP + 1; // 地面から1pxだけ浮かせる
+        }
+    });
+
     cameraCtrl.controls.update();
     renderer.render(scene, camera);
 }
