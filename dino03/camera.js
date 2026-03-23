@@ -1,9 +1,23 @@
-export const VERSION = "8.16.1";
+export const VERSION = "8.17.0";
 
 export class CameraControl {
     constructor(camera, controls) {
         this.camera = camera;
         this.controls = controls;
+    }
+
+    // ★ 追加：最初から「タクティクスらしい斜め見下ろし」に固定する
+    setInitialAngle(targetPos) {
+        this.controls.target.copy(targetPos);
+        const rad = 45 * (Math.PI / 180);
+        const distance = 800; // 引いた距離
+        this.camera.position.set(
+            targetPos.x + Math.sin(rad) * distance,
+            targetPos.y + 600, // 高さを出す（見下ろす）
+            targetPos.z + Math.cos(rad) * distance
+        );
+        this.camera.lookAt(this.controls.target);
+        this.controls.update();
     }
 
     centerOn(pos, dur = 0.8) {
@@ -38,12 +52,32 @@ export class CameraControl {
         gsap.to(this.controls.target, { x: this.controls.target.x + moveX, z: this.controls.target.z + moveZ, duration: 0.3 });
     }
 
+    // ★ 変更：鳥の視点で飛び、クローズアップしていく演出
     playOpening(boss, player, callback) {
-        if (!boss) { callback(); return; }
-        this.centerOn(boss.sprite.position, 2.5);
-        setTimeout(() => {
-            this.centerOn(player.sprite.position, 1.5);
-            setTimeout(callback, 1500);
-        }, 3000);
+        if (!boss || !player) { callback(); return; }
+        
+        // 1. 最初は「引き（ズーム1.0）」でプレイヤー付近からスタート
+        this.setZoom(1.0, 0); 
+        
+        // 2. ボスに向かって、マップ全体を斜め上から舐めるようにパン移動
+        gsap.to(this.controls.target, {
+            x: boss.sprite.position.x,
+            z: boss.sprite.position.z,
+            duration: 4.0, // ゆったりと飛ぶ
+            ease: "power1.inOut",
+            onComplete: () => {
+                // 3. ボスに到着後、プレイヤーへ戻りつつ「ズームイン」
+                setTimeout(() => {
+                    this.setZoom(2.5, 2.0); // クローズアップ！
+                    gsap.to(this.controls.target, {
+                        x: player.sprite.position.x,
+                        z: player.sprite.position.z,
+                        duration: 2.0,
+                        ease: "power2.inOut",
+                        onComplete: callback // ズームしきったら会話スタート
+                    });
+                }, 800);
+            }
+        });
     }
 }
