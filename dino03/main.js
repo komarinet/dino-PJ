@@ -1,11 +1,31 @@
-let scene, camera, renderer, controls, clock;
-window.gameState = 'INIT'; 
-window.walkableTiles = []; window.attackableTiles = [];
-window.pendingData = null; window.selectedTileKey = null; window.confirmMode = '';
-window.raycastTargets = []; window.talkIndex = 0;
-let hasBattleStarted = false;
+// ★ Zustand Store のセットアップ ★
+const { createStore } = window.zustandVanilla;
 
-// 汎用テクスチャ読み込み関数
+window.gameStore = createStore((set) => ({
+    // --- 状態 (State) ---
+    gameState: 'INIT',         // ゲームの進行状態 ('IDLE', 'ENEMY_TURN' など)
+    walkableTiles: [],         // 移動可能なタイルの配列
+    confirmMode: '',           // 確認ダイアログのモード ('MOVE', 'ATTACK', 'WAIT')
+    pendingData: null,         // 保留中のデータ (攻撃対象のユニットなど)
+    selectedTileKey: null,     // 選択されたタイルの座標キー
+    talkIndex: 0,              // 会話の進行インデックス
+    hasBattleStarted: false,   // バトル開始演出を見たかどうかのフラグ
+
+    // --- 更新関数 (Actions) ---
+    setGameState: (state) => set({ gameState: state }),
+    setWalkableTiles: (tiles) => set({ walkableTiles: tiles }),
+    setConfirmData: (mode, data, tileKey = null) => set({ confirmMode: mode, pendingData: data, selectedTileKey: tileKey }),
+    clearConfirmData: () => set({ confirmMode: '', pendingData: null, selectedTileKey: null }),
+    setTalkIndex: (index) => set({ talkIndex: index }),
+    setBattleStarted: (isStarted) => set({ hasBattleStarted: isStarted })
+}));
+
+// コードを短く書くためのヘルパー関数
+window.getStore = () => window.gameStore.getState();
+
+let scene, camera, renderer, controls, clock;
+window.raycastTargets = []; 
+
 function loadTex(texLoader, url) {
     return new Promise(resolve => {
         texLoader.load(url, resolve, undefined, () => resolve(null));
@@ -19,7 +39,6 @@ window.addEventListener('load', () => {
     sheetImg.src = 'img/plate01.png';
 
     sheetImg.onload = () => {
-        // ★3つのテクスチャを同時にロード
         Promise.all([
             loadTex(texLoader, 'img/bra.png'),
             loadTex(texLoader, 'img/tactyrano01.png'),
@@ -47,7 +66,7 @@ window.showStatus = function(unit) {
     window.setMsg("");
     document.getElementById('status-ui').style.display = 'block';
     document.getElementById('st-name').innerText = unit.id;
-    document.getElementById('st-lv').innerText = unit.level; // ★レベル表示更新
+    document.getElementById('st-lv').innerText = unit.level;
     document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
     document.getElementById('st-hp-bar').style.width = `${(unit.hp/unit.maxHp)*100}%`;
     document.getElementById('st-mp').innerText = `${unit.mp}/${unit.maxMp}`;
@@ -81,8 +100,8 @@ function playStageTitle(callback) {
 }
 
 function playBattleStart() {
-    if(hasBattleStarted) return;
-    hasBattleStarted = true;
+    if(window.getStore().hasBattleStarted) return;
+    window.getStore().setBattleStarted(true);
     const overlay = document.getElementById('battle-start-overlay');
     gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, ease:"back.out", onComplete: () => {
         gsap.to(overlay, { opacity:0, delay:1.0, duration:0.5, onComplete: () => {
@@ -92,14 +111,16 @@ function playBattleStart() {
 }
 
 window.startEvent = function(talkData, callback) {
-    window.gameState = 'TALKING';
+    window.getStore().setGameState('TALKING');
     window.hideAllUI();
     document.getElementById('event-ui').style.display = 'flex';
-    window.talkIndex = 0;
+    window.getStore().setTalkIndex(0);
+    
     window.onGlobalTap = () => {
-        window.talkIndex++;
-        if (window.talkIndex < talkData.length) {
-            renderTalkLine(talkData[window.talkIndex]);
+        const store = window.getStore();
+        store.setTalkIndex(store.talkIndex + 1);
+        if (store.talkIndex < talkData.length) {
+            renderTalkLine(talkData[store.talkIndex]);
         } else {
             document.getElementById('event-ui').style.display = 'none';
             callback();
@@ -113,17 +134,14 @@ function renderTalkLine(data) {
     const namePlate = document.getElementById('ev-name-plate');
     const textArea = document.getElementById('ev-text');
     
-    // 話者のユニットを取得（A〜Dの番号を無視して検索できるよう部分一致も考慮）
     const speakerUnit = window.units.find(u => u.id === data.name || (data.name.includes("コンプソグナトゥス") && u.id.includes("コンプソグナトゥス")));
     
-    // ★UI顔グラフィックの表示★
     if (speakerUnit && speakerUnit.spriteConfig) {
         if (speakerUnit.spriteConfig.type === 'bra') {
             portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;"></div>`;
         } else if (speakerUnit.spriteConfig.type === 'rex') {
             portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
         } else if (speakerUnit.spriteConfig.type === 'comp') {
-            // コンプは3列2行の右下（100% 100%）
             portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/comp.png'); background-size: 300% 200%; background-position: 100% 100%; image-rendering: pixelated;"></div>`;
         }
     } else {
@@ -133,7 +151,6 @@ function renderTalkLine(data) {
     namePlate.innerText = data.name;
     textArea.innerHTML = data.text;
     
-    // ★会話時にお互いを向く★
     if(speakerUnit && speakerUnit.hp > 0) {
         gsap.to(controls.target, { x: speakerUnit.sprite.position.x, z: speakerUnit.sprite.position.z, duration: 0.6 });
         if (speakerUnit !== window.player) {
@@ -145,29 +162,32 @@ function renderTalkLine(data) {
 
 window.startPlayerTurn = function() {
     let boss = window.units.find(u => u.id === 'ブラキオサウルス');
-    if(boss && boss.hp <= 0) return; // ボスが死んでいたら勝利
-    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
+    if(boss && boss.hp <= 0) return; 
+    window.getStore().setGameState('IDLE'); 
+    window.clearHighlights(); window.hideAllUI();
     window.setMsg("あなたの<ruby>番<rt>ばん</rt></ruby>です！<br><ruby>仲間<rt>なかま</rt></ruby>をタップしてね", "#00ff00");
 }
 
 window.resetToIdle = function() {
-    window.gameState = 'IDLE'; window.clearHighlights(); window.hideAllUI();
+    window.getStore().setGameState('IDLE'); 
+    window.clearHighlights(); window.hideAllUI();
     window.setMsg(""); 
     if(window.selectorMesh) window.selectorMesh.visible = false;
 }
 
 window.cancelMove = function() {
-    window.gameState = 'IDLE';
+    window.getStore().setGameState('IDLE');
     window.clearHighlights();
     window.showCommandMenu();
 }
 
 window.execCommand = function(cmd) {
     if(cmd === 'move') {
-        window.gameState = 'SELECTING_MOVE'; 
+        window.getStore().setGameState('SELECTING_MOVE'); 
         window.clearHighlights();
-        window.walkableTiles = window.getWalkableNodes(window.player);
-        window.walkableTiles.forEach(node => { 
+        const tiles = window.getWalkableNodes(window.player);
+        window.getStore().setWalkableTiles(tiles);
+        tiles.forEach(node => { 
             const tile = window.tilesMeshMap[`${Number(node.x)},${Number(node.z)}`];
             if(tile) tile.material[2].color.setHex(0x55ff55); 
         });
@@ -182,7 +202,7 @@ window.execCommand = function(cmd) {
             setTimeout(() => { window.setMsg(""); window.showCommandMenu(); }, 1200);
             return;
         }
-        window.gameState = 'SELECTING_ATTACK_TARGET';
+        window.getStore().setGameState('SELECTING_ATTACK_TARGET');
         const listDiv = document.getElementById('target-list');
         listDiv.innerHTML = ''; 
         targets.forEach(t => {
@@ -195,7 +215,8 @@ window.execCommand = function(cmd) {
         document.getElementById('command-ui').style.display = 'none';
         document.getElementById('target-ui').style.display = 'block';
     } else if (cmd === 'wait') {
-        window.gameState = 'CONFIRMING'; window.confirmMode = 'WAIT';
+        window.getStore().setGameState('CONFIRMING');
+        window.getStore().setConfirmData('WAIT', null);
         document.getElementById('confirm-text').innerHTML = "<ruby>行動<rt>こうどう</rt></ruby>を終了しますか？";
         document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
         document.getElementById('command-ui').style.display = 'none';
@@ -205,7 +226,8 @@ window.execCommand = function(cmd) {
 
 window.selectTarget = function(targetUnit) {
     document.getElementById('target-ui').style.display = 'none';
-    window.gameState = 'CONFIRMING'; window.confirmMode = 'ATTACK'; window.pendingData = targetUnit;
+    window.getStore().setGameState('CONFIRMING');
+    window.getStore().setConfirmData('ATTACK', targetUnit);
     document.getElementById('confirm-text').innerHTML = `${targetUnit.id} を<ruby>攻撃<rt>こうげき</rt></ruby>しますか？`;
     document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
     document.getElementById('confirm-ui').style.display = 'block';
@@ -218,32 +240,36 @@ window.cancelAttack = function() {
 
 window.answerConfirm = function(isYes) {
     document.getElementById('confirm-ui').style.display = 'none';
+    const store = window.getStore();
+
     if (isYes) {
-        window.gameState = 'ANIMATING'; window.clearHighlights(); window.setMsg("");
-        if(window.confirmMode === 'WAIT') {
+        store.setGameState('ANIMATING');
+        window.clearHighlights(); window.setMsg("");
+        
+        if(store.confirmMode === 'WAIT') {
             window.endPlayerTurn();
-        } else if(window.confirmMode === 'MOVE') {
+        } else if(store.confirmMode === 'MOVE') {
             window.player.hasMoved = true;
-            window.executeMovement(window.player, window.pendingData, () => { 
+            window.executeMovement(window.player, store.pendingData, () => { 
                 window.resetToIdle(); window.showStatus(window.player); window.showCommandMenu(); 
             });
-        } else if(window.confirmMode === 'ATTACK') {
+        } else if(store.confirmMode === 'ATTACK') {
             window.player.hasAttacked = true;
-            window.executeAttack(window.player, window.pendingData, true, () => { 
+            window.executeAttack(window.player, store.pendingData, true, () => { 
                 let boss = window.units.find(u => u.id === 'ブラキオサウルス');
                 if(boss && boss.hp <= 0) { checkVictory(); } else { window.endPlayerTurn(); }
             });
         }
     } else {
-        if(window.confirmMode === 'MOVE') {
-            window.gameState = 'SELECTING_MOVE';
-            window.tilesMeshMap[window.selectedTileKey].material[2].color.setHex(0x55ff55); 
+        if(store.confirmMode === 'MOVE') {
+            store.setGameState('SELECTING_MOVE');
+            window.tilesMeshMap[store.selectedTileKey].material[2].color.setHex(0x55ff55); 
             if(window.selectorMesh) window.selectorMesh.visible = false;
             document.getElementById('command-ui').style.display = 'block';
-        } else if(window.confirmMode === 'ATTACK') {
-            window.gameState = 'SELECTING_ATTACK_TARGET';
+        } else if(store.confirmMode === 'ATTACK') {
+            store.setGameState('SELECTING_ATTACK_TARGET');
             document.getElementById('target-ui').style.display = 'block';
-        } else if(window.confirmMode === 'WAIT') {
+        } else if(store.confirmMode === 'WAIT') {
             window.showCommandMenu();
         }
     }
@@ -251,8 +277,8 @@ window.answerConfirm = function(isYes) {
 
 function checkVictory() {
     let boss = window.units.find(u => u.id === 'ブラキオサウルス');
-    if(boss && boss.hp <= 0 && window.gameState !== 'FINISHED') {
-        window.gameState = 'FINISHED'; 
+    if(boss && boss.hp <= 0 && window.getStore().gameState !== 'FINISHED') {
+        window.getStore().setGameState('FINISHED'); 
         setTimeout(() => {
             if(boss.texture) { boss.setAction('HURT'); }
             
@@ -328,14 +354,13 @@ window.executeAttack = function(attacker, defender, allowCounter, onComplete) {
         if(defender.hp <= 0) {
             if(defender.texture) defender.setAction('DOWN');
             
-            // ★レベルアップ処理（敵を倒したら100EXP獲得で即レベルアップ設定）★
             if(attacker.isPlayer) {
                 attacker.exp += 100;
-                if(attacker.exp >= 100) { // 1体倒すたびに1レベル上がる仕様
+                if(attacker.exp >= 100) { 
                     attacker.levelUp();
                     setTimeout(() => { 
                         window.showFloatingText(attacker, "LEVEL UP!", 'levelup'); 
-                        window.showStatus(attacker); // UIも更新
+                        window.showStatus(attacker); 
                     }, 400);
                 }
             }
@@ -386,31 +411,29 @@ window.executeMovement = function(unit, path, onComplete, followCamera = false) 
     });
 }
 
-// ★敵の順番処理（AIキュー）の実装★
 window.endPlayerTurn = function() {
     let boss = window.units.find(u => u.id === 'ブラキオサウルス');
     if(boss && boss.hp <= 0) { checkVictory(); return; }
     
     window.player.hasMoved = false; window.player.hasAttacked = false; window.hideAllUI();
-    window.gameState = 'ENEMY_TURN'; window.setMsg("<ruby>敵<rt>てき</rt></ruby>の番です...", "#ff5555");
+    window.getStore().setGameState('ENEMY_TURN');
+    window.setMsg("<ruby>敵<rt>てき</rt></ruby>の番です...", "#ff5555");
     
     setTimeout(() => {
-        // 全生存している敵のリストを作成
         let enemies = window.units.filter(u => !u.isPlayer && u.hp > 0);
         let actingEnemies = [];
         
-        // C・D・ボスの行動条件をチェック
         let compAB_alive = enemies.some(u => u.id === 'コンプソグナトゥスA' || u.id === 'コンプソグナトゥスB');
         let anyComp_alive = enemies.some(u => u.id.includes('コンプソグナトゥス'));
 
         enemies.forEach(e => {
             let distToPlayer = Math.abs(e.x - window.player.x) + Math.abs(e.z - window.player.z);
             if (e.id === 'コンプソグナトゥスA' || e.id === 'コンプソグナトゥスB') {
-                actingEnemies.push(e); // AとBは常に動く
+                actingEnemies.push(e); 
             } else if (e.id === 'コンプソグナトゥスC' || e.id === 'コンプソグナトゥスD') {
-                if (!compAB_alive || distToPlayer <= 5) actingEnemies.push(e); // AB全滅か、プレイヤーが近いと動く
+                if (!compAB_alive || distToPlayer <= 5) actingEnemies.push(e); 
             } else if (e.id === 'ブラキオサウルス') {
-                if (!anyComp_alive) actingEnemies.push(e); // コンプが全滅したら動く
+                if (!anyComp_alive) actingEnemies.push(e); 
             }
         });
 
@@ -418,14 +441,13 @@ window.endPlayerTurn = function() {
     }, 1000);
 }
 
-// ★敵が1体ずつ行動するロジック★
 function processEnemyQueue(queue) {
     if (queue.length === 0) {
         window.startPlayerTurn();
         return;
     }
     let enemy = queue.shift();
-    if (enemy.hp <= 0) { processEnemyQueue(queue); return; } // 念のため
+    if (enemy.hp <= 0) { processEnemyQueue(queue); return; } 
 
     let routes = window.getWalkableNodes(enemy);
     let bestRoute = null; let minD = 999;
@@ -441,7 +463,7 @@ function processEnemyQueue(queue) {
                     if(window.player.hp <= 0) { 
                         if(window.player.texture) window.player.setAction('DOWN');
                         window.setMsg("GAME OVER", "#ff0000"); 
-                    } else { processEnemyQueue(queue); } // 次の敵へ
+                    } else { processEnemyQueue(queue); } 
                 }); 
             } else { processEnemyQueue(queue); }
         });
@@ -463,7 +485,7 @@ function init(sheetImg, braTex, rexTex, compTex) {
     const geo = new THREE.EdgesGeometry(new THREE.BoxGeometry(window.TILE_SIZE, window.H_STEP, window.TILE_SIZE));
     const mat = new THREE.LineBasicMaterial({ color: 0xffffff });
     window.selectorMesh = new THREE.LineSegments(geo, mat); window.selectorMesh.visible = false; scene.add(window.selectorMesh);
-    window.raycastTargets = [...window.interactableTiles]; 
+    
     window.units = window.StageData.units.map(u => {
         let conf = null;
         if(u.id === 'ブラキオサウルス' && braTex) {
@@ -493,6 +515,7 @@ function init(sheetImg, braTex, rexTex, compTex) {
         if(unit.isPlayer) window.player = unit; 
         return unit;
     });
+    
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.maxPolarAngle = Math.PI / 2.2; controls.minPolarAngle = Math.PI / 6;
     window.centerCameraInstantly(window.player); 
@@ -522,22 +545,25 @@ window.clearHighlights = function() {
 }
 
 function onPointerClick(event) {
-    if (window.gameState === 'ANIMATING' || window.gameState === 'ENEMY_TURN') return;
-    if (window.gameState === 'TALKING') { window.onGlobalTap(); return; }
+    const store = window.getStore();
+    if (store.gameState === 'ANIMATING' || store.gameState === 'ENEMY_TURN') return;
+    if (store.gameState === 'TALKING') { window.onGlobalTap(); return; }
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
     const intersects = raycaster.intersectObjects(window.raycastTargets);
     if (intersects.length > 0) {
         let data = intersects[0].object.userData;
         if(data.isUnit) data = { x: data.unit.x, z: data.unit.z, h: data.unit.h };
-        if(window.gameState === 'IDLE') {
+        if(store.gameState === 'IDLE') {
             const u = window.getUnitAt(data.x, data.z);
             if(u) { window.showStatus(u); if(u.isPlayer) window.showCommandMenu(); } else { window.resetToIdle(); }
-        } else if (window.gameState === 'SELECTING_MOVE') {
-            const route = window.walkableTiles.find(n => Math.abs(n.x - data.x) < 0.5 && Math.abs(n.z - data.z) < 0.5);
+        } else if (store.gameState === 'SELECTING_MOVE') {
+            const route = store.walkableTiles.find(n => Math.abs(n.x - data.x) < 0.5 && Math.abs(n.z - data.z) < 0.5);
             if (route) {
-                window.clearHighlights(); window.gameState = 'CONFIRMING'; window.confirmMode = 'MOVE'; window.pendingData = route.path; window.selectedTileKey = `${route.x},${route.z}`;
-                const tile = window.tilesMeshMap[window.selectedTileKey];
+                window.clearHighlights(); 
+                store.setGameState('CONFIRMING');
+                store.setConfirmData('MOVE', route.path, `${route.x},${route.z}`);
+                const tile = window.tilesMeshMap[store.selectedTileKey];
                 tile.material[2].color.setHex(0xffff00); window.selectorMesh.position.copy(tile.position); window.selectorMesh.visible = true;
                 document.getElementById('confirm-text').innerHTML = "ここへ移動しますか？";
                 document.querySelector('#confirm-ui .btn-yes').onclick = () => window.answerConfirm(true); 
@@ -559,7 +585,7 @@ window.centerCameraInstantly = function(u) {
     camera.lookAt(controls.target);
 }
 window.rotateCam = function(deg) {
-    if (window.gameState === 'ANIMATING') return;
+    if (window.getStore().gameState === 'ANIMATING') return;
     const r = controls.getDistance(); const polar = controls.getPolarAngle(); const startAz = controls.getAzimuthalAngle();
     const targetAz = startAz + (Number(deg) * Math.PI / 180);
     const proxy = { angle: startAz };
