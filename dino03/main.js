@@ -1,44 +1,67 @@
-export const VERSION = "8.15.2";
+export const VERSION = "8.15.3";
+
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
 import { CameraControl, VERSION as camV } from './camera.js';
 import { UIControl, VERSION as uiV } from './ui.js';
 import { BattleSystem, VERSION as batV } from './battle.js';
 import { buildMapMeshes, getWalkableNodes, TILE_SIZE, H_STEP, MAP_W, MAP_D, VERSION as mapV } from './map.js';
+// ★約束通り data/stage01.js をインポート
 import { StageData, VERSION as sceV } from './data/stage01.js';
 
-function checkVersions() {
-    const versions = { "store.js": storeV, "units.js": unitV, "camera.js": camV, "ui.js": uiV, "battle.js": batV, "data/stage01.js": sceV, "map.js": mapV };
-    let errors = [];
+const REQUIRED_VER = "8.15.3";
+
+function checkSystems() {
+    const list = document.getElementById('ver-list');
+    const versions = {
+        "main.js": VERSION, "store.js": storeV, "units.js": unitV, 
+        "camera.js": camV, "ui.js": uiV, "battle.js": batV, 
+        "map.js": mapV, "data/stage01.js": sceV
+    };
+    
+    let allOk = true;
+    list.innerHTML = "";
+    
     for (let [file, ver] of Object.entries(versions)) {
-        if (!ver || !ver.startsWith("8.15")) errors.push(`${file} (現:${ver || '不明'})`);
+        const isOk = (ver === REQUIRED_VER);
+        if (!isOk) allOk = false;
+        list.innerHTML += `<div style="color:${isOk ? '#0f0' : '#f00'}">${file.padEnd(16)}: ver ${ver || '---'} [${isOk ? 'OK' : 'OLD'}]</div>`;
     }
-    if (errors.length > 0) {
-        const log = document.getElementById('error-log');
-        log.style.display = 'block';
-        log.innerHTML = `【バージョン不一致】\n以下のファイルを更新してください：\n\n${errors.join('\n')}\n\nGitHub Pagesの反映待ちか、キャッシュが原因です。`;
-        throw new Error("Version Mismatch");
+
+    if (allOk) {
+        document.getElementById('btn-start-game').style.display = 'block';
+    } else {
+        list.innerHTML += `<div style="color:#f00; margin-top:10px; font-weight:bold;">! 互換性のないファイルがあります。リロードしてください。</div>`;
     }
 }
 
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 const mapData = StageData.generateLayout();
 
-const texLoader = new THREE.TextureLoader();
-const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
+window.addEventListener('load', () => {
+    checkSystems();
+    document.getElementById('btn-clear-data').onclick = () => { localStorage.clear(); location.reload(); };
+    document.getElementById('btn-start-game').onclick = () => {
+        document.getElementById('boot-screen').style.display = 'none';
+        document.getElementById('loading-screen').style.display = 'flex';
+        runGame();
+    };
+});
 
-window.addEventListener('load', async () => {
+async function runGame() {
     try {
-        checkVersions();
         clock = new THREE.Clock();
+        const texLoader = new THREE.TextureLoader();
+        const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
+        
         sheetImg.onload = async () => {
             const [braTex, rexTex, compTex] = await Promise.all([loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png')]);
             init(sheetImg, braTex, rexTex, compTex);
             document.getElementById('loading-screen').style.display = 'none';
         };
     } catch (e) { console.error(e); }
-});
+}
 
 function init(sheetImg, braTex, rexTex, compTex) {
     const container = document.getElementById('canvas-container');
@@ -49,6 +72,7 @@ function init(sheetImg, braTex, rexTex, compTex) {
     container.appendChild(renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     
+    // ★ グラフィック崩壊対策：map.jsへ直接mapDataを渡す
     buildMapMeshes(scene, sheetImg, mapData);
 
     cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
@@ -74,6 +98,7 @@ function init(sheetImg, braTex, rexTex, compTex) {
     setupEventListeners();
     animate();
 
+    // 演出開始
     const o = document.getElementById('stage-overlay');
     document.getElementById('chapter-num').innerText = StageData.info.chapter;
     document.getElementById('stage-title').innerHTML = StageData.info.name;
@@ -244,7 +269,7 @@ async function processEnemyAI() {
 
 function checkVictory() {
     gameStore.setState({ gameState: 'FINISHED' });
-    startDialogue(); // 戦後会話はStageDataを拡張する際にここを調整
+    startDialogue();
 }
 
 function animate() {
