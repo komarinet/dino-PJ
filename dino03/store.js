@@ -1,4 +1,5 @@
-export const VERSION = "8.16.0";
+export const VERSION = "8.16.1";
+
 import { createStore } from 'https://esm.sh/zustand/vanilla';
 
 export const gameStore = createStore((set) => ({
@@ -12,7 +13,7 @@ export const gameStore = createStore((set) => ({
     
     setGameState: (state) => set({ gameState: state }),
     setTalkIndex: (index) => set({ talkIndex: index }),
-    setState: (newState) => set(newState) // 一括更新用
+    setState: (newState) => set(newState) 
 }));
 
 export const getStore = () => gameStore.getState();
