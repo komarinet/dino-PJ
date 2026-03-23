@@ -12,7 +12,6 @@ window.addEventListener('load', () => {
     sheetImg.src = 'img/plate01.png';
 
     sheetImg.onload = () => {
-        // 全ての画像を安全に読み込むフロー
         texLoader.load('img/bra.png', (braTex) => {
             texLoader.load('img/tactyrano01.png', (rexTex) => {
                 startGame(sheetImg, braTex, rexTex);
@@ -113,7 +112,6 @@ function renderTalkLine(data) {
     
     const speakerUnit = window.units.find(u => u.id === data.name);
     
-    // サムネイル画像の表示（それぞれ計算された切り抜き位置を使用）
     if (speakerUnit && speakerUnit.spriteConfig) {
         if (speakerUnit.spriteConfig.type === 'bra') {
             portrait.innerHTML = `<div style="width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;"></div>`;
@@ -271,6 +269,22 @@ function checkVictory() {
     }
 }
 
+function executeSlowExit(unit, path, onComplete) {
+    const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
+    const tl = gsap.timeline({ onComplete });
+    path.forEach(step => {
+        const tX = (step.x * window.TILE_SIZE) - offsetX; const tZ = (step.z * window.TILE_SIZE) - offsetZ;
+        // ★修正: 余分な TILE_SIZE*0.5 を削除し、タイル表面の高さに合わせる
+        const tY = step.h * window.H_STEP;
+        tl.to(unit.sprite.position, {
+            x: tX, z: tZ, y: tY,
+            duration: 0.5,
+            ease: "none",
+            onUpdate: () => { controls.target.copy(unit.sprite.position); }
+        });
+    });
+}
+
 function showBigEpisodeClear() {
     const overlay = document.getElementById('episode-clear-overlay');
     gsap.to(overlay, { opacity: 1, y: -20, duration: 1.0 });
@@ -278,7 +292,9 @@ function showBigEpisodeClear() {
 
 window.showFloatingText = function(unit, text, type) {
     const vector = unit.sprite.position.clone();
-    vector.y += 60; vector.project(camera); 
+    // ★修正: ユニットの高さ（スケール）に合わせて文字を頭上に出す
+    vector.y += unit.sprite.scale.y + 10; 
+    vector.project(camera); 
     const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
     const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
     const el = document.createElement('div');
@@ -340,7 +356,8 @@ window.executeMovement = function(unit, path, onComplete, followCamera = false) 
     path.forEach(step => {
         const tX = (step.x * window.TILE_SIZE) - offsetX; 
         const tZ = (step.z * window.TILE_SIZE) - offsetZ;
-        const tY = (step.h * window.H_STEP) + (window.TILE_SIZE * 0.5);
+        // ★修正: 半マス分上にズレる不要な計算を削除
+        const tY = step.h * window.H_STEP;
         
         tl.call(() => { unit.lookAtNode(step.x, step.z); });
 
@@ -350,7 +367,8 @@ window.executeMovement = function(unit, path, onComplete, followCamera = false) 
             ease: "power1.inOut",
             onUpdate: () => { if(followCamera) controls.target.copy(unit.sprite.position); }
         });
-        tl.to(unit.sprite.position, { y: Math.max(unit.sprite.position.y, tY) + 30, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
+        // 移動時のジャンプの高さを調整（20pxピョンと跳ねる）
+        tl.to(unit.sprite.position, { y: Math.max(unit.sprite.position.y, tY) + 20, duration: 0.125, ease: "power1.out", yoyo: true, repeat: 1 }, "<");
         tl.set(unit.sprite.position, { y: tY });
     });
 }
@@ -473,10 +491,12 @@ function onPointerClick(event) {
     }
 }
 
+// ★修正: 半マス分(TILE_SIZE*0.5)上にズレる不要な計算を削除
 window.updateUnitPosInstantly = function(u) {
     const offsetX = (window.MAP_W * window.TILE_SIZE) / 2; const offsetZ = (window.MAP_D * window.TILE_SIZE) / 2;
-    u.sprite.position.set((u.x * window.TILE_SIZE) - offsetX, (u.h * window.H_STEP) + (window.TILE_SIZE * 0.5), (u.z * window.TILE_SIZE) - offsetZ);
+    u.sprite.position.set((u.x * window.TILE_SIZE) - offsetX, u.h * window.H_STEP, (u.z * window.TILE_SIZE) - offsetZ);
 }
+
 window.centerCameraInstantly = function(u) {
     const rad = 45 * (Math.PI / 180); const r = 800;
     controls.target.copy(u.sprite.position);
