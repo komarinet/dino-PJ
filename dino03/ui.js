@@ -1,4 +1,4 @@
-export const VERSION = "8.15.2";
+export const VERSION = "8.15.3";
 export class UIControl {
     constructor(cameraControl) { this.cameraControl = cameraControl; }
 
@@ -20,12 +20,12 @@ export class UIControl {
         document.getElementById('st-lv').innerText = u.level;
         document.getElementById('st-hp').innerText = `${u.hp}/${u.maxHp}`;
         document.getElementById('st-hp-bar').style.width = `${(u.hp/u.maxHp)*100}%`;
-        document.getElementById('st-mp').innerText = `${u.mp}/${u.maxMp}`;
-        document.getElementById('st-mp-bar').style.width = `${(u.mp/u.maxMp)*100}%`;
-        document.getElementById('dt-str').innerText = u.str;
-        document.getElementById('dt-def').innerText = u.def;
-        document.getElementById('dt-spd').innerText = u.spd;
-        document.getElementById('dt-mag').innerText = u.mag;
+        
+        document.getElementById('detail-stats').innerHTML = `
+            <div class="stat-row"><span>💪 力</span><span>${u.str}</span></div>
+            <div class="stat-row"><span>🛡️ 防御</span><span>${u.def}</span></div>
+            <div class="stat-row"><span>👟 速度</span><span>${u.spd}</span></div>
+        `;
     }
 
     renderTalkLine(data, units, player) {
