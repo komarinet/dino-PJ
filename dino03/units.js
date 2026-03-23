@@ -1,9 +1,12 @@
 window.Unit = class {
-    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig) {
+    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
         this.id = id; this.emoji = emoji;
         this.x = x; this.z = z; this.h = 0;
-        this.hp = hp; this.maxHp = hp;
-        this.mp = mp; this.maxMp = mp;
+        this.level = level;
+        this.exp = 0; // 100溜まるとレベルアップ
+        
+        this.maxHp = hp; this.hp = hp;
+        this.maxMp = mp; this.mp = mp;
         this.str = str; this.def = def; this.spd = spd; this.mag = mag;
         this.move = move; this.jump = jump;
         this.isPlayer = isPlayer;
@@ -14,7 +17,6 @@ window.Unit = class {
         this.spriteConfig = spriteConfig;
         this.texture = spriteConfig ? spriteConfig.tex : null;
         this.animTime = 0;
-        // ★修正：ティラノの歩行速度（1コマ150ms）をUnitクラスで管理★
         this.animSpeed = 150; 
         this.animState = 'IDLE'; 
 
@@ -24,18 +26,31 @@ window.Unit = class {
         if(this.texture) { this.initTextureSprite(); }
     }
 
+    // ★レベルアップ機構★
+    levelUp() {
+        this.level++;
+        this.exp = 0; // 超過分は切り捨ててリセット
+        this.maxHp += 10; this.hp = this.maxHp; // 全回復
+        this.maxMp += 5;  this.mp = this.maxMp;
+        this.str += 4;
+        this.def += 3;
+        this.spd += 1;
+    }
+
     initTextureSprite() {
         const conf = this.spriteConfig;
         this.texture.repeat.set(1 / conf.cols, 1 / conf.rows);
         this.texture.magFilter = THREE.NearestFilter;
         
-        this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true });
+        // ★めり込み修正：alphaTest: 0.5 で透明部分の奥行き判定を消す★
+        this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true, alphaTest: 0.5 });
         this.sprite = new THREE.Sprite(this.material);
         this.sprite.center.set(0.5, 0.0); 
         
         const cellW = conf.w / conf.cols;
         const cellH = conf.h / conf.rows;
         
+        // 高さは ティラノ/コンプが60、ブラキオが90
         const h = (conf.type === 'bra') ? 90 : 60; 
         this.baseScaleX = h * (cellW / cellH);
         
@@ -68,15 +83,17 @@ window.Unit = class {
         if(this.animState === 'IDLE') {
             this.animTime += delta;
             if(this.spriteConfig.type === 'bra') {
-                const frame = (Math.floor(this.animTime / 500) % 2); // 0 or 1
+                const frame = (Math.floor(this.animTime / 500) % 2); 
                 this.setRawFrame(0, frame);
             } else if(this.spriteConfig.type === 'rex') {
-                // ★修正箇所：歩行アニメーションのループ順序を逆転させる★
-                // 増加する animTime に基づいて 11, 10, 9, ..., 0, 11, ... と減少させる
                 const f = 11 - (Math.floor(this.animTime / this.animSpeed) % 12); 
                 const col = f % 4;
                 const row = Math.floor(f / 4);
                 this.setRawFrame(col, row);
+            } else if(this.spriteConfig.type === 'comp') {
+                // コンプは歩行1(0,0)と歩行2(1,0)を交互に
+                const col = (Math.floor(this.animTime / 200) % 2);
+                this.setRawFrame(col, 0);
             }
         }
     }
@@ -99,6 +116,10 @@ window.Unit = class {
             if(action === 'ATTACK') this.setRawFrame(1, 3); 
             else if(action === 'HURT') this.setRawFrame(0, 3);  
             else if(action === 'DOWN') this.setRawFrame(2, 3);  
+        } else if(this.spriteConfig.type === 'comp') {
+            if(action === 'ATTACK') this.setRawFrame(2, 0); 
+            else if(action === 'HURT') this.setRawFrame(0, 1);  
+            else if(action === 'DOWN') this.setRawFrame(1, 1);  
         }
     }
 
