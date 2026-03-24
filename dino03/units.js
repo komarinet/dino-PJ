@@ -1,4 +1,4 @@
-export const VERSION = "8.17.1";
+export const VERSION = "8.19.0";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -10,8 +10,8 @@ export class Unit {
         this.move = move; this.jump = jump;
         this.isPlayer = isPlayer;
         this.sprite = null; this.material = null;
-        this.shadow = null; // ★ 影オブジェクト用の変数
-        this.hasMoved = false; this.hasAttacked = false;
+        this.shadow = null;
+        this.hasMoved = false; this.hasAttacked = false; this.hasActed = false;
         this.spriteConfig = spriteConfig;
         this.texture = spriteConfig ? spriteConfig.tex : null;
         this.animTime = 0; this.animSpeed = 150; this.animState = 'IDLE'; 
@@ -42,11 +42,10 @@ export class Unit {
         this.sprite.userData = { isUnit: true, unit: this };
         this.setIdle();
 
-        // ★ ドロップシャドウ（足元の影）の生成
         const shadowGeo = new THREE.CircleGeometry(this.baseScaleX * 0.4, 32);
         const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
         this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
-        this.shadow.rotation.x = -Math.PI / 2; // 地面に寝かせる
+        this.shadow.rotation.x = -Math.PI / 2;
     }
 
     dispose(scene) {
@@ -55,7 +54,6 @@ export class Unit {
             if(this.material) this.material.dispose();
             this.sprite = null;
         }
-        // ★ 影も一緒に消す
         if(this.shadow) {
             scene.remove(this.shadow);
             this.shadow.geometry.dispose();
@@ -112,11 +110,16 @@ export class Unit {
 }
 
 export const getUnitAt = (units, x, z) => units.find(u => u.x === x && u.z === z && u.hp > 0);
+
+// ★ 変更：攻撃対象の検索に「高低差が1以内」という条件を追加
 export const getAttackableEnemies = (units, unit) => {
     let targets = [];
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
         let u = getUnitAt(units, unit.x + d[0], unit.z + d[1]);
-        if(u && u.isPlayer !== unit.isPlayer) targets.push(u);
+        // 自分(unit.h)と相手(u.h)の高さの差を計算し、1以内なら攻撃可能とする
+        if(u && u.isPlayer !== unit.isPlayer && Math.abs(unit.h - u.h) <= 1) {
+            targets.push(u);
+        }
     }
     return targets;
 };
