@@ -1,14 +1,14 @@
 /* =================================================================
-   main.js - v8.20.7
+   main.js
    修正・復旧内容：
-   1. 会話システム：name/face プロパティに対応し undefined を解消
-   2. UI再配置：ステータス窓を左下へ移動(メッセージとの重複回避)
-   3. 描画順修正：ハイライトを最前面(renderOrder 999)かつ高度+10へ
-   4. 演出修正：敵の初期向きを左(-1)に完全固定
-   5. ルール遵守：一切の省略なし、フルコードで記載
+   1. 致命的バグの修正：欠落していた OrbitControls の初期化を復元し、起動不能を解消
+   2. 会話システム：name/face プロパティに対応し undefined を解消
+   3. UI再配置：ステータス窓を左下へ移動(メッセージとの重複回避)
+   4. 描画順修正：ハイライトを最前面(renderOrder 999)かつ高度+10へ
+   5. 演出修正：敵の初期向きを左(-1)に完全固定
    ================================================================= */
 
-export const VERSION = "8.20.7";
+export const VERSION = "8.20.8";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -87,11 +87,12 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     
     buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, StageData.obstacles);
 
-    cameraCtrl = new CameraControl(camera, renderer.domElement);
+    // ★修正箇所：欠落していた OrbitControls の生成処理を復元しました
+    cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
+    
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
 
-    // ★ UI再配置：ステータス窓を左下へ
     const statusUI = document.getElementById('status-ui');
     if(statusUI) {
         statusUI.style.top = 'auto'; statusUI.style.bottom = '20px'; statusUI.style.left = '20px';
@@ -108,7 +109,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
         unit.h = mapData[unit.z][unit.x].h; 
         
-        // ★ 敵向き固定：左(-1)に強制設定
         if (!unit.isPlayer) {
             unit.facing = -1;
             if (unit.sprite) unit.sprite.scale.x = unit.baseScaleX * unit.facing;
@@ -191,7 +191,6 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        // ★ 高度+10とrenderOrder 999で視認性確保
         mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
         mesh.renderOrder = 999;
         scene.add(mesh);
