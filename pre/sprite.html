@@ -2,100 +2,348 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Sprite Sheet Maker</title>
+    <title>Poke-Sprite Studio - Advanced Maker</title>
     <style>
-        body { font-family: sans-serif; background: #f0f0f0; padding: 20px; }
-        .controls { background: white; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-        canvas { background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%); background-size: 20px 20px; background-position: 0 0, 0 10px, 10px -10px, -10px 0px; border: 1px solid #999; max-width: 100%; }
-        input[type="number"] { width: 60px; }
+        body { font-family: 'Press Start 2P', monospace; background: #222e33; color: white; padding: 10px; font-size: 10px; margin: 0; }
+        .wrapper { display: flex; gap: 10px; flex-wrap: wrap; }
+        .main-col { flex: 1; display: flex; flex-direction: column; gap: 10px; }
+        
+        .panel { background: #1a1e22; padding: 10px; border: 2px solid #3c4a52; border-radius: 4px; }
+        .panel h3 { margin-top: 0; font-size: 12px; color: #a8b9c2; border-bottom: 1px solid #3c4a52; padding-bottom: 5px; }
+        
+        /* グローバルコントロール */
+        .controls { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+        .controls label { display: flex; align-items: center; gap: 4px; }
+        input[type="number"] { width: 50px; background: #2a3a42; border: 1px solid #3c4a52; color: white; }
+        input[type="range"] { width: 80px; }
+        button { background: #3d5a80; color: white; border: 1px solid #7891aa; padding: 5px 10px; font-family: inherit; cursor: pointer; }
+        button:hover { background: #5077a7; }
+
+        /* 画像リスト（ドラッグ＆ドロップ） */
+        .list-panel { width: 280px; display: flex; flex-direction: column; gap: 5px; }
+        .image-list-container { max-height: 600px; overflow-y: auto; }
+        .sprite-item { background: #2a3a42; padding: 5px; border: 1px solid #3c4a52; cursor: grab; display: flex; flex-direction: column; gap: 4px; margin-bottom: 3px; position: relative;}
+        .sprite-item.dragging { opacity: 0.5; border: 1px solid #7891aa; cursor: grabbing; }
+        .sprite-item.over { border-top: 2px solid white; }
+        .sprite-item-thumb { width: 40px; height: 40px; background: white; padding: 2px; border: 1px solid #1a1e22; object-fit: contain;}
+        .sprite-item-data { display: flex; flex-direction: column; gap: 2px; flex: 1;}
+        .sprite-item-controls { display: grid; grid-template-columns: repeat(2, 1fr); gap: 2px; }
+        .sprite-item-controls label { display: flex; align-items: center; justify-content: space-between; gap: 2px; }
+        
+        /* キャンバスプレビュー */
+        .canvas-container { flex: 1; display: flex; flex-direction: column; gap: 5px; }
+        canvas { background: white url('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABQAAAAUCAYAAACNiR0NAAAAMElEQVQ4T2NkoAD8P+Kff4D7U9wQf4b5Qf4mFmP8f+KfsA8Gf4b5Qf4mFmP8AwAc+S/B3T/UzwAAAABJRU5ErkJggg==') repeat; border: 2px solid #3c4a52; cursor: default; }
+        canvas:hover { cursor: crosshair; }
+        
+        /* 個別調整用のオーバーレイ表示 */
+        #adjustmentTip { display: none; position: absolute; background: rgba(0,0,0,0.8); padding: 5px; border-radius: 4px; pointer-events: none; white-space: nowrap; font-size: 8px; z-index: 100;}
     </style>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
 </head>
 <body>
 
-    <h2>Sprite Sheet Maker</h2>
-
-    <div class="controls">
+    <div class="panel controls">
+        <h3>POKE-SPRITE STUDIO</h3>
         <input type="file" id="fileInput" multiple accept="image/*">
-        <label>列数: <input type="number" id="cols" value="3" min="1"></label>
-        <label>1セルの幅: <input type="number" id="cellW" value="200"></label>
-        <label>1セルの高: <input type="number" id="cellH" value="200"></label>
-        <label>拡大率: <input type="range" id="scale" min="0.1" max="3" step="0.1" value="1.0"></label>
-        <label>位置X微調整: <input type="number" id="offsetX" value="0"></label>
-        <label>位置Y微調整: <input type="number" id="offsetY" value="0"></label>
-        <button id="downloadBtn">PNGとして保存</button>
+        <label>COLS: [ <input type="number" id="cols" value="3" min="1"> ]</label>
+        <label>ROWS: [ <input type="number" id="rows" value="4" min="1"> ]</label>
+        <label>CELL: [ <input type="number" id="cellW" value="128"> x <input type="number" id="cellH" value="128"> ] px</label>
+        <label>GLOBAL SCALE: [ <input type="number" id="globalScale" value="1.0" min="0.1" step="0.1">x ]</label>
+        <label>SHOW GRID: <input type="checkbox" id="showGrid" checked></label>
+        <button id="downloadBtn">PNGとしてエクスポート</button>
+        <span id="finalSize">FINAL SIZE: [?]</span>
     </div>
 
-    <canvas id="canvas"></canvas>
+    <div class="wrapper">
+        <div class="list-panel panel">
+            <h3>IMAGE LIST (DRAG TO REORDER)</h3>
+            <div id="imageListContainer" class="image-list-container"></div>
+        </div>
+
+        <div class="canvas-container panel">
+            <h3>PREVIEW</h3>
+            <div style="overflow:auto; max-height:600px; position:relative;">
+                <canvas id="canvas"></canvas>
+                <div id="adjustmentTip">Adjusting...</div>
+            </div>
+        </div>
+    </div>
 
     <script>
+        // DOM要素の取得
         const fileInput = document.getElementById('fileInput');
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
+        const imageListContainer = document.getElementById('imageListContainer');
+        const finalSizeText = document.getElementById('finalSize');
         const downloadBtn = document.getElementById('downloadBtn');
+        const adjustmentTip = document.getElementById('adjustmentTip');
 
-        let images = [];
+        // スプライトデータの管理用
+        let sprites = [];
+        let draggingElement = null;
+        let activeSprite = null; // キャンバスドラッグ用
 
-        // 入力値の取得
-        const getInputs = () => ({
-            cols: parseInt(document.getElementById('cols').value),
-            cellW: parseInt(document.getElementById('cellW').value),
-            cellH: parseInt(document.getElementById('cellH').value),
-            scale: parseFloat(document.getElementById('scale').value),
-            offX: parseInt(document.getElementById('offsetX').value),
-            offY: parseInt(document.getElementById('offsetY').value)
-        });
-
-        // 描画処理
-        function draw() {
-            if (images.length === 0) return;
-            const settings = getInputs();
-            const rows = Math.ceil(images.length / settings.cols);
-
-            canvas.width = settings.cols * settings.cellW;
-            canvas.height = rows * settings.cellH;
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            images.forEach((img, i) => {
-                const col = i % settings.cols;
-                const row = Math.floor(i / settings.cols);
-
-                const destW = img.width * settings.scale;
-                const destH = img.height * settings.scale;
-
-                // 中心合わせ + 微調整
-                const x = col * settings.cellW + (settings.cellW - destW) / 2 + settings.offX;
-                const y = row * settings.cellH + (settings.cellH - destH) / 2 + settings.offY;
-
-                ctx.drawImage(img, x, y, destW, destH);
-            });
-        }
-
-        // ファイル読み込み
+        // 画像の読み込みとスプライトデータの初期化
         fileInput.onchange = async (e) => {
-            images = [];
             const files = Array.from(e.target.files);
             for (const file of files) {
                 const img = new Image();
                 img.src = URL.createObjectURL(file);
                 await img.decode();
-                images.push(img);
+                
+                // 初期データを作成
+                const sprite = {
+                    id: Date.now() + '-' + Math.random().toString(36).substr(2, 9),
+                    img: img,
+                    name: file.name,
+                    individualScale: 1.0,
+                    rotation: 0,
+                    offX: 0,
+                    offY: 0
+                };
+                sprites.push(sprite);
             }
-            draw();
+            updateUI();
         };
 
-        // イベントリスナー
-        ['cols', 'cellW', 'cellH', 'scale', 'offsetX', 'offsetY'].forEach(id => {
-            document.getElementById(id).addEventListener('input', draw);
+        // 入力値の取得
+        const getSettings = () => ({
+            cols: parseInt(document.getElementById('cols').value),
+            rows: parseInt(document.getElementById('rows').value),
+            cellW: parseInt(document.getElementById('cellW').value),
+            cellH: parseInt(document.getElementById('cellH').value),
+            globalScale: parseFloat(document.getElementById('globalScale').value),
+            showGrid: document.getElementById('showGrid').checked
+        });
+
+        // 描画処理（全体の更新）
+        function draw() {
+            if (sprites.length === 0) return;
+            const settings = getSettings();
+
+            canvas.width = settings.cols * settings.cellW;
+            canvas.height = settings.rows * settings.cellH;
+            finalSizeText.textContent = `FINAL SIZE: [${canvas.width} x ${canvas.height} px]`;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            sprites.forEach((sprite, i) => {
+                const col = i % settings.cols;
+                const row = Math.floor(i / settings.cols);
+
+                const finalScale = settings.globalScale * sprite.individualScale;
+                const destW = sprite.img.width * finalScale;
+                const destH = sprite.img.height * finalScale;
+
+                const baseCenterX = col * settings.cellW + settings.cellW / 2;
+                const baseCenterY = row * settings.cellH + settings.cellH / 2;
+
+                ctx.save();
+                ctx.translate(baseCenterX + sprite.offX, baseCenterY + sprite.offY);
+                ctx.rotate(sprite.rotation * Math.PI / 180);
+                
+                // 中心合わせをして描画
+                ctx.drawImage(sprite.img, -destW / 2, -destH / 2, destW, destH);
+                ctx.restore();
+            });
+
+            // ガイド線の描画
+            if (settings.showGrid) {
+                ctx.strokeStyle = 'rgba(78, 116, 178, 0.5)';
+                ctx.lineWidth = 1;
+                for (let c = 1; c < settings.cols; c++) {
+                    ctx.beginPath();
+                    ctx.moveTo(c * settings.cellW, 0);
+                    ctx.lineTo(c * settings.cellW, canvas.height);
+                    ctx.stroke();
+                }
+                for (let r = 1; r < settings.rows; r++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, r * settings.cellH);
+                    ctx.lineTo(canvas.width, r * settings.cellH);
+                    ctx.stroke();
+                }
+            }
+        }
+
+        // 左側リストUIの更新
+        function updateUI() {
+            imageListContainer.innerHTML = '';
+            sprites.forEach((sprite, i) => {
+                const item = document.createElement('div');
+                item.className = 'sprite-item';
+                item.draggable = true;
+                item.dataset.id = sprite.id;
+
+                const topDiv = document.createElement('div');
+                topDiv.style.display = 'flex';
+                topDiv.style.gap = '5px';
+                
+                const thumb = sprite.img.cloneNode();
+                thumb.className = 'sprite-item-thumb';
+                topDiv.appendChild(thumb);
+
+                const dataDiv = document.createElement('div');
+                dataDiv.className = 'sprite-item-data';
+                const nameLabel = document.createElement('span');
+                nameLabel.textContent = `#${i+1}: ${sprite.name.substring(0, 15)}...`;
+                nameLabel.style.color = 'white';
+                dataDiv.appendChild(nameLabel);
+                topDiv.appendChild(dataDiv);
+                item.appendChild(topDiv);
+
+                // 個別コントロール
+                const ctrlDiv = document.createElement('div');
+                ctrlDiv.className = 'sprite-item-controls';
+
+                const scaleCtrl = createRangeControl('S', 0.5, 3.0, 0.1, sprite.individualScale, (v) => { sprite.individualScale = v; draw(); });
+                ctrlDiv.appendChild(scaleCtrl);
+
+                const rotCtrl = createRangeControl('R', -180, 180, 1, sprite.rotation, (v) => { sprite.rotation = v; draw(); });
+                ctrlDiv.appendChild(rotCtrl);
+
+                const offXCtrl = createNumberControl('X', sprite.offX, (v) => { sprite.offX = v; draw(); });
+                ctrlDiv.appendChild(offXCtrl);
+
+                const offYCtrl = createNumberControl('Y', sprite.offY, (v) => { sprite.offY = v; draw(); });
+                ctrlDiv.appendChild(offYCtrl);
+
+                item.appendChild(ctrlDiv);
+
+                // ドラッグ開始
+                item.addEventListener('dragstart', (e) => {
+                    draggingElement = item;
+                    item.classList.add('dragging');
+                    e.dataTransfer.effectAllowed = 'move';
+                });
+                // ドラッグ中（over）
+                item.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    item.classList.add('over');
+                    e.dataTransfer.dropEffect = 'move';
+                });
+                item.addEventListener('dragleave', () => {
+                    item.classList.remove('over');
+                });
+                item.addEventListener('dragend', () => {
+                    draggingElement = null;
+                    item.classList.remove('dragging');
+                });
+                // ドロップ
+                item.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    item.classList.remove('over');
+                    if (draggingElement === item) return;
+                    
+                    const fromId = draggingElement.dataset.id;
+                    const toId = item.dataset.id;
+                    const fromIndex = sprites.findIndex(s => s.id === fromId);
+                    const toIndex = sprites.findIndex(s => s.id === toId);
+                    
+                    // 配列の入れ替え
+                    const movedItem = sprites.splice(fromIndex, 1)[0];
+                    sprites.splice(toIndex, 0, movedItem);
+                    
+                    updateUI(); // UIを再構築
+                });
+
+                imageListContainer.appendChild(item);
+            });
+            draw(); // リスト更新後に再描画
+        }
+
+        // コントロール生成のユーティリティ関数
+        function createRangeControl(label, min, max, step, value, onChange) {
+            const l = document.createElement('label');
+            l.textContent = `${label}: `;
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.min = min;
+            input.max = max;
+            input.step = step;
+            input.value = value;
+            input.addEventListener('input', (e) => onChange(parseFloat(e.target.value)));
+            l.appendChild(input);
+            return l;
+        }
+        function createNumberControl(label, value, onChange) {
+            const l = document.createElement('label');
+            l.textContent = `${label}: `;
+            const input = document.createElement('input');
+            input.type = 'number';
+            input.value = value;
+            input.addEventListener('input', (e) => onChange(parseInt(e.target.value)));
+            l.appendChild(input);
+            return l;
+        }
+
+        // グローバルイベントリスナー
+        ['cols', 'rows', 'cellW', 'cellH', 'globalScale', 'showGrid'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el.type === 'checkbox') {
+                el.addEventListener('change', draw);
+            } else {
+                el.addEventListener('input', draw);
+            }
         });
 
         // ダウンロード
         downloadBtn.onclick = () => {
             const link = document.createElement('a');
-            link.download = 'spritesheet.png';
+            link.download = `poke-spritesheet-${Date.now()}.png`;
             link.href = canvas.toDataURL();
             link.click();
         };
+
+        // --- キャンバスドラッグ微調整 ---
+        canvas.addEventListener('mousedown', (e) => {
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+            
+            const settings = getSettings();
+            
+            // マウス位置から対応するスプライトを検索
+            const col = Math.floor(mouseX / settings.cellW);
+            const row = Math.floor(mouseY / settings.cellH);
+            const index = row * settings.cols + col;
+
+            if (index < sprites.length) {
+                activeSprite = sprites[index];
+                // 開始時のオフセットを保存
+                activeSprite.startX = activeSprite.offX;
+                activeSprite.startY = activeSprite.offY;
+                activeSprite.startMouseX = mouseX;
+                activeSprite.startMouseY = mouseY;
+            }
+        });
+
+        canvas.addEventListener('mousemove', (e) => {
+            if (!activeSprite) return;
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = e.clientX - rect.left;
+            const mouseY = e.clientY - rect.top;
+
+            // 差分を計算してオフセットを更新
+            activeSprite.offX = activeSprite.startX + (mouseX - activeSprite.startMouseX);
+            activeSprite.offY = activeSprite.startY + (mouseY - activeSprite.startMouseY);
+
+            // 調整値をツールチップで表示
+            adjustmentTip.style.display = 'block';
+            adjustmentTip.style.left = `${e.clientX + 10}px`;
+            adjustmentTip.style.top = `${e.clientY + 10}px`;
+            adjustmentTip.textContent = `Adjusting Sprite #${sprites.indexOf(activeSprite)+1}: X=${activeSprite.offX}px, Y=${activeSprite.offY}px`;
+            
+            draw();
+            // 左側リストの数値入力も更新したいが、再読み込みはコストがかかるので、個別更新するか、諦める。今回は簡易的にリストUIはそのまま。
+        });
+
+        window.addEventListener('mouseup', () => {
+            activeSprite = null;
+            adjustmentTip.style.display = 'none';
+        });
+
     </script>
 </body>
 </html>
