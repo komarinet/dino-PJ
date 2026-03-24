@@ -1,13 +1,15 @@
 /* =================================================================
-   main.js - v8.20.11
+   main.js - v8.20.13
    修正・機能追加内容：
-   1. ステータスUIの配置変更：左下(bottom)から左上(top:20px, left:20px)へ変更。
-      これにより、メッセージUI(上部中央)やコマンドUI(左下)との重なりを完全に解消。
-   2. メリハリ表示ロジック：コマンド（移動・攻撃・待機）を選択した瞬間、
-      盤面を広く見渡せるようにステータスUIを一時的に非表示(display: 'none')にする処理を追加。
+   1. 敵ターンの完全直列化：processEnemyAI を for...of ループに書き換え、
+      敵1体の移動・攻撃アニメーションが完全に終わるまで次の敵が動かないように修正。
+      これにより、進行不能(フリーズ)やターンの暴走を完全に防ぎます。
+   2. 小隊待機ロジック：
+      - 前衛コンプ(1,2体目)が生きている間、後衛コンプ(3,4体目)は動かない。
+      - 後衛コンプが生きている間、ボス(ブラキオサウルス)は動かない。
    ================================================================= */
 
-export const VERSION = "8.20.11";
+export const VERSION = "8.20.13";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -91,7 +93,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
 
-    // ★ 修正箇所1：ステータスUIを左上に配置固定
     const statusUI = document.getElementById('status-ui');
     if(statusUI) {
         statusUI.style.bottom = 'auto'; 
@@ -255,7 +256,6 @@ function onPointerClick(event) {
 }
 
 function execCommand(cmd) {
-    // ★ 修正箇所2：コマンド選択時にステータスUIを非表示にして画面を広くする
     const statusUI = document.getElementById('status-ui');
     
     if(cmd === 'move') {
@@ -264,7 +264,7 @@ function execCommand(cmd) {
             gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
             showHighlight(tiles, moveHighlightMat); 
             document.getElementById('command-ui').style.display = 'none';
-            if(statusUI) statusUI.style.display = 'none'; // ステータス消去
+            if(statusUI) statusUI.style.display = 'none';
             uiCtrl.setMsg("移動先を選んでください");
         }
     } else if(cmd === 'attack') {
@@ -278,10 +278,10 @@ function execCommand(cmd) {
         });
         showHighlight(targets, attackHighlightMat); 
         document.getElementById('command-ui').style.display = 'none'; 
-        if(statusUI) statusUI.style.display = 'none'; // ステータス消去
+        if(statusUI) statusUI.style.display = 'none';
         document.getElementById('target-ui').style.display = 'block';
     } else if(cmd === 'wait') {
-        if(statusUI) statusUI.style.display = 'none'; // ステータス消去
+        if(statusUI) statusUI.style.display = 'none';
         completePlayerAction(window.player);
     }
 }
@@ -312,7 +312,6 @@ function answerConfirm(isYes) {
             gameStore.setState({ gameState: 'IDLE' }); 
             uiCtrl.updateCommandMenu(window.player);
             document.getElementById('command-ui').style.display = 'block'; 
-            // 移動完了後に再度ステータスを見たい場合はキャラタップで表示されるようになります
         });
     } else if(store.confirmMode === 'ATTACK') {
         battleSys.executeAttack(window.player, store.pendingData, window.units, camera, () => completePlayerAction(window.player), scene);
@@ -336,35 +335,68 @@ function completePlayerAction(unit) {
     }
 }
 
+// ★ 修正箇所：敵の行動を完全に直列化し、待機条件を追加した processEnemyAI
 async function processEnemyAI() {
     window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
     const enemies = window.units.filter(u => !u.isPlayer && u.hp > 0);
     
-    for(let i = 0; i < enemies.length; i += 2) {
-        const chunk = enemies.slice(i, i + 2);
-        await Promise.all(chunk.map(async (enemy) => {
-            if(enemy.hp <= 0) return;
-            enemy.lookAtNode(window.player.x, window.player.z);
-            const routes = getWalkableNodes(window.units, enemy, mapData);
-            let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
-            
-            if(best && best.path.length > 0) {
-                await new Promise(res => battleSys.executeMovement(enemy, best.path, res));
-                const targets = getAttackableEnemies(window.units, enemy);
-                if(targets.includes(window.player)) {
-                    await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
-                    if(window.player.hp <= 0) { uiCtrl.setMsg("GAME OVER", "#ff0000"); return; }
-                }
+    // コンプソグナトゥスを配列として取得（生成順：0,1が前衛 / 2,3が後衛）
+    const comps = window.units.filter(u => !u.isPlayer && u.id.includes('コンプ'));
+    const isFrontAlive = (comps[0] && comps[0].hp > 0) || (comps[1] && comps[1].hp > 0);
+    const isBackAlive  = (comps[2] && comps[2].hp > 0) || (comps[3] && comps[3].hp > 0);
+
+    for (const enemy of enemies) {
+        if (enemy.hp <= 0) continue;
+
+        // --- 待機ロジック ---
+        // 後衛コンプは、前衛が生きている間は動かない
+        if (enemy === comps[2] || enemy === comps[3]) {
+            if (isFrontAlive) {
+                enemy.hasActed = true;
+                continue; // ターンをスキップして次へ
             }
-            enemy.hasActed = true;
-        }));
-        await new Promise(res => setTimeout(res, 600)); 
+        }
+        // ボスは、後衛コンプが生きている間は動かない
+        if (enemy.id === 'ブラキオサウルス') {
+            if (isBackAlive) {
+                enemy.hasActed = true;
+                continue; // ターンをスキップして次へ
+            }
+        }
+        // --------------------
+
+        enemy.lookAtNode(window.player.x, window.player.z);
+        
+        const routes = getWalkableNodes(window.units, enemy, mapData);
+        let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
+        
+        // 移動を完全に待つ
+        if (best && best.path.length > 0) {
+            await new Promise(res => battleSys.executeMovement(enemy, best.path, res));
+        }
+        
+        // 攻撃を完全に待つ
+        const targets = getAttackableEnemies(window.units, enemy);
+        if (targets.includes(window.player)) {
+            await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
+            if (window.player.hp <= 0) { 
+                uiCtrl.setMsg("GAME OVER", "#ff0000"); 
+                return; // プレイヤーが倒れたら即終了
+            }
+        }
+        
+        enemy.hasActed = true;
+        
+        // 敵の行動間に少しウェイトを入れ、カメラのテンポを落ち着かせる
+        await new Promise(res => setTimeout(res, 400)); 
     }
     
+    // 全員の処理が終わったことを確認してから、プレイヤーのターンへ移行
     if (window.player.hp > 0) {
         window.units.filter(u => u.isPlayer).forEach(u => { u.hasMoved = false; u.hasAttacked = false; u.hasActed = false; });
         gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' }); 
-        uiCtrl.hideAll(); uiCtrl.setMsg("あなたの番です！", "#00ff00");
+        uiCtrl.hideAll(); 
+        uiCtrl.setMsg("あなたの番です！", "#00ff00");
     }
 }
 
