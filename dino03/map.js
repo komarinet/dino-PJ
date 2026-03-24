@@ -1,12 +1,14 @@
 /* =================================================================
-   map.js - v8.20.12
+   map.js - v8.20.17
    修正内容：
-   1. ユニット重なりバグの解消：getWalkableNodes において、
-      「敵陣営のみ」だった進入不可判定を「HPが残っている全ユニット」に変更。
-      これにより、敵同士や敵と味方が同じマスで合体する現象を完全に防ぎます。
+   1. 移動ハイライト消失バグの修正：
+      getWalkableNodes 関数で探索済みのマス(node)を配列に追加する際、
+      「h（高さ）」のプロパティを含めるよう修正。
+      これにより、main.js 側でハイライトのY座標が正しく計算され、
+      移動範囲が緑色に光るようになります。
    ================================================================= */
 
-export const VERSION = "8.20.12";
+export const VERSION = "8.20.17";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 
@@ -20,7 +22,7 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
     
-    // UV座標の再定義（下端が0、上端が1）
+    // UV座標の定義（下端が0、上端が1）
     const wRatio = 256 / 1280; 
     const vFloorStart = 128 / 384;
     const vFloorEnd   = 384 / 384;
@@ -69,10 +71,8 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                     } else {
                         newU = (u + col) * wRatio;
                         if (isTopBlock) {
-                            // 最上段の側面 (256〜320px)
                             newV = vSide1Start + (v * (vSide1End - vSide1Start));
                         } else {
-                            // 2段目以降の側面 (320〜384px) - 鏡面ループ
                             const distFromTop = (blocksHigh - 1) - b;
                             const isMirror = (distFromTop % 2 === 0);
                             
@@ -124,7 +124,11 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
 
 export function getWalkableNodes(units, unit, mapData) {
     const nodes = [];
-    const openList = [{ x: unit.x, z: unit.z, d: 0, path: [] }];
+    
+    // ★ 修正箇所：初期位置のデータにも「h」を追加
+    const startH = mapData[unit.z][unit.x].h;
+    const openList = [{ x: unit.x, z: unit.z, h: startH, d: 0, path: [] }];
+    
     const visited = new Set();
     visited.add(`${unit.x},${unit.z}`);
 
@@ -136,22 +140,17 @@ export function getWalkableNodes(units, unit, mapData) {
         for (const dir of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
             const nx = current.x + dir[0], nz = current.z + dir[1];
             
-            // マップ外、または探索済みの場合はスキップ
             if (nx < 0 || nx >= MAP_W || nz < 0 || nz >= MAP_D || visited.has(`${nx},${nz}`)) continue;
-            
-            // 障害物（木や岩、川など）がある場合はスキップ
             if (window.obstaclesMap.has(`${nx},${nz}`)) continue;
 
-            // 高低差チェック（自分のジャンプ力より高い/低い段差は登れない/降りられない）
             const targetH = mapData[nz][nx].h;
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
             
-            // ★ 修正箇所：ユニットの重なり防止
-            // 敵味方問わず、HPが0より大きい(生きている)ユニットが既にそのマスにいる場合は進入不可
             if (units.find(u => u.x === nx && u.z === nz && u.hp > 0)) continue;
 
             visited.add(`${nx},${nz}`);
-            openList.push({ x: nx, z: nz, d: current.d + 1, path: [...current.path, { x: nx, z: nz, h: targetH }] });
+            // ★ 修正箇所：探索先のデータにも「h: targetH」を追加
+            openList.push({ x: nx, z: nz, h: targetH, d: current.d + 1, path: [...current.path, { x: nx, z: nz, h: targetH }] });
         }
     }
     return nodes;
