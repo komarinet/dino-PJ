@@ -1,14 +1,13 @@
 /* =================================================================
-   main.js - v8.20.1
-   変更点：
-   1. バージョンチェックの緩和（OLDでもゲーム開始可能に修正）
-   2. 初期配置バリデーション（水場・重複回避）
-   3. 3ステップ移動（範囲表示 -> 地点選択/黄色 -> 確認UI）
-   4. 敵AIの2体同時行動（Chunk処理）
-   5. 各種フリーズ防止ガードの強化
+   main.js - v8.20.3
+   修正・実装内容：
+   1. クラッシュ修正：showHighlight 内の変数名 offZ を正確に参照
+   2. 3ステップ移動：青範囲提示 -> 黄色地点決定 -> 確認UI（いいえで青範囲へ戻る）
+   3. 配置デバッグ：水場・障害物・既存ユニットとの重複を完全に回避
+   4. 敵AI：2体ずつ同時に思考・行動するチャンク処理
    ================================================================= */
 
-export const VERSION = "8.20.1";
+export const VERSION = "8.20.3";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -27,18 +26,13 @@ function checkSystems() {
     };
     
     list.innerHTML = "";
-    
     for (let [file, curVer] of Object.entries(currentVersions)) {
-        // v8.16系以降であれば基本OKとするが、不一致は「OLD」と表示するのみ
-        const isLatest = curVer && (curVer.startsWith("8.20"));
+        const isLatest = curVer && curVer.startsWith("8.20");
         const isValid = curVer && curVer.startsWith("8.");
-        
         list.innerHTML += `<div style="color:${isLatest ? '#0f0' : (isValid ? '#ffcc00' : '#f00')}">
             ${file.padEnd(16)}: ver ${curVer || '---'} [${isLatest ? 'OK' : (isValid ? 'OLD' : 'ERR')}]
         </div>`;
     }
-
-    // ★ 変更：バージョンに関わらず「続ける」ボタンは常に表示する
     document.getElementById('btn-start-game').style.display = 'block';
     list.innerHTML += `<div style="color:#0f0; margin-top:10px; font-weight:bold;">READY TO START!</div>`;
 }
@@ -56,8 +50,7 @@ window.addEventListener('load', () => {
     checkSystems();
     document.getElementById('btn-clear-data').onclick = () => { 
         if(confirm("以前のデータを完全に消去してリロードしますか？")) {
-            localStorage.clear(); 
-            location.reload(); 
+            localStorage.clear(); location.reload(); 
         }
     };
     document.getElementById('btn-start-game').onclick = () => {
@@ -75,11 +68,8 @@ async function runGame() {
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
         sheetImg.onload = async () => {
             const [braTex, rexTex, compTex, treeTex, rockTex] = await Promise.all([
-                loadTex('img/bra.png'), 
-                loadTex('img/tactyrano01.png'), 
-                loadTex('img/comp.png'),
-                loadTex('img/tree01.png'),
-                loadTex('img/rock01.png')
+                loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png'),
+                loadTex('img/tree01.png'), loadTex('img/rock01.png')
             ]);
             init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex);
             document.getElementById('loading-screen').style.display = 'none';
@@ -102,7 +92,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
 
-    // ★ ユニット配置：水場・障害物・重複を回避して初期位置を決定
+    let createdUnits = [];
     window.units = StageData.units.map(u => {
         let conf = null;
         if(u.id === 'ブラキオサウルス') conf = { tex: braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
@@ -111,7 +101,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         if(conf && conf.tex) conf.tex.needsUpdate = true;
         
         let spawnX = u.x, spawnZ = u.z;
-        const isPosBlocked = (x, z) => window.obstaclesMap.has(`${x},${z}`) || getUnitAt(window.units || [], x, z);
+        const isPosBlocked = (tx, tz) => window.obstaclesMap.has(`${tx},${tz}`) || createdUnits.some(unit => unit.x === tx && unit.z === tz);
 
         if (isPosBlocked(spawnX, spawnZ)) {
             findSafe: for (let r = 1; r < 10; r++) {
@@ -133,6 +123,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
 
         const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
         unit.sprite.position.set((unit.x * TILE_SIZE) - offX, unit.h * H_STEP, (unit.z * TILE_SIZE) - offZ);
+        createdUnits.push(unit);
         if(unit.isPlayer) window.player = unit; 
         return unit;
     });
@@ -206,7 +197,8 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 2, (node.z * TILE_SIZE) - offsetZ);
+        // ★ 修正済み：offZ を正しく使用
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 2, (node.z * TILE_SIZE) - offZ);
         scene.add(mesh);
         highlightMeshes.push(mesh);
     });
@@ -240,11 +232,12 @@ function onPointerClick(event) {
                 }
             } else { uiCtrl.hideAll(); }
         } 
+        // ★ 3ステップ移動：地点選択
         else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
             if(route) {
-                clearHighlights(); // 青い範囲を消す
-                showHighlight([route], targetHighlightMat); // 選択したタイルを黄色に
+                clearHighlights(); // 青範囲を一旦クリア
+                showHighlight([route], targetHighlightMat); // 決定地点を黄色に
                 gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'MOVE', pendingData: route.path });
                 document.getElementById('confirm-text').innerText = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
@@ -257,7 +250,7 @@ function execCommand(cmd) {
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, window.player, mapData);
         gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
-        showHighlight(tiles, moveHighlightMat); 
+        showHighlight(tiles, moveHighlightMat); // 全範囲を青に提示
         document.getElementById('command-ui').style.display = 'none';
         uiCtrl.setMsg("移動先を選んでください");
     } else if(cmd === 'attack') {
@@ -290,6 +283,7 @@ function answerConfirm(isYes) {
     const store = getStore(); document.getElementById('confirm-ui').style.display = 'none';
     if(!isYes) {
         clearHighlights();
+        // ★ 3ステップ移動：いいえ を押したら範囲提示（青）に戻る
         if(store.confirmMode === 'MOVE') return execCommand('move'); 
         if(store.confirmMode === 'ATTACK') return execCommand('attack'); 
         uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
@@ -331,6 +325,7 @@ async function processEnemyAI() {
     window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
     const enemies = battleSys.decideEnemyAI(window.units, window.player);
     
+    // ★ 敵AI：2体ずつ同時行動
     for(let i = 0; i < enemies.length; i += 2) {
         const chunk = enemies.slice(i, i + 2);
         await Promise.all(chunk.map(async (enemy) => {
