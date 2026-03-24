@@ -1,389 +1,158 @@
 /* =================================================================
-   main.js - v8.20.11
-   修正・機能追加内容：
-   1. ステータスUIの配置変更：左下(bottom)から左上(top:20px, left:20px)へ変更。
-      これにより、メッセージUI(上部中央)やコマンドUI(左下)との重なりを完全に解消。
-   2. メリハリ表示ロジック：コマンド（移動・攻撃・待機）を選択した瞬間、
-      盤面を広く見渡せるようにステータスUIを一時的に非表示(display: 'none')にする処理を追加。
+   map.js - v8.20.12
+   修正内容：
+   1. ユニット重なりバグの解消：getWalkableNodes において、
+      「敵陣営のみ」だった進入不可判定を「HPが残っている全ユニット」に変更。
+      これにより、敵同士や敵と味方が同じマスで合体する現象を完全に防ぎます。
    ================================================================= */
 
-export const VERSION = "8.20.11";
+export const VERSION = "8.20.12";
+export const TILE_SIZE = 60;
+export const H_STEP = 30;
 
-import { gameStore, getStore, VERSION as storeV } from './store.js';
-import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
-import { CameraControl, VERSION as camV } from './camera.js';
-import { UIControl, VERSION as uiV } from './ui.js';
-import { BattleSystem, VERSION as batV } from './battle.js';
-import { buildMapMeshes, getWalkableNodes, TILE_SIZE, H_STEP, MAP_W, MAP_D, VERSION as mapV } from './map.js';
-import { StageData, VERSION as sceV } from './data/stage01.js';
+export const MAP_W = 10;
+export const MAP_D = 15;
 
-function checkSystems() {
-    const list = document.getElementById('ver-list');
-    const currentVersions = {
-        "main.js": VERSION, "store.js": storeV, "units.js": unitV, 
-        "camera.js": camV, "ui.js": uiV, "battle.js": batV, 
-        "map.js": mapV, "data/stage01.js": sceV
-    };
-    list.innerHTML = "";
-    for (let [file, curVer] of Object.entries(currentVersions)) {
-        const isLatest = curVer && curVer.startsWith("8.20");
-        const isValid = curVer && curVer.startsWith("8.");
-        list.innerHTML += `<div style="color:${isLatest ? '#0f0' : (isValid ? '#ffcc00' : '#f00')}">
-            ${file.padEnd(16)}: ver ${curVer || '---'} [${isLatest ? 'OK' : (isValid ? 'OLD' : 'ERR')}]
-        </div>`;
-    }
-    document.getElementById('btn-start-game').style.display = 'block';
-}
+export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obstacles) {
+    if (!mapData) return;
 
-let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
-const mapData = StageData.generateLayout();
-
-let highlightMeshes = [];
-const moveHighlightMat = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.6, depthTest: false });
-const attackHighlightMat = new THREE.MeshBasicMaterial({ color: 0xff5555, transparent: true, opacity: 0.6, depthTest: false });
-const targetHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8, depthTest: false });
-const highlightGeo = new THREE.PlaneGeometry(TILE_SIZE * 0.9, TILE_SIZE * 0.9);
-
-window.addEventListener('load', () => {
-    checkSystems();
-    document.getElementById('btn-clear-data').onclick = () => { 
-        if(confirm("以前のデータを完全に消去してリロードしますか？")) {
-            localStorage.clear(); location.reload(); 
-        }
-    };
-    document.getElementById('btn-start-game').onclick = () => {
-        document.getElementById('boot-screen').style.display = 'none';
-        document.getElementById('loading-screen').style.display = 'flex';
-        runGame();
-    };
-});
-
-async function runGame() {
-    try {
-        clock = new THREE.Clock();
-        const texLoader = new THREE.TextureLoader();
-        const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
-        const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
-        sheetImg.onload = async () => {
-            const [braTex, rexTex, compTex, treeTex, rockTex] = await Promise.all([
-                loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png'),
-                loadTex('img/tree01.png'), loadTex('img/rock01.png')
-            ]);
-            init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex);
-            document.getElementById('loading-screen').style.display = 'none';
-        };
-    } catch (e) { console.error(e); }
-}
-
-function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
-    const container = document.getElementById('canvas-container');
-    scene = new THREE.Scene();
-    const w = container.clientWidth, h = container.clientHeight;
-    camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000); camera.zoom = 1.5; camera.updateProjectionMatrix();
-    renderer = new THREE.WebGLRenderer({ antialias: false }); renderer.setSize(w, h); renderer.setClearColor(0x1a1a1a);
-    container.appendChild(renderer.domElement);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+    const texture = new THREE.CanvasTexture(sheetImg);
+    texture.magFilter = THREE.NearestFilter;
+    texture.minFilter = THREE.NearestFilter;
     
-    buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, StageData.obstacles);
+    // UV座標の再定義（下端が0、上端が1）
+    const wRatio = 256 / 1280; 
+    const vFloorStart = 128 / 384;
+    const vFloorEnd   = 384 / 384;
+    const vSide1Start = 64 / 384;
+    const vSide1End   = 128 / 384;
+    const vSide2Start = 0 / 384;
+    const vSide2End   = 64 / 384;
 
-    cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
-    
-    uiCtrl = new UIControl(cameraCtrl);
-    battleSys = new BattleSystem(uiCtrl, cameraCtrl);
+    const offsetX = (MAP_W * TILE_SIZE) / 2;
+    const offsetZ = (MAP_D * TILE_SIZE) / 2;
 
-    // ★ 修正箇所1：ステータスUIを左上に配置固定
-    const statusUI = document.getElementById('status-ui');
-    if(statusUI) {
-        statusUI.style.bottom = 'auto'; 
-        statusUI.style.top = '20px'; 
-        statusUI.style.left = '20px';
-    }
+    window.tilesMeshMap = {};
+    window.interactableTiles = [];
+    window.obstaclesMap = new Set();
 
-    let createdUnits = [];
-    window.units = StageData.units.map(u => {
-        let conf = null;
-        if(u.id === 'ブラキオサウルス') conf = { tex: braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
-        else if (u.id === 'ティラノ') conf = { tex: rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
-        else conf = { tex: compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
-        if(conf && conf.tex) conf.tex.needsUpdate = true;
-        
-        const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
-        unit.h = mapData[unit.z][unit.x].h; 
-        
-        if (!unit.isPlayer) {
-            unit.facing = -1;
-            if (unit.sprite) unit.sprite.scale.x = unit.baseScaleX * unit.facing;
-        }
+    const material = new THREE.MeshLambertMaterial({ map: texture, transparent: true });
 
-        scene.add(unit.sprite);
-        if (unit.shadow) scene.add(unit.shadow);
+    for (let z = 0; z < MAP_D; z++) {
+        for (let x = 0; x < MAP_W; x++) {
+            const cell = mapData[z][x];
+            const col = cell.type;
+            const blocksHigh = Math.max(1, cell.h); 
+            if (col === 4) window.obstaclesMap.add(`${x},${z}`);
 
-        const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
-        unit.sprite.position.set((unit.x * TILE_SIZE) - offX, unit.h * H_STEP, (unit.z * TILE_SIZE) - offZ);
-        createdUnits.push(unit);
-        if(unit.isPlayer) window.player = unit; 
-        return unit;
-    });
+            for (let b = 0; b < blocksHigh; b++) {
+                const isTopBlock = (b === blocksHigh - 1);
+                const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
+                const uvAttr = geo.attributes.uv;
 
-    setupEventListeners();
-    animate();
+                for (let i = 0; i < uvAttr.count; i++) {
+                    let u = uvAttr.getX(i);
+                    let v = uvAttr.getY(i);
+                    const isTopFace = (i >= 8 && i <= 11);
+                    const isBottomFace = (i >= 12 && i <= 15);
 
-    cameraCtrl.setInitialAngle(window.player.sprite.position);
-    const o = document.getElementById('stage-overlay');
-    document.getElementById('chapter-num').innerHTML = StageData.info.chapter;
-    document.getElementById('stage-title').innerHTML = StageData.info.name;
-    gsap.to(o, { opacity: 1, duration: 1.5, onComplete: () => {
-        gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
-            const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-            cameraCtrl.playOpening(boss, window.player, () => { startDialogue(); });
-        }});
-    }});
-}
-
-function startDialogue() {
-    gameStore.setState({ gameState: 'TALKING', talkIndex: 0 });
-    uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
-    document.getElementById('event-ui').style.display = 'flex';
-    
-    const playLine = (idx) => {
-        const lineData = StageData.preBattleTalk[idx];
-        uiCtrl.renderTalkLine(lineData, window.units, window.player);
-        
-        const speaker = window.units.find(u => u.id === lineData.name);
-        if (speaker && speaker.sprite) {
-            cameraCtrl.centerOn(speaker.sprite.position);
-        }
-    };
-
-    window.onGlobalTap = () => {
-        const idx = getStore().talkIndex + 1;
-        if(idx < StageData.preBattleTalk.length) {
-            gameStore.setState({ talkIndex: idx });
-            playLine(idx);
-        } else {
-            document.getElementById('event-ui').style.display = 'none';
-            cameraCtrl.setZoom(1.5);
-            
-            cameraCtrl.centerOn(window.player.sprite.position);
-            
-            gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
-            const overlay = document.getElementById('battle-start-overlay');
-            gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
-                gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
-            }});
-        }
-    };
-    
-    playLine(0);
-}
-
-function setupEventListeners() {
-    renderer.domElement.addEventListener('pointerup', onPointerClick);
-    document.getElementById('cmd-move').onclick = () => execCommand('move');
-    document.getElementById('cmd-attack').onclick = () => execCommand('attack');
-    document.getElementById('cmd-wait').onclick = () => execCommand('wait');
-    document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); clearHighlights(); gameStore.setState({ gameState: 'IDLE' }); };
-    document.getElementById('btn-cancel-attack').onclick = () => { document.getElementById('target-ui').style.display = 'none'; clearHighlights(); document.getElementById('command-ui').style.display = 'block'; };
-    document.querySelector('.btn-yes').onclick = () => answerConfirm(true);
-    document.querySelector('.btn-no').onclick = () => answerConfirm(false);
-    
-    const camUI = document.getElementById('camera-ui');
-    document.getElementById('ui-header').onclick = () => camUI.classList.toggle('collapsed');
-    camUI.querySelectorAll('.ui-btn').forEach(btn => {
-        btn.onclick = () => {
-            const t = btn.dataset.cam;
-            if(t === 'rotate-left') cameraCtrl.rotate(-90); if(t === 'rotate-right') cameraCtrl.rotate(90);
-            if(t === 'pan-up') cameraCtrl.pan(0, -1); if(t === 'pan-down') cameraCtrl.pan(0, 1);
-            if(t === 'pan-left') cameraCtrl.pan(-1, 0); if(t === 'pan-right') cameraCtrl.pan(1, 0);
-            if(t === 'center') cameraCtrl.centerOn(window.player.sprite.position);
-            if(t === 'zoom-in') cameraCtrl.setZoom(camera.zoom + 0.3); if(t === 'zoom-out') cameraCtrl.setZoom(camera.zoom - 0.3);
-        };
-    });
-}
-
-function showHighlight(nodeList, mat) {
-    const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
-    nodeList.forEach(node => {
-        const mesh = new THREE.Mesh(highlightGeo, mat);
-        mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
-        mesh.renderOrder = 999;
-        scene.add(mesh);
-        highlightMeshes.push(mesh);
-    });
-}
-
-function clearHighlights() {
-    highlightMeshes.forEach(mesh => scene.remove(mesh));
-    highlightMeshes = [];
-}
-
-function onPointerClick(event) {
-    const store = getStore();
-    if (store.gameState === 'ANIMATING' || store.gameState === 'ENEMY_TURN') return;
-    if (store.gameState === 'TALKING') { if(window.onGlobalTap) window.onGlobalTap(); return; }
-    
-    const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
-    const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects([...window.interactableTiles, ...window.units.map(u => u.sprite)]);
-    
-    if (intersects.length > 0) {
-        const obj = intersects[0].object;
-        const data = obj.userData.isUnit ? { x: obj.userData.unit.x, z: obj.userData.unit.z } : obj.userData;
-        
-        if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
-            const u = getUnitAt(window.units, data.x, data.z);
-            if(u) { 
-                uiCtrl.showStatus(u); 
-                if(u.isPlayer && !u.hasActed) {
-                    uiCtrl.updateCommandMenu(u); 
-                    document.getElementById('command-ui').style.display = 'block'; 
+                    let newU, newV;
+                    if (isTopFace) {
+                        if (isTopBlock) {
+                            newU = (u + col) * wRatio;
+                            newV = vFloorStart + (v * (vFloorEnd - vFloorStart));
+                        } else {
+                            newU = 0; newV = 0; 
+                        }
+                    } else if (isBottomFace) {
+                        newU = 0; newV = 0; 
+                    } else {
+                        newU = (u + col) * wRatio;
+                        if (isTopBlock) {
+                            // 最上段の側面 (256〜320px)
+                            newV = vSide1Start + (v * (vSide1End - vSide1Start));
+                        } else {
+                            // 2段目以降の側面 (320〜384px) - 鏡面ループ
+                            const distFromTop = (blocksHigh - 1) - b;
+                            const isMirror = (distFromTop % 2 === 0);
+                            
+                            if (isMirror) {
+                                newV = vSide2Start + ((1.0 - v) * (vSide2End - vSide2Start));
+                            } else {
+                                newV = vSide2Start + (v * (vSide2End - vSide2Start));
+                            }
+                        }
+                    }
+                    uvAttr.setXY(i, newU, newV);
                 }
-            } else { uiCtrl.hideAll(); }
-        } 
-        else if (store.gameState === 'SELECTING_MOVE') {
-            const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
-            if(route) {
-                clearHighlights(); 
-                showHighlight([route], targetHighlightMat); 
-                gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'MOVE', pendingData: route.path });
-                document.getElementById('confirm-text').innerText = "ここへ移動しますか？";
-                document.getElementById('confirm-ui').style.display = 'block';
+                uvAttr.needsUpdate = true;
+
+                const mesh = new THREE.Mesh(geo, material);
+                const posY = (b * H_STEP) + (H_STEP / 2);
+                mesh.position.set(x * TILE_SIZE - offsetX, posY, z * TILE_SIZE - offsetZ);
+                
+                if (isTopBlock) {
+                    mesh.userData = { x, z, h: cell.h };
+                    window.tilesMeshMap[`${x},${z}`] = mesh;
+                    window.interactableTiles.push(mesh);
+                }
+                scene.add(mesh);
             }
         }
     }
-}
 
-function execCommand(cmd) {
-    // ★ 修正箇所2：コマンド選択時にステータスUIを非表示にして画面を広くする
-    const statusUI = document.getElementById('status-ui');
-    
-    if(cmd === 'move') {
-        const tiles = getWalkableNodes(window.units, window.player, mapData);
-        if(tiles.length > 0) {
-            gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
-            showHighlight(tiles, moveHighlightMat); 
-            document.getElementById('command-ui').style.display = 'none';
-            if(statusUI) statusUI.style.display = 'none'; // ステータス消去
-            uiCtrl.setMsg("移動先を選んでください");
-        }
-    } else if(cmd === 'attack') {
-        const targets = getAttackableEnemies(window.units, window.player);
-        if(targets.length === 0) return uiCtrl.setMsg("範囲内に敵がいません");
-        gameStore.setState({ gameState: 'SELECTING_ATTACK_TARGET' });
-        const list = document.getElementById('target-list'); list.innerHTML = '';
-        targets.forEach(t => {
-            const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
-            btn.onclick = () => selectTarget(t); list.appendChild(btn);
+    if (obstacles) {
+        const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
+        const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
+        const obsGeo1 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+        const obsGeo2 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+        obsGeo2.rotateY(Math.PI / 2);
+
+        obstacles.forEach(obs => {
+            window.obstaclesMap.add(`${obs.x},${obs.z}`);
+            const cell = mapData[obs.z][obs.x];
+            const mat = obs.type === 'tree' ? treeMat : rockMat;
+            const group = new THREE.Group();
+            group.add(new THREE.Mesh(obsGeo1, mat));
+            group.add(new THREE.Mesh(obsGeo2, mat));
+            group.position.set(obs.x * TILE_SIZE - offsetX, (cell.h * H_STEP) + (TILE_SIZE / 2), obs.z * TILE_SIZE - offsetZ);
+            group.rotation.y = Math.random() * Math.PI;
+            scene.add(group);
         });
-        showHighlight(targets, attackHighlightMat); 
-        document.getElementById('command-ui').style.display = 'none'; 
-        if(statusUI) statusUI.style.display = 'none'; // ステータス消去
-        document.getElementById('target-ui').style.display = 'block';
-    } else if(cmd === 'wait') {
-        if(statusUI) statusUI.style.display = 'none'; // ステータス消去
-        completePlayerAction(window.player);
     }
 }
 
-function selectTarget(t) {
-    gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'ATTACK', pendingData: t });
-    document.getElementById('target-ui').style.display = 'none';
-    clearHighlights();
-    showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
-    document.getElementById('confirm-text').innerText = `${t.id} を攻撃しますか？`; document.getElementById('confirm-ui').style.display = 'block';
-}
+export function getWalkableNodes(units, unit, mapData) {
+    const nodes = [];
+    const openList = [{ x: unit.x, z: unit.z, d: 0, path: [] }];
+    const visited = new Set();
+    visited.add(`${unit.x},${unit.z}`);
 
-function answerConfirm(isYes) {
-    const store = getStore(); document.getElementById('confirm-ui').style.display = 'none';
-    if(!isYes) {
-        clearHighlights();
-        if(store.confirmMode === 'MOVE') return execCommand('move'); 
-        if(store.confirmMode === 'ATTACK') return execCommand('attack'); 
-        uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
-    }
-    
-    clearHighlights(); 
-    gameStore.setState({ gameState: 'ANIMATING' });
-    
-    if(store.confirmMode === 'MOVE') {
-        battleSys.executeMovement(window.player, store.pendingData, () => { 
-            window.player.hasMoved = true; 
-            gameStore.setState({ gameState: 'IDLE' }); 
-            uiCtrl.updateCommandMenu(window.player);
-            document.getElementById('command-ui').style.display = 'block'; 
-            // 移動完了後に再度ステータスを見たい場合はキャラタップで表示されるようになります
-        });
-    } else if(store.confirmMode === 'ATTACK') {
-        battleSys.executeAttack(window.player, store.pendingData, window.units, camera, () => completePlayerAction(window.player), scene);
-    } else { 
-        completePlayerAction(window.player); 
-    }
-}
+    while (openList.length > 0) {
+        const current = openList.shift();
+        if (current.d > unit.move) continue;
+        nodes.push(current);
 
-function completePlayerAction(unit) {
-    unit.hasMoved = true; unit.hasAttacked = true; unit.hasActed = true; 
-    const activePlayers = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
-    const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-    if(boss && boss.hp <= 0) return checkVictory();
-
-    if (activePlayers.length > 0) {
-        gameStore.setState({ gameState: 'IDLE' }); uiCtrl.hideAll();
-    } else {
-        gameStore.setState({ gameState: 'ENEMY_TURN', phase: 'ENEMY_PHASE' });
-        uiCtrl.hideAll(); uiCtrl.setMsg("敵の番です...", "#ff5555");
-        setTimeout(processEnemyAI, 1000);
-    }
-}
-
-async function processEnemyAI() {
-    window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
-    const enemies = window.units.filter(u => !u.isPlayer && u.hp > 0);
-    
-    for(let i = 0; i < enemies.length; i += 2) {
-        const chunk = enemies.slice(i, i + 2);
-        await Promise.all(chunk.map(async (enemy) => {
-            if(enemy.hp <= 0) return;
-            enemy.lookAtNode(window.player.x, window.player.z);
-            const routes = getWalkableNodes(window.units, enemy, mapData);
-            let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
+        for (const dir of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
+            const nx = current.x + dir[0], nz = current.z + dir[1];
             
-            if(best && best.path.length > 0) {
-                await new Promise(res => battleSys.executeMovement(enemy, best.path, res));
-                const targets = getAttackableEnemies(window.units, enemy);
-                if(targets.includes(window.player)) {
-                    await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
-                    if(window.player.hp <= 0) { uiCtrl.setMsg("GAME OVER", "#ff0000"); return; }
-                }
-            }
-            enemy.hasActed = true;
-        }));
-        await new Promise(res => setTimeout(res, 600)); 
-    }
-    
-    if (window.player.hp > 0) {
-        window.units.filter(u => u.isPlayer).forEach(u => { u.hasMoved = false; u.hasAttacked = false; u.hasActed = false; });
-        gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' }); 
-        uiCtrl.hideAll(); uiCtrl.setMsg("あなたの番です！", "#00ff00");
-    }
-}
+            // マップ外、または探索済みの場合はスキップ
+            if (nx < 0 || nx >= MAP_W || nz < 0 || nz >= MAP_D || visited.has(`${nx},${nz}`)) continue;
+            
+            // 障害物（木や岩、川など）がある場合はスキップ
+            if (window.obstaclesMap.has(`${nx},${nz}`)) continue;
 
-function checkVictory() {
-    gameStore.setState({ gameState: 'FINISHED' });
-    startDialogue();
-}
+            // 高低差チェック（自分のジャンプ力より高い/低い段差は登れない/降りられない）
+            const targetH = mapData[nz][nx].h;
+            if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
+            
+            // ★ 修正箇所：ユニットの重なり防止
+            // 敵味方問わず、HPが0より大きい(生きている)ユニットが既にそのマスにいる場合は進入不可
+            if (units.find(u => u.x === nx && u.z === nz && u.hp > 0)) continue;
 
-function animate() {
-    requestAnimationFrame(animate);
-    const delta = clock.getDelta() * 1000;
-    window.units.forEach(u => {
-        if (u.updateAnimation) u.updateAnimation(delta);
-        if (u.shadow && u.sprite) {
-            u.shadow.position.x = u.sprite.position.x;
-            u.shadow.position.z = u.sprite.position.z;
-            u.shadow.position.y = u.h * H_STEP + 1; 
+            visited.add(`${nx},${nz}`);
+            openList.push({ x: nx, z: nz, d: current.d + 1, path: [...current.path, { x: nx, z: nz, h: targetH }] });
         }
-    });
-    cameraCtrl.controls.update();
-    renderer.render(scene, camera);
+    }
+    return nodes;
 }
