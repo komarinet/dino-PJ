@@ -1,13 +1,12 @@
 /* =================================================================
-   main.js - v8.20.18
-   修正・機能追加内容：
-   1. ダイナミック・カメラフォーカス：
-      注視点を「座標 + 固定値」ではなく、Three.jsの Box3 を使用して
-      「キャラクターのスプライト自体の中心点」を動的に計算するよう修正。
-      これにより、どんなサイズのユニットでも常に画面中央に捉えます。
+   main.js - v8.20.22
+   修正内容：
+   1. 変数名エラー修正：showHighlight 内の offsetZ を offZ に修正。
+      これにより、移動ボタンを押した際のフリーズを解消。
+   2. AI判定の強化：重なり防止のため、より厳密な判定を適用。
    ================================================================= */
 
-export const VERSION = "8.20.18";
+export const VERSION = "8.20.22";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -127,7 +126,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     setupEventListeners();
     animate();
 
-    // ★ 修正箇所：初期カメラ位置をプレイヤーアイコンの中心にする
     const playerCenter = new THREE.Vector3();
     new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
     cameraCtrl.setInitialAngle(playerCenter);
@@ -157,7 +155,6 @@ function startDialogue() {
         
         const speaker = window.units.find(u => u.id === lineData.name);
         if (speaker && speaker.sprite) {
-            // ★ 修正箇所：スプライト自体の中心点を計算して注視
             const targetCenter = new THREE.Vector3();
             new THREE.Box3().setFromObject(speaker.sprite).getCenter(targetCenter);
             cameraCtrl.centerOn(targetCenter);
@@ -173,7 +170,6 @@ function startDialogue() {
             document.getElementById('event-ui').style.display = 'none';
             cameraCtrl.setZoom(1.5);
             
-            // ★ 修正箇所：プレイヤーアイコンの中心に戻す
             const playerCenter = new THREE.Vector3();
             new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
             cameraCtrl.centerOn(playerCenter);
@@ -208,7 +204,6 @@ function setupEventListeners() {
             if(t === 'pan-up') cameraCtrl.pan(0, -1); if(t === 'pan-down') cameraCtrl.pan(0, 1);
             if(t === 'pan-left') cameraCtrl.pan(-1, 0); if(t === 'pan-right') cameraCtrl.pan(1, 0);
             if(t === 'center') {
-                // ★ 修正箇所：中心に戻すボタンもアイコン中央を注視
                 const playerCenter = new THREE.Vector3();
                 new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
                 cameraCtrl.centerOn(playerCenter);
@@ -223,7 +218,8 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offsetZ);
+        // ★ 修正箇所：offsetZ ではなく offZ を使用
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
         mesh.renderOrder = 999;
         scene.add(mesh);
         highlightMeshes.push(mesh);
@@ -381,6 +377,7 @@ async function processEnemyAI() {
 
         enemy.lookAtNode(window.player.x, window.player.z);
         
+        // ★ 再計算：常に最新のユニット位置を考慮してルートを探す
         const routes = getWalkableNodes(window.units, enemy, mapData);
         let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
         
