@@ -1,13 +1,14 @@
 /* =================================================================
-   main.js - v8.20.3
+   main.js - v8.20.4
    修正・実装内容：
-   1. クラッシュ修正：showHighlight 内の変数名 offZ を正確に参照
-   2. 3ステップ移動：青範囲提示 -> 黄色地点決定 -> 確認UI（いいえで青範囲へ戻る）
-   3. 配置デバッグ：水場・障害物・既存ユニットとの重複を完全に回避
-   4. 敵AI：2体ずつ同時に思考・行動するチャンク処理
+   1. クラッシュ修正：showHighlight 内の変数名を offZ に統一し高さを +5 へ
+   2. 向きの制御：オープニングは敵を左向き(-1)固定、実戦でティラノ追従
+   3. 3ステップ移動：青範囲 -> 黄地点 -> 確認UI（いいえで青範囲へ復帰）
+   4. 配置バリデーション：水場・障害物・既存ユニットとの重複を完全回避
+   5. 敵AI：2体ずつ同時に思考・行動するチャンク処理
    ================================================================= */
 
-export const VERSION = "8.20.3";
+export const VERSION = "8.20.4";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -118,6 +119,13 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         
         const unit = new Unit(u.id, u.emoji, spawnX, spawnZ, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
         unit.h = mapData[unit.z][unit.x].h; 
+        
+        // ★ 向きの初期設定：敵ユニットは左向き(-1)に固定して対峙させる
+        if (!unit.isPlayer) {
+            unit.facing = -1;
+            if (unit.sprite) unit.sprite.scale.x = unit.baseScaleX * unit.facing;
+        }
+
         scene.add(unit.sprite);
         if (unit.shadow) scene.add(unit.shadow);
 
@@ -127,8 +135,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         if(unit.isPlayer) window.player = unit; 
         return unit;
     });
-
-    window.units.forEach(u => { if (!u.isPlayer) u.lookAtNode(window.player.x, window.player.z); });
 
     setupEventListeners();
     animate();
@@ -197,8 +203,8 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        // ★ 修正済み：offZ を正しく使用
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 2, (node.z * TILE_SIZE) - offZ);
+        // ★ 修正：offZ を正確に使用し、高さを +5 にして視認性を確保
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 5, (node.z * TILE_SIZE) - offZ);
         scene.add(mesh);
         highlightMeshes.push(mesh);
     });
@@ -232,12 +238,11 @@ function onPointerClick(event) {
                 }
             } else { uiCtrl.hideAll(); }
         } 
-        // ★ 3ステップ移動：地点選択
         else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
             if(route) {
-                clearHighlights(); // 青範囲を一旦クリア
-                showHighlight([route], targetHighlightMat); // 決定地点を黄色に
+                clearHighlights(); 
+                showHighlight([route], targetHighlightMat); 
                 gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'MOVE', pendingData: route.path });
                 document.getElementById('confirm-text').innerText = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
@@ -249,10 +254,12 @@ function onPointerClick(event) {
 function execCommand(cmd) {
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, window.player, mapData);
-        gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
-        showHighlight(tiles, moveHighlightMat); // 全範囲を青に提示
-        document.getElementById('command-ui').style.display = 'none';
-        uiCtrl.setMsg("移動先を選んでください");
+        if(tiles.length > 0) {
+            gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
+            showHighlight(tiles, moveHighlightMat); 
+            document.getElementById('command-ui').style.display = 'none';
+            uiCtrl.setMsg("移動先を選んでください");
+        }
     } else if(cmd === 'attack') {
         const targets = getAttackableEnemies(window.units, window.player);
         if(targets.length === 0) return uiCtrl.setMsg("範囲内に敵がいません");
@@ -325,11 +332,13 @@ async function processEnemyAI() {
     window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
     const enemies = battleSys.decideEnemyAI(window.units, window.player);
     
-    // ★ 敵AI：2体ずつ同時行動
     for(let i = 0; i < enemies.length; i += 2) {
         const chunk = enemies.slice(i, i + 2);
         await Promise.all(chunk.map(async (enemy) => {
             if(enemy.hp <= 0) return;
+            // 実戦モード：ティラノを狙うように向きを変える
+            enemy.lookAtNode(window.player.x, window.player.z);
+            
             const routes = getWalkableNodes(window.units, enemy, mapData);
             let best = null, minD = 999;
             routes.forEach(r => { const d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z); if(d < minD){ minD=d; best=r; } });
