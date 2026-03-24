@@ -1,13 +1,13 @@
 /* =================================================================
-   main.js - v8.20.5
+   main.js - v8.20.6
    修正内容：
-   1. UI改善：ステータス窓を左下へ移動(メッセージとの重なり解消)
-   2. 演出改善：敵の初期向きを左(-1)に完全固定、実戦で追従
-   3. 描画改善：ハイライトの renderOrder 最大化と高度 +10 で視認性確保
-   4. 3ステップ移動：いいえ 選択時に青い範囲提示へ即座に復帰
+   1. ダイアログ修正：名前の undefined 回避ロジック
+   2. UI再配置：ステータス窓を左下へ移動し、メッセージとの重複を解消
+   3. 描画順修正：ハイライトを最前面(renderOrder 999)かつ高度+10へ
+   4. 敵向き固定：オープニング時の左向き(-1)を徹底
    ================================================================= */
 
-export const VERSION = "8.20.5";
+export const VERSION = "8.20.6";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -40,7 +40,6 @@ let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 const mapData = StageData.generateLayout();
 
 let highlightMeshes = [];
-// ★ 修正：ハイライトの描画順序を最前面に設定
 const moveHighlightMat = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.6, depthTest: false });
 const attackHighlightMat = new THREE.MeshBasicMaterial({ color: 0xff5555, transparent: true, opacity: 0.6, depthTest: false });
 const targetHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.8, depthTest: false });
@@ -86,16 +85,14 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     
     buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, StageData.obstacles);
 
-    cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
+    cameraCtrl = new CameraControl(camera, renderer.domElement);
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
 
-    // ★ 負荷軽減：UIの重なりを解決するために、ステータス窓を左下へ移動
+    // ★ UI再配置：ステータス窓を左下へ
     const statusUI = document.getElementById('status-ui');
     if(statusUI) {
-        statusUI.style.top = 'auto';
-        statusUI.style.bottom = '20px';
-        statusUI.style.left = '20px';
+        statusUI.style.top = 'auto'; statusUI.style.bottom = '20px'; statusUI.style.left = '20px';
     }
 
     let createdUnits = [];
@@ -125,7 +122,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         const unit = new Unit(u.id, u.emoji, spawnX, spawnZ, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
         unit.h = mapData[unit.z][unit.x].h; 
         
-        // ★ 修正：敵は初期状態で左(-1)を向かせ、ティラノと対峙させる
+        // ★ 敵向き固定：左(-1)に強制設定
         if (!unit.isPlayer) {
             unit.facing = -1;
             if (unit.sprite) unit.sprite.scale.x = unit.baseScaleX * unit.facing;
@@ -208,7 +205,7 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        // ★ 修正：埋没防止のため高度を +10 に、さらに renderOrder を上げて最前面へ
+        // ★ 高度+10とrenderOrder 999で視認性確保
         mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
         mesh.renderOrder = 999;
         scene.add(mesh);
@@ -296,7 +293,6 @@ function answerConfirm(isYes) {
     const store = getStore(); document.getElementById('confirm-ui').style.display = 'none';
     if(!isYes) {
         clearHighlights();
-        // ★ 3ステップ移動：いいえ を選んだら範囲提示(青)へ戻る
         if(store.confirmMode === 'MOVE') return execCommand('move'); 
         if(store.confirmMode === 'ATTACK') return execCommand('attack'); 
         uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
@@ -342,9 +338,7 @@ async function processEnemyAI() {
         const chunk = enemies.slice(i, i + 2);
         await Promise.all(chunk.map(async (enemy) => {
             if(enemy.hp <= 0) return;
-            // 実戦：ティラノを追従する
             enemy.lookAtNode(window.player.x, window.player.z);
-            
             const routes = getWalkableNodes(window.units, enemy, mapData);
             let best = null, minD = 999;
             routes.forEach(r => { const d = Math.abs(r.x - window.player.x) + Math.abs(r.z - window.player.z); if(d < minD){ minD=d; best=r; } });
