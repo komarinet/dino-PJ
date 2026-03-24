@@ -1,19 +1,21 @@
 /* =================================================================
    map.js - v8.20.7
    修正内容：
-   1. シマウマ模様の解消：積み上げ方式でUV計算を単純化
-   2. plate01.png 仕様準拠：最上段側面(256-320px)と中段(320-384px)を分離
-   3. 鏡面ループ：偶数段のUVを反転焼き付け
+   1. シマウマ模様の解消：Segments方式を廃止し、積み上げ方式でUVを単純化
+   2. plate01.png 仕様準拠：最上段側面と中段側面を個別に割り当て
+   3. 鏡面ループ：偶数段のテクスチャを反転させて継ぎ目を解消
    ================================================================= */
 
 export const VERSION = "8.20.7";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
+
 export const MAP_W = 10;
 export const MAP_D = 15;
 
 export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obstacles) {
     if (!mapData) return;
+
     const texture = new THREE.CanvasTexture(sheetImg);
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
@@ -29,6 +31,7 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
     window.tilesMeshMap = {};
     window.interactableTiles = [];
     window.obstaclesMap = new Set();
+
     const material = new THREE.MeshLambertMaterial({ map: texture, transparent: true });
 
     for (let z = 0; z < MAP_D; z++) {
@@ -38,6 +41,7 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             const blocksHigh = Math.max(1, cell.h); 
             if (col === 4) window.obstaclesMap.add(`${x},${z}`);
 
+            // 1段ずつ箱を積み上げる
             for (let b = 0; b < blocksHigh; b++) {
                 const isTopBlock = (b === blocksHigh - 1);
                 const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
@@ -55,30 +59,37 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                             newU = (u + col) * wRatio;
                             newV = v * vFloorEnd;
                         } else {
-                            newU = 0; newV = 0;
+                            newU = 0; newV = 0; 
                         }
                     } else if (isBottomFace) {
                         newU = 0; newV = 0; 
                     } else {
-                        // 側面描画
+                        // 側面
                         newU = (u + col) * wRatio;
                         if (isTopBlock) {
-                            // 最上段側面 (256-320px)
+                            // 256-320px (側面1)
                             newV = vFloorEnd + (v * (vSide1End - vFloorEnd));
                         } else {
-                            // 中段側面 (320-384px) 鏡面ループ
+                            // 320-384px (側面2) - 鏡面ループ
                             const distFromTop = (blocksHigh - 1) - b;
                             const isMirror = (distFromTop % 2 === 0);
                             const vStart = vSide1End;
                             const vHeight = vSide2End - vSide1End;
-                            newV = isMirror ? vStart + ((1.0 - v) * vHeight) : vStart + (v * vHeight);
+
+                            if (isMirror) {
+                                newV = vStart + ((1.0 - v) * vHeight);
+                            } else {
+                                newV = vStart + (v * vHeight);
+                            }
                         }
                     }
                     uvAttr.setXY(i, newU, newV);
                 }
                 uvAttr.needsUpdate = true;
+
                 const mesh = new THREE.Mesh(geo, material);
-                mesh.position.set(x * TILE_SIZE - offsetX, (b * H_STEP) + (H_STEP / 2), z * TILE_SIZE - offsetZ);
+                const posY = (b * H_STEP) + (H_STEP / 2);
+                mesh.position.set(x * TILE_SIZE - offsetX, posY, z * TILE_SIZE - offsetZ);
                 
                 if (isTopBlock) {
                     mesh.userData = { x, z, h: cell.h };
@@ -93,14 +104,17 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
     if (obstacles) {
         const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
         const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
-        const obsGeo1 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE), obsGeo2 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+        const obsGeo1 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+        const obsGeo2 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
         obsGeo2.rotateY(Math.PI / 2);
+
         obstacles.forEach(obs => {
             window.obstaclesMap.add(`${obs.x},${obs.z}`);
             const cell = mapData[obs.z][obs.x];
             const mat = obs.type === 'tree' ? treeMat : rockMat;
             const group = new THREE.Group();
-            group.add(new THREE.Mesh(obsGeo1, mat)); group.add(new THREE.Mesh(obsGeo2, mat));
+            group.add(new THREE.Mesh(obsGeo1, mat));
+            group.add(new THREE.Mesh(obsGeo2, mat));
             group.position.set(obs.x * TILE_SIZE - offsetX, (cell.h * H_STEP) + (TILE_SIZE / 2), obs.z * TILE_SIZE - offsetZ);
             group.rotation.y = Math.random() * Math.PI;
             scene.add(group);
