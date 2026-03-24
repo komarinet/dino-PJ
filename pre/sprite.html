@@ -3,82 +3,51 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprite Studio v1.2.0</title>
+    <title>Sprite Studio v1.3 - Slot Mapper</title>
     <style>
-        :root {
-            --bg: #0f111a; --panel: #1a1c26; --accent: #00f2ff; --text: #e1e1e6; --border: #2f334d;
-        }
-        body {
-            font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text);
-            margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
-        }
-        header {
-            padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .v-info { font-size: 10px; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
-
-        .main { display: flex; flex: 1; overflow: hidden; }
-        @media (max-width: 900px) { .main { flex-direction: column; overflow-y: auto; } }
-
-        /* 左側：設定パネル */
-        .sidebar {
-            width: 350px; background: var(--panel); border-right: 1px solid var(--border);
-            padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
-        }
-        @media (max-width: 900px) { .sidebar { width: auto; border-right: none; } }
-
-        .group { background: #24273a; padding: 15px; border-radius: 8px; border: 1px solid var(--border); }
-        h4 { margin: 0 0 12px 0; font-size: 12px; color: var(--accent); border-left: 3px solid var(--accent); padding-left: 8px; }
+        :root { --bg: #0d1117; --panel: #161b22; --accent: #58a6ff; --text: #c9d1d9; --border: #30363d; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
         
-        input[type="number"], input[type="range"] { width: 100%; margin-top: 5px; }
-        label { font-size: 11px; color: #9499b8; }
+        /* サイドバー：設定 */
+        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
+        .side-content { padding: 20px; overflow-y: auto; flex: 1; }
+        .group { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border); }
+        h4 { margin: 0 0 12px 0; font-size: 12px; color: var(--accent); text-transform: uppercase; }
 
-        /* スプライトリスト項目 */
-        .s-item {
-            background: #1a1c26; border: 1px solid var(--border); padding: 10px; margin-top: 8px;
-            border-radius: 6px; cursor: grab;
+        /* メイン：グリッドマップ */
+        .main-stage { flex: 1; display: flex; flex-direction: column; background: #010409; overflow: auto; padding: 20px; align-items: center; }
+        
+        /* スロットマップUI */
+        .slot-grid { display: grid; gap: 10px; margin-bottom: 40px; }
+        .slot { 
+            width: 100px; height: 100px; border: 2px dashed #30363d; border-radius: 8px;
+            display: flex; align-items: center; justify-content: center; position: relative;
+            cursor: pointer; transition: 0.2s; background: rgba(255,255,255,0.02);
         }
-        .s-item:active { cursor: grabbing; }
-        .s-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-        .s-head img { width: 40px; height: 40px; background: #fff; object-fit: contain; border-radius: 4px; }
-        .s-ctrls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .slot:hover { border-color: var(--accent); background: rgba(88, 166, 255, 0.1); }
+        .slot.active { border-color: var(--accent); border-style: solid; box-shadow: 0 0 10px var(--accent); }
+        .slot img { max-width: 90%; max-height: 90%; object-fit: contain; pointer-events: none; }
+        .slot-num { position: absolute; top: 4px; left: 6px; font-size: 10px; color: #484f58; font-weight: bold; }
 
-        /* 右側：プレビュー */
-        .preview { flex: 1; padding: 20px; overflow: auto; display: flex; flex-direction: column; align-items: center; background: #0b0d14; }
-        .anim-box {
-            background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; 
-            border: 1px dashed var(--accent); margin-bottom: 20px; text-align: center;
-        }
-        #mainCanvas {
-            background-image: conic-gradient(#161822 0.25turn, #1e202e 0.25turn 0.5turn, #161822 0.5turn 0.75turn, #1e202e 0.75turn);
-            background-size: 20px 20px; border: 2px solid var(--border);
-        }
+        /* 調整パネル（インスペクター） */
+        .inspector { width: 280px; background: var(--panel); border-left: 1px solid var(--border); padding: 20px; display: none; }
+        input[type="range"] { width: 100%; }
+        input[type="number"] { width: 100%; background: #000; color: #fff; border: 1px solid var(--border); padding: 4px; }
+        label { font-size: 11px; color: #8b949e; display: block; margin-top: 10px; }
 
-        .btn {
-            background: var(--accent); color: #000; border: none; padding: 12px;
-            border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.2s;
+        .btn { 
+            background: var(--accent); color: #fff; border: none; padding: 12px; border-radius: 6px; 
+            font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; 
         }
-        .btn:hover { filter: brightness(1.2); transform: translateY(-2px); }
+        canvas { background-image: conic-gradient(#161b22 0.25turn, #0d1117 0.25turn 0.5turn, #161b22 0.5turn 0.75turn, #0d1117 0.75turn); background-size: 20px 20px; border: 1px solid #30363d; }
     </style>
 </head>
 <body>
 
-<header>
-    <div style="font-weight: 800; font-size: 18px;">SPRITE <span style="color:var(--accent)">STUDIO</span></div>
-    <div class="v-info">Build 2026.03 / v1.2.0-ULTIMATE</div>
-</header>
-
-<div class="main">
-    <div class="sidebar">
+<div class="sidebar">
+    <div class="side-content">
         <div class="group">
-            <h4>1. Import & Export</h4>
-            <input type="file" id="fileInput" multiple accept="image/*" style="font-size: 12px;">
-            <button class="btn" id="dlBtn" style="margin-top:15px;">DOWNLOAD TRANSPARENT PNG</button>
-        </div>
-
-        <div class="group">
-            <h4>2. Grid & Global</h4>
+            <h4>1. Grid Config</h4>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
                 <label>COLS<input type="number" id="cols" value="3"></label>
                 <label>ROWS<input type="number" id="rows" value="4"></label>
@@ -86,156 +55,205 @@
                 <label>CELL H<input type="number" id="cellH" value="128"></label>
             </div>
         </div>
-
         <div class="group">
-            <h4>3. Loop Preview</h4>
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                <label>START #<input type="number" id="lpS" value="4"></label>
-                <label>END #<input type="number" id="lpE" value="6"></label>
-                <label>FPS<input type="number" id="lpFps" value="10"></label>
-            </div>
+            <h4>2. Import</h4>
+            <input type="file" id="fileInput" multiple accept="image/*">
+            <p style="font-size:10px; color:#666;">※1枚目に基づきサイズを自動調整します</p>
+            <button class="btn" id="dlBtn">EXPORT PNG</button>
         </div>
-
-        <div class="group" id="listGroup">
-            <h4>4. Individual Adjust (<span id="count">0</span>)</h4>
-            <div id="spriteList"></div>
-        </div>
-    </div>
-
-    <div class="preview">
-        <div class="anim-box">
-            <div style="font-size: 10px; color: var(--accent); margin-bottom: 10px;">LIVE LOOP PREVIEW</div>
-            <canvas id="animCanvas"></canvas>
-        </div>
-        <canvas id="mainCanvas"></canvas>
     </div>
 </div>
 
+<div class="main-stage">
+    <div id="slotGrid" class="slot-grid"></div>
+    <div style="color:var(--accent); font-size:12px; margin-bottom:10px;">PREVIEW (FINAL SHEET)</div>
+    <canvas id="mainCanvas"></canvas>
+</div>
+
+<div class="inspector" id="inspector">
+    <h4 id="inspectTitle">Slot Settings</h4>
+    <label>Scale (数値 / バー)</label>
+    <input type="number" id="scNum" step="0.1">
+    <input type="range" id="scRange" min="0.05" max="3" step="0.05">
+
+    <label>Rotation</label>
+    <input type="number" id="rtNum">
+    <input type="range" id="rtRange" min="-180" max="180">
+
+    <label>Offset X</label>
+    <input type="number" id="oxNum">
+    <input type="range" id="oxRange" min="-100" max="100">
+
+    <label>Offset Y</label>
+    <input type="number" id="oyNum">
+    <input type="range" id="oyRange" min="-100" max="100">
+    
+    <button class="btn" style="background:#f85149; margin-top:30px;" onclick="clearSlot()">Remove Image</button>
+</div>
+
 <script>
-    let sprites = [];
-    let dragItem = null;
-    let lastTime = 0;
-    let frameIdx = 0;
+    let sprites = []; // Array of {img, scale, rot, ox, oy}
+    let selectedIdx = null;
 
     const fileInput = document.getElementById('fileInput');
-    const spriteList = document.getElementById('spriteList');
-    const mainCanvas = document.getElementById('mainCanvas');
-    const mCtx = mainCanvas.getContext('2d');
-    const animCanvas = document.getElementById('animCanvas');
-    const aCtx = animCanvas.getContext('2d');
+    const slotGrid = document.getElementById('slotGrid');
+    const canvas = document.getElementById('mainCanvas');
+    const ctx = canvas.getContext('2d');
+    const inspector = document.getElementById('inspector');
+
+    // 初期化：スロット作成
+    function initSlots() {
+        const cols = parseInt(document.getElementById('cols').value);
+        const rows = parseInt(document.getElementById('rows').value);
+        slotGrid.style.gridTemplateColumns = `repeat(${cols}, 1fr)`;
+        slotGrid.innerHTML = '';
+        
+        for (let i = 0; i < cols * rows; i++) {
+            const slot = document.createElement('div');
+            slot.className = 'slot';
+            slot.innerHTML = `<span class="slot-num">${i+1}</span>`;
+            if (sprites[i]) {
+                const thumb = new Image();
+                thumb.src = sprites[i].img.src;
+                slot.appendChild(thumb);
+            }
+            slot.onclick = () => selectSlot(i);
+            slotGrid.appendChild(slot);
+        }
+        draw();
+    }
+
+    // 白背景除去ロジック
+    async function processImage(img) {
+        const tempCanvas = document.createElement('canvas');
+        const tCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = img.width;
+        tempCanvas.height = img.height;
+        tCtx.drawImage(img, 0, 0);
+        const imageData = tCtx.getImageData(0, 0, img.width, img.height);
+        const data = imageData.data;
+        
+        let hasWhite = false;
+        for (let i = 0; i < data.length; i += 4) {
+            if (data[i] > 240 && data[i+1] > 240 && data[i+2] > 240) {
+                hasWhite = true; break;
+            }
+        }
+
+        if (hasWhite && confirm("白背景を検知しました。透過処理を行いますか？")) {
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] > 240 && data[i+1] > 240 && data[i+2] > 240) data[i+3] = 0;
+            }
+            tCtx.putImageData(imageData, 0, 0);
+            const newImg = new Image();
+            newImg.src = tempCanvas.toDataURL();
+            await newImg.decode();
+            return newImg;
+        }
+        return img;
+    }
 
     fileInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
         for (const file of files) {
-            const img = new Image();
+            let img = new Image();
             img.src = URL.createObjectURL(file);
             await img.decode();
-            sprites.push({
-                img, name: file.name, id: Math.random(),
-                scale: 1.0, rot: 0, ox: 0, oy: 0
-            });
+
+            // 1枚目ならサイズ自動調整
+            if (sprites.filter(s => s).length === 0) {
+                document.getElementById('cellW').value = img.width;
+                document.getElementById('cellH').value = img.height;
+            }
+
+            img = await processImage(img);
+
+            // 空いているスロットを探して入れる
+            const emptyIdx = sprites.findIndex((s, idx) => !s && idx < (parseInt(document.getElementById('cols').value) * parseInt(document.getElementById('rows').value)));
+            const targetIdx = emptyIdx === -1 ? sprites.length : emptyIdx;
+
+            sprites[targetIdx] = { img, scale: 1.0, rot: 0, ox: 0, oy: 0 };
         }
-        renderUI();
-        drawAll();
+        initSlots();
     };
 
-    function renderUI() {
-        spriteList.innerHTML = '';
-        document.getElementById('count').textContent = sprites.length;
-        sprites.forEach((s, i) => {
-            const div = document.createElement('div');
-            div.className = 's-item';
-            div.draggable = true;
-            div.innerHTML = `
-                <div class="s-head">
-                    <img src="${s.img.src}">
-                    <div style="font-size:11px; font-weight:bold;">#${i+1} ${s.name.slice(0,12)}</div>
-                </div>
-                <div class="s-ctrls">
-                    <label>Scale<input type="range" min="0.1" max="3" step="0.1" value="${s.scale}" oninput="updateSprite(${i}, 'scale', this.value)"></label>
-                    <label>Rot<input type="range" min="-180" max="180" value="${s.rot}" oninput="updateSprite(${i}, 'rot', this.value)"></label>
-                    <label>X Offset<input type="number" value="${s.ox}" oninput="updateSprite(${i}, 'ox', this.value)"></label>
-                    <label>Y Offset<input type="number" value="${s.oy}" oninput="updateSprite(${i}, 'oy', this.value)"></label>
-                </div>
-            `;
-            // ドラッグ＆ドロップ並び替えロジック
-            div.ondragstart = () => { dragItem = i; div.style.opacity = '0.5'; };
-            div.ondragover = (e) => e.preventDefault();
-            div.ondrop = () => {
-                const moved = sprites.splice(dragItem, 1)[0];
-                sprites.splice(i, 0, moved);
-                renderUI(); drawAll();
+    function selectSlot(i) {
+        selectedIdx = i;
+        document.querySelectorAll('.slot').forEach((el, idx) => {
+            el.classList.toggle('active', idx === i);
+        });
+        
+        if (sprites[i]) {
+            inspector.style.display = 'block';
+            document.getElementById('inspectTitle').textContent = `Slot #${i+1} Settings`;
+            syncInspector(sprites[i]);
+        } else {
+            inspector.style.display = 'none';
+        }
+    }
+
+    function syncInspector(s) {
+        const mapping = [
+            ['scNum', 'scRange', 'scale'], ['rtNum', 'rtRange', 'rot'],
+            ['oxNum', 'oxRange', 'ox'], ['oyNum', 'oyRange', 'oy']
+        ];
+        mapping.forEach(([nId, rId, prop]) => {
+            const n = document.getElementById(nId);
+            const r = document.getElementById(rId);
+            n.value = r.value = s[prop];
+            n.oninput = r.oninput = (e) => {
+                s[prop] = parseFloat(e.target.value);
+                n.value = r.value = e.target.value;
+                draw();
             };
-            div.ondragend = () => div.style.opacity = '1';
-            spriteList.appendChild(div);
         });
     }
 
-    function updateSprite(i, prop, val) {
-        sprites[i][prop] = parseFloat(val);
-        drawAll();
+    function clearSlot() {
+        if (selectedIdx !== null) {
+            sprites[selectedIdx] = null;
+            initSlots();
+            inspector.style.display = 'none';
+        }
     }
 
-    function drawSprite(ctx, s, x, y, cw, ch) {
-        const sw = s.img.width * s.scale;
-        const sh = s.img.height * s.scale;
-        ctx.save();
-        ctx.translate(x + cw/2 + s.ox, y + ch/2 + s.oy);
-        ctx.rotate(s.rot * Math.PI / 180);
-        ctx.drawImage(s.img, -sw/2, -sh/2, sw, sh);
-        ctx.restore();
-    }
-
-    function drawAll() {
-        if (sprites.length === 0) return;
+    function draw() {
         const cw = parseInt(document.getElementById('cellW').value);
         const ch = parseInt(document.getElementById('cellH').value);
         const cols = parseInt(document.getElementById('cols').value);
         const rows = parseInt(document.getElementById('rows').value);
-
-        mainCanvas.width = cols * cw;
-        mainCanvas.height = rows * ch;
-        mCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
+        
+        canvas.width = cols * cw;
+        canvas.height = rows * ch;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
 
         sprites.forEach((s, i) => {
-            if (i >= cols * rows) return;
+            if (!s || i >= cols * rows) return;
             const x = (i % cols) * cw;
             const y = Math.floor(i / cols) * ch;
-            drawSprite(mCtx, s, x, y, cw, ch);
+            
+            ctx.save();
+            ctx.translate(x + cw/2 + s.ox, y + ch/2 + s.oy);
+            ctx.rotate(s.rot * Math.PI / 180);
+            const sw = s.img.width * s.scale;
+            const sh = s.img.height * s.scale;
+            ctx.drawImage(s.img, -sw/2, -sh/2, sw, sh);
+            ctx.restore();
         });
     }
 
-    function loop(time) {
-        const start = parseInt(document.getElementById('lpS').value) - 1;
-        const end = parseInt(document.getElementById('lpE').value) - 1;
-        const fps = parseInt(document.getElementById('lpFps').value);
-        const cw = parseInt(document.getElementById('cellW').value);
-        const ch = parseInt(document.getElementById('cellH').value);
-
-        if (sprites.length > 0 && start >= 0 && end < sprites.length) {
-            if (time - lastTime > 1000 / fps) {
-                frameIdx = (frameIdx < start || frameIdx >= end) ? start : frameIdx + 1;
-                animCanvas.width = cw; animCanvas.height = ch;
-                aCtx.clearRect(0, 0, cw, ch);
-                drawSprite(aCtx, sprites[frameIdx], 0, 0, cw, ch);
-                lastTime = time;
-            }
-        }
-        requestAnimationFrame(loop);
-    }
+    ['cols', 'rows', 'cellW', 'cellH'].forEach(id => {
+        document.getElementById(id).oninput = initSlots;
+    });
 
     document.getElementById('dlBtn').onclick = () => {
         const link = document.createElement('a');
-        link.download = `spritesheet_v120.png`;
-        link.href = mainCanvas.toDataURL();
+        link.download = "spritesheet.png";
+        link.href = canvas.toDataURL();
         link.click();
     };
 
-    ['cols', 'rows', 'cellW', 'cellH'].forEach(id => {
-        document.getElementById(id).oninput = drawAll;
-    });
-
-    requestAnimationFrame(loop);
+    initSlots();
 </script>
 </body>
 </html>
