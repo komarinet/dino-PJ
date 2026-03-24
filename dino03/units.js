@@ -1,84 +1,125 @@
-/* =================================================================
-   units.js - v8.17.0
-   ユニット管理および初期配置ロジック
-   変更点：水上・重複配置の回避バリデーション実装
-   ================================================================= */
+export const VERSION = "8.19.0";
 
-import * as THREE from 'three';
-import { store } from './store.js';
+export class Unit {
+    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
+        this.id = id; this.emoji = emoji; this.x = x; this.z = z; this.h = 0;
+        this.level = level; this.exp = 0;
+        this.maxHp = hp; this.hp = hp;
+        this.maxMp = mp; this.mp = mp;
+        this.str = str; this.def = def; this.spd = spd; this.mag = mag;
+        this.move = move; this.jump = jump;
+        this.isPlayer = isPlayer;
+        this.sprite = null; this.material = null;
+        this.shadow = null;
+        this.hasMoved = false; this.hasAttacked = false; this.hasActed = false;
+        this.spriteConfig = spriteConfig;
+        this.texture = spriteConfig ? spriteConfig.tex : null;
+        this.animTime = 0; this.animSpeed = 150; this.animState = 'IDLE'; 
+        this.facing = 1; this.baseScaleX = 1; 
 
-export class UnitManager {
-    constructor(scene, mapManager) {
-        this.scene = scene;
-        this.mapManager = mapManager;
+        if(this.texture) { this.initTextureSprite(); }
     }
 
-    createUnit(type, x, z, side) {
-        // 安全な配置場所を探す（指定位置がNGなら近隣を検索）
-        const pos = this.findSafeSpawnPoint(x, z);
-        
-        const geometry = new THREE.SphereGeometry(0.4, 32, 32);
-        const material = new THREE.MeshPhongMaterial({ 
-            color: side === 'player' ? 0x3333ff : 0xff3333 
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-
-        const height = this.mapManager.tiles[pos.x][pos.z].userData.height;
-        mesh.position.set(pos.x, height + 0.4, pos.z);
-        
-        const unit = {
-            id: THREE.MathUtils.generateUUID(),
-            type: type, // 'tyrano', 'compsognathus', etc.
-            side: side,
-            gridX: pos.x,
-            gridZ: pos.z,
-            mesh: mesh,
-            stats: this.getStatsByType(type),
-            isDone: false
-        };
-
-        this.scene.add(mesh);
-        store.units.push(unit);
-        return unit;
+    levelUp() {
+        this.level++;
+        this.exp = 0; 
+        this.maxHp += 10; this.hp = this.maxHp; 
+        this.maxMp += 5;  this.mp = this.maxMp;
+        this.str += 4; this.def += 3; this.spd += 1;
     }
 
-    // 配置バリデーションを通過するまで再帰的または近隣を探索
-    findSafeSpawnPoint(targetX, targetZ) {
-        if (this.mapManager.isValidSpawnPoint(targetX, targetZ)) {
-            return { x: targetX, z: targetZ };
+    initTextureSprite() {
+        const conf = this.spriteConfig;
+        this.texture.repeat.set(1 / conf.cols, 1 / conf.rows);
+        this.texture.magFilter = THREE.NearestFilter;
+        this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true, alphaTest: 0.5 });
+        this.sprite = new THREE.Sprite(this.material);
+        this.sprite.center.set(0.5, 0.0); 
+        const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
+        const h = (conf.type === 'bra') ? 90 : 60; 
+        this.baseScaleX = h * (cellW / cellH);
+        this.sprite.scale.set(this.baseScaleX * this.facing, h, 1);
+        this.sprite.userData = { isUnit: true, unit: this };
+        this.setIdle();
+
+        const shadowGeo = new THREE.CircleGeometry(this.baseScaleX * 0.4, 32);
+        const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
+        this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
+        this.shadow.rotation.x = -Math.PI / 2;
+    }
+
+    dispose(scene) {
+        if(this.sprite) {
+            scene.remove(this.sprite);
+            if(this.material) this.material.dispose();
+            this.sprite = null;
         }
-
-        console.warn(`Position (${targetX}, ${targetZ}) is invalid. Searching for nearest tile...`);
-
-        // 単純な渦巻き探索アルゴリズム（配置可能タイルが見つかるまで周囲を広げる）
-        for (let radius = 1; radius < 5; radius++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-                for (let dz = -radius; dz <= radius; dz++) {
-                    const nx = targetX + dx;
-                    const nz = targetZ + dz;
-                    if (this.mapManager.isValidSpawnPoint(nx, nz)) {
-                        return { x: nx, z: nz };
-                    }
-                }
-            }
+        if(this.shadow) {
+            scene.remove(this.shadow);
+            this.shadow.geometry.dispose();
+            this.shadow.material.dispose();
+            this.shadow = null;
         }
-        
-        // 万が一見つからない場合のフォールバック（0,0が安全と仮定してはいけないが、エラー回避用）
-        return { x: targetX, z: targetZ };
     }
 
-    getStatsByType(type) {
-        const baseStats = {
-            'tyrano': { hp: 100, move: 3, attack: 30, range: 1 },
-            'compsognathus': { hp: 30, move: 4, attack: 10, range: 1 }
-        };
-        return baseStats[type] || baseStats['tyrano'];
+    lookAtNode(targetX, targetZ) {
+        if (targetX > this.x) this.facing = 1;      
+        else if (targetX < this.x) this.facing = -1; 
+        if (this.sprite) this.sprite.scale.x = this.baseScaleX * this.facing;
     }
 
-    updateUnitPosition(unit, newX, newZ) {
-        const height = this.mapManager.tiles[newX][newZ].userData.height;
-        unit.gridX = newX;
-        unit.gridZ = newZ;
-        unit.mesh.position.set(newX, height + 0.4, newZ);
+    updateAnimation(delta) {
+        if(!this.texture || this.animState === 'FIXED') return;
+        this.animTime += delta;
+        if(this.spriteConfig.type === 'bra') {
+            const frame = (Math.floor(this.animTime / 500) % 2); 
+            this.setRawFrame(0, frame);
+        } else if(this.spriteConfig.type === 'rex') {
+            const f = 11 - (Math.floor(this.animTime / this.animSpeed) % 12); 
+            this.setRawFrame(f % 4, Math.floor(f / 4));
+        } else if(this.spriteConfig.type === 'comp') {
+            const col = (Math.floor(this.animTime / 200) % 2);
+            this.setRawFrame(col, 0);
+        }
     }
+
+    setRawFrame(col, row) {
+        if(!this.texture) return;
+        const conf = this.spriteConfig;
+        this.texture.offset.x = col / conf.cols;
+        this.texture.offset.y = 1.0 - ((row + 1) / conf.rows);
+    }
+
+    setAction(action) {
+        if(!this.texture) return;
+        this.animState = 'FIXED';
+        if(this.spriteConfig.type === 'bra') {
+            this.setRawFrame(0, action === 'ATTACK' ? 2 : 3);
+        } else if(this.spriteConfig.type === 'rex') {
+            if(action === 'ATTACK') this.setRawFrame(1, 3); 
+            else if(action === 'HURT') this.setRawFrame(0, 3);  
+            else if(action === 'DOWN') this.setRawFrame(2, 3);  
+        } else if(this.spriteConfig.type === 'comp') {
+            if(action === 'ATTACK') this.setRawFrame(2, 0); 
+            else if(action === 'HURT') this.setRawFrame(0, 1);  
+            else if(action === 'DOWN') this.setRawFrame(1, 1);  
+        }
+    }
+
+    setIdle() { this.animState = 'IDLE'; this.setRawFrame(0, 0); }
 }
+
+export const getUnitAt = (units, x, z) => units.find(u => u.x === x && u.z === z && u.hp > 0);
+
+// ★ 変更：攻撃対象の検索に「高低差が1以内」という条件を追加
+export const getAttackableEnemies = (units, unit) => {
+    let targets = [];
+    for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
+        let u = getUnitAt(units, unit.x + d[0], unit.z + d[1]);
+        // 自分(unit.h)と相手(u.h)の高さの差を計算し、1以内なら攻撃可能とする
+        if(u && u.isPlayer !== unit.isPlayer && Math.abs(unit.h - u.h) <= 1) {
+            targets.push(u);
+        }
+    }
+    return targets;
+};
