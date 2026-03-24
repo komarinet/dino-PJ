@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DevToolbox | pre-alpha</title>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --card: #161b22;
+            --accent: #58a6ff;
+            --text: #c9d1d9;
+            --dim: #8b949e;
+            --border: #30363d;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        /* ヘッダーエリア */
+        header {
+            padding: 80px 20px 40px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+            background: radial-gradient(circle at top, #1e2530 0%, #0d1117 70%);
+        }
+
+        .version-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent);
+            font-size: 12px;
+            font-weight: bold;
+            margin-bottom: 16px;
+            border: 1px solid rgba(88, 166, 255, 0.2);
+        }
+
+        h1 {
+            font-size: 2.8rem;
+            margin: 0;
+            font-weight: 800;
+            letter-spacing: -1px;
+        }
+
+        .desc {
+            color: var(--dim);
+            font-size: 1.1rem;
+            max-width: 600px;
+            margin: 15px auto 0;
+            line-height: 1.6;
+        }
+
+        /* ツールグリッド */
+        .grid {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 60px 20px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        /* ツールカード */
+        .tool-card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 32px;
+            text-decoration: none;
+            color: inherit;
+            transition: all 0.25s ease;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        .tool-card:hover {
+            border-color: #8b949e;
+            transform: translateY(-4px);
+            background: #1c2128;
+            box-shadow: 0 12px 24px rgba(0,0,0,0.3);
+        }
+
+        .tool-card h2 {
+            margin: 0;
+            font-size: 1.5rem;
+            color: #fff;
+        }
+
+        .tool-card p {
+            margin: 12px 0 0;
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--dim);
+            flex-grow: 1;
+        }
+
+        .tool-tag {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 24px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .dot { width: 8px; height: 8px; border-radius: 50%; }
+        .dot.green { background: #3fb950; box-shadow: 0 0 8px #3fb950; }
+        .dot.gray { background: #484f58; }
+
+        /* フッター */
+        footer {
+            margin-top: auto;
+            padding: 40px;
+            text-align: center;
+            border-top: 1px solid var(--border);
+            font-size: 13px;
+            color: var(--dim);
+        }
+
+        @media (max-width: 600px) {
+            header { padding: 40px 20px; }
+            h1 { font-size: 2rem; }
+            .grid { padding: 30px 20px; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <div class="version-badge">2026 INTERNAL BUILD</div>
+    <h1>GameDev Tools <span style="color:var(--accent)">.pre</span></h1>
+    <p class="desc">開発効率を最大化するための、軽量・高速なブラウザベース・ツールセット。</p>
+</header>
+
+<main class="grid">
+    <a href="sprite.html" class="tool-card">
+        <h2>Sprite Studio Pro</h2>
+        <p>バラバラの画像をインポートし、グリッド整列・個別調整・ループプレビューを経て、1枚の透過PNGとして書き出します。</p>
+        <div class="tool-tag" style="color: #3fb950;">
+            <span class="dot green"></span> Stable / v1.2.0
+        </div>
+    </a>
+
+    <div class="tool-card" style="opacity: 0.5; cursor: default;">
+        <h2>Tile Painter</h2>
+        <p>マップチップのパターンを作成し、コリジョンデータを含む構造化ファイルを生成します（開発準備中）。</p>
+        <div class="tool-tag" style="color: var(--dim);">
+            <span class="dot gray"></span> Coming Soon
+        </div>
+    </div>
+
+    <div class="tool-card" style="opacity: 0.5; cursor: default;">
+        <h2>VFX Previewer</h2>
+        <p>パーティクル素材やエフェクトシートの重なり・加算合成をブラウザ上でシミュレーションします。</p>
+        <div class="tool-tag" style="color: var(--dim);">
+            <span class="dot gray"></span> Planning
+        </div>
+    </div>
+</main>
+
+<footer>
+    &copy; 2026 Developer System. Repository: <code>/pre/</code>
+</footer>
+
+</body>
+</html>
