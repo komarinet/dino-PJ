@@ -1,84 +1,58 @@
 /* =================================================================
-   units.js - v8.17.0
-   ユニット管理および初期配置ロジック
-   変更点：水上・重複配置の回避バリデーション実装
+   ui.js - v8.17.0
+   UI制御（メニュー、メッセージ、確認ダイアログ）
+   変更点：移動確認UIの追加
    ================================================================= */
 
-import * as THREE from 'three';
 import { store } from './store.js';
 
-export class UnitManager {
-    constructor(scene, mapManager) {
-        this.scene = scene;
-        this.mapManager = mapManager;
+export class UIManager {
+    constructor() {
+        this.msgElement = document.getElementById('message');
+        this.confirmElement = this.createConfirmUI();
+        this.onConfirmCallback = null;
+        this.onCancelCallback = null;
     }
 
-    createUnit(type, x, z, side) {
-        // 安全な配置場所を探す（指定位置がNGなら近隣を検索）
-        const pos = this.findSafeSpawnPoint(x, z);
+    createConfirmUI() {
+        const div = document.createElement('div');
+        div.id = 'confirm-ui';
+        div.style.cssText = `
+            display: none; position: fixed; bottom: 100px; left: 50%;
+            transform: translateX(-50%); background: rgba(0,0,0,0.8);
+            color: white; padding: 20px; border-radius: 10px; text-align: center;
+            z-index: 100;
+        `;
+        div.innerHTML = `
+            <p id="confirm-text">ここへ移動しますか？</p>
+            <button id="btn-yes" style="padding: 10px 20px; margin-right: 10px;">はい</button>
+            <button id="btn-no" style="padding: 10px 20px;">いいえ</button>
+        `;
+        document.body.appendChild(div);
+
+        div.querySelector('#btn-yes').onclick = () => this.onConfirmCallback?.();
+        div.querySelector('#btn-no').onclick = () => this.onCancelCallback?.();
         
-        const geometry = new THREE.SphereGeometry(0.4, 32, 32);
-        const material = new THREE.MeshPhongMaterial({ 
-            color: side === 'player' ? 0x3333ff : 0xff3333 
-        });
-        const mesh = new THREE.Mesh(geometry, material);
-
-        const height = this.mapManager.tiles[pos.x][pos.z].userData.height;
-        mesh.position.set(pos.x, height + 0.4, pos.z);
-        
-        const unit = {
-            id: THREE.MathUtils.generateUUID(),
-            type: type, // 'tyrano', 'compsognathus', etc.
-            side: side,
-            gridX: pos.x,
-            gridZ: pos.z,
-            mesh: mesh,
-            stats: this.getStatsByType(type),
-            isDone: false
-        };
-
-        this.scene.add(mesh);
-        store.units.push(unit);
-        return unit;
+        return div;
     }
 
-    // 配置バリデーションを通過するまで再帰的または近隣を探索
-    findSafeSpawnPoint(targetX, targetZ) {
-        if (this.mapManager.isValidSpawnPoint(targetX, targetZ)) {
-            return { x: targetX, z: targetZ };
-        }
-
-        console.warn(`Position (${targetX}, ${targetZ}) is invalid. Searching for nearest tile...`);
-
-        // 単純な渦巻き探索アルゴリズム（配置可能タイルが見つかるまで周囲を広げる）
-        for (let radius = 1; radius < 5; radius++) {
-            for (let dx = -radius; dx <= radius; dx++) {
-                for (let dz = -radius; dz <= radius; dz++) {
-                    const nx = targetX + dx;
-                    const nz = targetZ + dz;
-                    if (this.mapManager.isValidSpawnPoint(nx, nz)) {
-                        return { x: nx, z: nz };
-                    }
-                }
-            }
-        }
-        
-        // 万が一見つからない場合のフォールバック（0,0が安全と仮定してはいけないが、エラー回避用）
-        return { x: targetX, z: targetZ };
+    showConfirm(onConfirm, onCancel) {
+        this.onConfirmCallback = onConfirm;
+        this.onCancelCallback = onCancel;
+        this.confirmElement.style.display = 'block';
     }
 
-    getStatsByType(type) {
-        const baseStats = {
-            'tyrano': { hp: 100, move: 3, attack: 30, range: 1 },
-            'compsognathus': { hp: 30, move: 4, attack: 10, range: 1 }
-        };
-        return baseStats[type] || baseStats['tyrano'];
+    hideConfirm() {
+        this.confirmElement.style.display = 'none';
     }
 
-    updateUnitPosition(unit, newX, newZ) {
-        const height = this.mapManager.tiles[newX][newZ].userData.height;
-        unit.gridX = newX;
-        unit.gridZ = newZ;
-        unit.mesh.position.set(newX, height + 0.4, newZ);
+    showMessage(text) {
+        this.msgElement.innerText = text;
+        gsap.fromTo(this.msgElement, { opacity: 0 }, { opacity: 1, duration: 0.5 });
+    }
+
+    updateTurnDisplay() {
+        const turnText = store.turn === 'player' ? "PLAYER TURN" : "ENEMY TURN";
+        document.getElementById('turn-display').innerText = turnText;
     }
 }
