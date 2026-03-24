@@ -1,15 +1,13 @@
 /* =================================================================
-   main.js - v8.20.13
+   main.js - v8.20.15
    修正・機能追加内容：
-   1. 敵ターンの完全直列化：processEnemyAI を for...of ループに書き換え、
-      敵1体の移動・攻撃アニメーションが完全に終わるまで次の敵が動かないように修正。
-      これにより、進行不能(フリーズ)やターンの暴走を完全に防ぎます。
-   2. 小隊待機ロジック：
-      - 前衛コンプ(1,2体目)が生きている間、後衛コンプ(3,4体目)は動かない。
-      - 後衛コンプが生きている間、ボス(ブラキオサウルス)は動かない。
+   1. オープニングの没入感向上：
+      ゲーム起動直後（タイトルロゴ表示とカメラパン演出の開始時）に、
+      ステータス画面などのUIを強制的に非表示にする処理を追加。
+      これにより、映画のような演出を邪魔する要素を排除しました。
    ================================================================= */
 
-export const VERSION = "8.20.13";
+export const VERSION = "8.20.15";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -129,7 +127,14 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     setupEventListeners();
     animate();
 
-    cameraCtrl.setInitialAngle(window.player.sprite.position);
+    const initPos = window.player.sprite.position.clone();
+    initPos.y += 60;
+    cameraCtrl.setInitialAngle(initPos);
+    
+    // ★ 修正箇所：オープニング開始時にUIを非表示にして没入感を高める
+    uiCtrl.hideAll();
+    if(statusUI) statusUI.style.display = 'none';
+    
     const o = document.getElementById('stage-overlay');
     document.getElementById('chapter-num').innerHTML = StageData.info.chapter;
     document.getElementById('stage-title').innerHTML = StageData.info.name;
@@ -152,7 +157,9 @@ function startDialogue() {
         
         const speaker = window.units.find(u => u.id === lineData.name);
         if (speaker && speaker.sprite) {
-            cameraCtrl.centerOn(speaker.sprite.position);
+            const targetPos = speaker.sprite.position.clone();
+            targetPos.y += 60;
+            cameraCtrl.centerOn(targetPos);
         }
     };
 
@@ -165,7 +172,9 @@ function startDialogue() {
             document.getElementById('event-ui').style.display = 'none';
             cameraCtrl.setZoom(1.5);
             
-            cameraCtrl.centerOn(window.player.sprite.position);
+            const playerPos = window.player.sprite.position.clone();
+            playerPos.y += 60;
+            cameraCtrl.centerOn(playerPos);
             
             gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
             const overlay = document.getElementById('battle-start-overlay');
@@ -196,7 +205,11 @@ function setupEventListeners() {
             if(t === 'rotate-left') cameraCtrl.rotate(-90); if(t === 'rotate-right') cameraCtrl.rotate(90);
             if(t === 'pan-up') cameraCtrl.pan(0, -1); if(t === 'pan-down') cameraCtrl.pan(0, 1);
             if(t === 'pan-left') cameraCtrl.pan(-1, 0); if(t === 'pan-right') cameraCtrl.pan(1, 0);
-            if(t === 'center') cameraCtrl.centerOn(window.player.sprite.position);
+            if(t === 'center') {
+                const playerPos = window.player.sprite.position.clone();
+                playerPos.y += 60;
+                cameraCtrl.centerOn(playerPos);
+            }
             if(t === 'zoom-in') cameraCtrl.setZoom(camera.zoom + 0.3); if(t === 'zoom-out') cameraCtrl.setZoom(camera.zoom - 0.3);
         };
     });
@@ -335,12 +348,10 @@ function completePlayerAction(unit) {
     }
 }
 
-// ★ 修正箇所：敵の行動を完全に直列化し、待機条件を追加した processEnemyAI
 async function processEnemyAI() {
     window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
     const enemies = window.units.filter(u => !u.isPlayer && u.hp > 0);
     
-    // コンプソグナトゥスを配列として取得（生成順：0,1が前衛 / 2,3が後衛）
     const comps = window.units.filter(u => !u.isPlayer && u.id.includes('コンプ'));
     const isFrontAlive = (comps[0] && comps[0].hp > 0) || (comps[1] && comps[1].hp > 0);
     const isBackAlive  = (comps[2] && comps[2].hp > 0) || (comps[3] && comps[3].hp > 0);
@@ -348,50 +359,41 @@ async function processEnemyAI() {
     for (const enemy of enemies) {
         if (enemy.hp <= 0) continue;
 
-        // --- 待機ロジック ---
-        // 後衛コンプは、前衛が生きている間は動かない
         if (enemy === comps[2] || enemy === comps[3]) {
             if (isFrontAlive) {
                 enemy.hasActed = true;
-                continue; // ターンをスキップして次へ
+                continue; 
             }
         }
-        // ボスは、後衛コンプが生きている間は動かない
         if (enemy.id === 'ブラキオサウルス') {
             if (isBackAlive) {
                 enemy.hasActed = true;
-                continue; // ターンをスキップして次へ
+                continue; 
             }
         }
-        // --------------------
 
         enemy.lookAtNode(window.player.x, window.player.z);
         
         const routes = getWalkableNodes(window.units, enemy, mapData);
         let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
         
-        // 移動を完全に待つ
         if (best && best.path.length > 0) {
             await new Promise(res => battleSys.executeMovement(enemy, best.path, res));
         }
         
-        // 攻撃を完全に待つ
         const targets = getAttackableEnemies(window.units, enemy);
         if (targets.includes(window.player)) {
             await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
             if (window.player.hp <= 0) { 
                 uiCtrl.setMsg("GAME OVER", "#ff0000"); 
-                return; // プレイヤーが倒れたら即終了
+                return; 
             }
         }
         
         enemy.hasActed = true;
-        
-        // 敵の行動間に少しウェイトを入れ、カメラのテンポを落ち着かせる
         await new Promise(res => setTimeout(res, 400)); 
     }
     
-    // 全員の処理が終わったことを確認してから、プレイヤーのターンへ移行
     if (window.player.hp > 0) {
         window.units.filter(u => u.isPlayer).forEach(u => { u.hasMoved = false; u.hasAttacked = false; u.hasActed = false; });
         gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' }); 
