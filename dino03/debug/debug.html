@@ -2,88 +2,109 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <title>Dino3 Map & Enemy Debugger</title>
+    <title>Dino3 Stage Debugger v1.1.0</title>
     <style>
-        body { background: #333; color: white; font-family: sans-serif; }
-        canvas { border: 2px solid #fff; background: #000; }
-        .controls { margin-bottom: 10px; padding: 10px; background: #444; }
+        body { background: #1a1a1a; color: #eee; font-family: 'Courier New', monospace; margin: 20px; }
+        .header { border-bottom: 2px solid #444; margin-bottom: 15px; padding-bottom: 10px; }
+        .ver { font-size: 0.8em; color: #888; }
+        canvas { background: #000; border: 1px solid #555; image-rendering: pixelated; }
+        .legend { margin-top: 10px; font-size: 0.9em; }
+        .error-log { color: #ff5555; background: #300; padding: 10px; border-radius: 4px; display: none; }
     </style>
 </head>
 <body>
-    <div class="controls">
-        <label>Stage Select: </label>
-        <select id="stageSelect" onchange="drawDebug()"></select>
-        <span id="info"></span>
+
+    <div class="header">
+        <h2>Dino3 Map & Enemy Viewer <span class="ver">v1.1.0</span></h2>
+        <div id="errorLog" class="error-log"></div>
     </div>
+
+    <div id="ui">
+        <p>Current Stage: <strong>stage01.js</strong></p>
+    </div>
+
     <canvas id="debugCanvas"></canvas>
 
-    <script src="../js/constants.js"></script>
-    <script src="../js/mapData.js"></script>
-    <script src="../js/enemyData.js"></script>
+    <div class="legend">
+        <span style="color:#666">■</span> 壁 | 
+        <span style="color:#f00">●</span> 敵配置 | 
+        <span style="color:#0f0">S</span> スタート地点
+    </div>
+
+    <script src="../map.js" onerror="showError('map.js が見つかりません')"></script>
+    <script src="../units.js" onerror="showError('units.js が見つかりません')"></script>
+    
+    <script src="../data/stage01.js" onerror="showError('data/stage01.js が見つかりません')"></script>
 
     <script>
-        const canvas = document.getElementById('debugCanvas');
-        const ctx = canvas.getContext('2d');
-        const TILE_SIZE = 8; // デバッグ用に小さく表示
-
-        function init() {
-            // ステージ選択肢の生成（mapDataのキーを取得）
-            const select = document.getElementById('stageSelect');
-            Object.keys(mapData).forEach(key => {
-                const opt = document.createElement('option');
-                opt.value = key;
-                opt.textContent = `Stage: ${key}`;
-                select.appendChild(opt);
-            });
-            drawDebug();
+        function showError(msg) {
+            const log = document.getElementById('errorLog');
+            log.style.display = 'block';
+            log.innerHTML += `<div>[ERROR] ${msg}</div>`;
         }
 
-        function drawDebug() {
-            const stageKey = document.getElementById('stageSelect').value;
-            const currentMap = mapData[stageKey];
-            const currentEnemies = enemyData[stageKey];
+        window.onload = function() {
+            // ステージデータの変数名を特定（プロジェクトに合わせて stage01 か mapData か調整）
+            const data = window.stage01 || window.mapData;
 
-            // キャンバスサイズをマップに合わせて調整
-            canvas.width = currentMap[0].length * TILE_SIZE;
-            canvas.height = currentMap.length * TILE_SIZE;
+            if (!data) {
+                showError("ステージデータ(stage01 または mapData)が定義されていません。");
+                return;
+            }
 
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawStage(data);
+        };
 
-            // 1. マップの描画
-            for (let y = 0; y < currentMap.length; y++) {
-                for (let x = 0; x < currentMap[y].length; x++) {
-                    const tile = currentMap[y][x];
-                    if (tile === 1) { // 壁
-                        ctx.fillStyle = '#666';
-                    } else if (tile === 2) { // トラップ
-                        ctx.fillStyle = '#f00';
-                    } else { // 通路
-                        ctx.fillStyle = '#222';
+        function drawStage(data) {
+            const canvas = document.getElementById('debugCanvas');
+            const ctx = canvas.getContext('2d');
+            const TILE_SIZE = 16; // 1タイルの表示サイズ
+
+            // マップ配列の取得 (data.map または data.layers[0] など)
+            const mapGrid = data.map || data.layout; 
+            if (!mapGrid) {
+                showError("マップの配列データが見つかりません。");
+                return;
+            }
+
+            const rows = mapGrid.length;
+            const cols = mapGrid[0].length;
+
+            canvas.width = cols * TILE_SIZE;
+            canvas.height = rows * TILE_SIZE;
+
+            // 1. マップ描画
+            for (let y = 0; y < rows; y++) {
+                for (let x = 0; x < cols; x++) {
+                    const tile = mapGrid[y][x];
+                    if (tile === 1) { // 壁（数値は適宜調整）
+                        ctx.fillStyle = '#555';
+                    } else {
+                        ctx.fillStyle = '#111';
                     }
                     ctx.fillRect(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE - 1, TILE_SIZE - 1);
                 }
             }
 
             // 2. 敵配置の描画
-            if (currentEnemies) {
-                currentEnemies.forEach(enemy => {
-                    ctx.fillStyle = 'yellow';
-                    ctx.beginPath();
-                    // 敵の座標 (enemy.x, enemy.y) をタイル座標として描画
-                    ctx.arc(
-                        enemy.x * TILE_SIZE + TILE_SIZE/2, 
-                        enemy.y * TILE_SIZE + TILE_SIZE/2, 
-                        TILE_SIZE/3, 0, Math.PI * 2
-                    );
-                    ctx.fill();
-                });
-            }
+            const enemies = data.enemies || [];
+            enemies.forEach(enemy => {
+                ctx.fillStyle = '#ff0000';
+                ctx.beginPath();
+                // 敵の座標がタイル単位(x, y)かピクセル単位かで調整が必要
+                const ex = enemy.x * TILE_SIZE + TILE_SIZE / 2;
+                const ey = enemy.y * TILE_SIZE + TILE_SIZE / 2;
+                ctx.arc(ex, ey, TILE_SIZE / 3, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 敵の名前（あれば）を表示
+                ctx.fillStyle = "white";
+                ctx.font = "8px Arial";
+                ctx.fillText(enemy.type || 'E', ex - 4, ey - 8);
+            });
 
-            document.getElementById('info').textContent = 
-                ` | Size: ${currentMap[0].length}x${currentMap.length} | Enemies: ${currentEnemies ? currentEnemies.length : 0}`;
+            console.log("Stage render complete:", cols, "x", rows);
         }
-
-        window.onload = init;
     </script>
 </body>
 </html>
