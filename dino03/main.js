@@ -1,13 +1,13 @@
 /* =================================================================
-   main.js - v8.20.15
+   main.js - v8.20.16
    修正・機能追加内容：
-   1. オープニングの没入感向上：
-      ゲーム起動直後（タイトルロゴ表示とカメラパン演出の開始時）に、
-      ステータス画面などのUIを強制的に非表示にする処理を追加。
-      これにより、映画のような演出を邪魔する要素を排除しました。
+   1. 進行不能（ソフトロック）バグの修正：
+      onPointerClick 内の Raycaster（タップ判定）において、
+      HPが0以下のキャラクター（死体）を判定対象から完全に除外。
+      これにより、倒した敵のマスやキャラクターを正常にタップできるようになります。
    ================================================================= */
 
-export const VERSION = "8.20.15";
+export const VERSION = "8.20.16";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -131,7 +131,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     initPos.y += 60;
     cameraCtrl.setInitialAngle(initPos);
     
-    // ★ 修正箇所：オープニング開始時にUIを非表示にして没入感を高める
     uiCtrl.hideAll();
     if(statusUI) statusUI.style.display = 'none';
     
@@ -239,14 +238,20 @@ function onPointerClick(event) {
     
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
-    const intersects = raycaster.intersectObjects([...window.interactableTiles, ...window.units.map(u => u.sprite)]);
+    
+    // ★ 修正箇所：生きているユニットのSpriteだけを抽出し、タップ判定の対象にする（死体を無視）
+    const activeUnits = window.units.filter(u => u.hp > 0);
+    const activeSprites = activeUnits.filter(u => u.sprite).map(u => u.sprite);
+    
+    const intersects = raycaster.intersectObjects([...window.interactableTiles, ...activeSprites]);
     
     if (intersects.length > 0) {
         const obj = intersects[0].object;
         const data = obj.userData.isUnit ? { x: obj.userData.unit.x, z: obj.userData.unit.z } : obj.userData;
         
         if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
-            const u = getUnitAt(window.units, data.x, data.z);
+            // ★ 修正箇所：検索時も生きているユニットだけを対象にする
+            const u = getUnitAt(activeUnits, data.x, data.z);
             if(u) { 
                 uiCtrl.showStatus(u); 
                 if(u.isPlayer && !u.hasActed) {
