@@ -1,14 +1,13 @@
 /* =================================================================
-   main.js - v8.20.10
+   main.js - v8.20.11
    修正・機能追加内容：
-   1. シネマティックカメラ：会話中、発言者(name)の座標を取得し、
-      cameraCtrl.centerOn() でカメラが自動追従するロジックを追加。
-   2. 会話終了時：カメラのズームを戻すとともに、操作キャラ(プレイヤー)に
-      視点を自動で戻す処理を追加。
-   3. バグ修正維持：OrbitControlsの生成、UI位置、ハイライト最前面表示などは全て維持。
+   1. ステータスUIの配置変更：左下(bottom)から左上(top:20px, left:20px)へ変更。
+      これにより、メッセージUI(上部中央)やコマンドUI(左下)との重なりを完全に解消。
+   2. メリハリ表示ロジック：コマンド（移動・攻撃・待機）を選択した瞬間、
+      盤面を広く見渡せるようにステータスUIを一時的に非表示(display: 'none')にする処理を追加。
    ================================================================= */
 
-export const VERSION = "8.20.10";
+export const VERSION = "8.20.11";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -92,9 +91,12 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
 
+    // ★ 修正箇所1：ステータスUIを左上に配置固定
     const statusUI = document.getElementById('status-ui');
     if(statusUI) {
-        statusUI.style.top = 'auto'; statusUI.style.bottom = '20px'; statusUI.style.left = '20px';
+        statusUI.style.bottom = 'auto'; 
+        statusUI.style.top = '20px'; 
+        statusUI.style.left = '20px';
     }
 
     let createdUnits = [];
@@ -143,12 +145,10 @@ function startDialogue() {
     uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
     document.getElementById('event-ui').style.display = 'flex';
     
-    // ★ 修正箇所：指定したインデックスのセリフを再生し、カメラを発言者に向ける関数
     const playLine = (idx) => {
         const lineData = StageData.preBattleTalk[idx];
         uiCtrl.renderTalkLine(lineData, window.units, window.player);
         
-        // 発言者を探してカメラをセンタリング
         const speaker = window.units.find(u => u.id === lineData.name);
         if (speaker && speaker.sprite) {
             cameraCtrl.centerOn(speaker.sprite.position);
@@ -164,7 +164,6 @@ function startDialogue() {
             document.getElementById('event-ui').style.display = 'none';
             cameraCtrl.setZoom(1.5);
             
-            // ★ 修正箇所：会話終了後、カメラをプレイヤー(ティラノ)の座標に戻す
             cameraCtrl.centerOn(window.player.sprite.position);
             
             gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
@@ -175,7 +174,6 @@ function startDialogue() {
         }
     };
     
-    // 最初のセリフを再生（カメラも最初の発言者へ向く）
     playLine(0);
 }
 
@@ -257,12 +255,16 @@ function onPointerClick(event) {
 }
 
 function execCommand(cmd) {
+    // ★ 修正箇所2：コマンド選択時にステータスUIを非表示にして画面を広くする
+    const statusUI = document.getElementById('status-ui');
+    
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, window.player, mapData);
         if(tiles.length > 0) {
             gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
             showHighlight(tiles, moveHighlightMat); 
             document.getElementById('command-ui').style.display = 'none';
+            if(statusUI) statusUI.style.display = 'none'; // ステータス消去
             uiCtrl.setMsg("移動先を選んでください");
         }
     } else if(cmd === 'attack') {
@@ -275,8 +277,11 @@ function execCommand(cmd) {
             btn.onclick = () => selectTarget(t); list.appendChild(btn);
         });
         showHighlight(targets, attackHighlightMat); 
-        document.getElementById('command-ui').style.display = 'none'; document.getElementById('target-ui').style.display = 'block';
+        document.getElementById('command-ui').style.display = 'none'; 
+        if(statusUI) statusUI.style.display = 'none'; // ステータス消去
+        document.getElementById('target-ui').style.display = 'block';
     } else if(cmd === 'wait') {
+        if(statusUI) statusUI.style.display = 'none'; // ステータス消去
         completePlayerAction(window.player);
     }
 }
@@ -307,6 +312,7 @@ function answerConfirm(isYes) {
             gameStore.setState({ gameState: 'IDLE' }); 
             uiCtrl.updateCommandMenu(window.player);
             document.getElementById('command-ui').style.display = 'block'; 
+            // 移動完了後に再度ステータスを見たい場合はキャラタップで表示されるようになります
         });
     } else if(store.confirmMode === 'ATTACK') {
         battleSys.executeAttack(window.player, store.pendingData, window.units, camera, () => completePlayerAction(window.player), scene);
