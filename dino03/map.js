@@ -1,21 +1,11 @@
-/* =================================================================
-   map.js - v8.20.6
-   修正内容：
-   1. シマウマ模様の解消：Segments方式を廃止し、積み上げ方式へ転換
-   2. plate01.png 仕様の完全準拠：最上段とそれ以外でUVを分離
-   3. 鏡面リピート：偶数段のUVを反転させて焼き付け
-   ================================================================= */
-
 export const VERSION = "8.20.6";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
-
 export const MAP_W = 10;
 export const MAP_D = 15;
 
 export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obstacles) {
     if (!mapData) return;
-
     const texture = new THREE.CanvasTexture(sheetImg);
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
@@ -31,7 +21,6 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
     window.tilesMeshMap = {};
     window.interactableTiles = [];
     window.obstaclesMap = new Set();
-
     const material = new THREE.MeshLambertMaterial({ map: texture, transparent: true });
 
     for (let z = 0; z < MAP_D; z++) {
@@ -41,7 +30,6 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             const blocksHigh = Math.max(1, cell.h); 
             if (col === 4) window.obstaclesMap.add(`${x},${z}`);
 
-            // ★ 蘇生ロジック：1段ずつ箱を積み上げる
             for (let b = 0; b < blocksHigh; b++) {
                 const isTopBlock = (b === blocksHigh - 1);
                 const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
@@ -59,38 +47,26 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                             newU = (u + col) * wRatio;
                             newV = v * vFloorEnd;
                         } else {
-                            newU = 0; newV = 0; // 下の段の上面は見えない
+                            newU = 0; newV = 0;
                         }
                     } else if (isBottomFace) {
                         newU = 0; newV = 0; 
                     } else {
-                        // 側面
                         newU = (u + col) * wRatio;
                         if (isTopBlock) {
-                            // 256-320px (側面1)
                             newV = vFloorEnd + (v * (vSide1End - vFloorEnd));
                         } else {
-                            // 320-384px (側面2) - 鏡面ループ
                             const distFromTop = (blocksHigh - 1) - b;
                             const isMirror = (distFromTop % 2 === 0);
-                            const vStart = vSide1End;
-                            const vHeight = vSide2End - vSide1End;
-
-                            if (isMirror) {
-                                newV = vStart + ((1.0 - v) * vHeight);
-                            } else {
-                                newV = vStart + (v * vHeight);
-                            }
+                            const vStart = vSide1End, vHeight = vSide2End - vSide1End;
+                            newV = isMirror ? vStart + ((1.0 - v) * vHeight) : vStart + (v * vHeight);
                         }
                     }
                     uvAttr.setXY(i, newU, newV);
                 }
                 uvAttr.needsUpdate = true;
-
                 const mesh = new THREE.Mesh(geo, material);
-                // 各段の高さを計算して配置
-                const posY = (b * H_STEP) + (H_STEP / 2);
-                mesh.position.set(x * TILE_SIZE - offsetX, posY, z * TILE_SIZE - offsetZ);
+                mesh.position.set(x * TILE_SIZE - offsetX, (b * H_STEP) + (H_STEP / 2), z * TILE_SIZE - offsetZ);
                 
                 if (isTopBlock) {
                     mesh.userData = { x, z, h: cell.h };
@@ -101,24 +77,18 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             }
         }
     }
-
+    // 障害物描画
     if (obstacles) {
-        if (treeTex) { treeTex.magFilter = THREE.NearestFilter; treeTex.minFilter = THREE.NearestFilter; }
-        if (rockTex) { rockTex.magFilter = THREE.NearestFilter; rockTex.minFilter = THREE.NearestFilter; }
         const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
         const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
-        const obsGeo1 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
-        const obsGeo2 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+        const obsGeo1 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE), obsGeo2 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
         obsGeo2.rotateY(Math.PI / 2);
-
         obstacles.forEach(obs => {
             window.obstaclesMap.add(`${obs.x},${obs.z}`);
             const cell = mapData[obs.z][obs.x];
             const mat = obs.type === 'tree' ? treeMat : rockMat;
-            const mesh1 = new THREE.Mesh(obsGeo1, mat);
-            const mesh2 = new THREE.Mesh(obsGeo2, mat);
             const group = new THREE.Group();
-            group.add(mesh1); group.add(mesh2);
+            group.add(new THREE.Mesh(obsGeo1, mat)); group.add(new THREE.Mesh(obsGeo2, mat));
             group.position.set(obs.x * TILE_SIZE - offsetX, (cell.h * H_STEP) + (TILE_SIZE / 2), obs.z * TILE_SIZE - offsetZ);
             group.rotation.y = Math.random() * Math.PI;
             scene.add(group);
@@ -131,23 +101,17 @@ export function getWalkableNodes(units, unit, mapData) {
     const openList = [{ x: unit.x, z: unit.z, d: 0, path: [] }];
     const visited = new Set();
     visited.add(`${unit.x},${unit.z}`);
-
     while (openList.length > 0) {
         const current = openList.shift();
         if (current.d > unit.move) continue;
         nodes.push(current);
-
         for (const dir of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
             const nx = current.x + dir[0], nz = current.z + dir[1];
             if (nx < 0 || nx >= MAP_W || nz < 0 || nz >= MAP_D || visited.has(`${nx},${nz}`)) continue;
-            if (window.obstaclesMap && window.obstaclesMap.has(`${nx},${nz}`)) continue;
-
+            if (window.obstaclesMap.has(`${nx},${nz}`)) continue;
             const targetH = mapData[nz][nx].h;
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
-            
-            const blocker = units.find(u => u.x === nx && u.z === nz && u.hp > 0);
-            if (blocker && blocker.isPlayer !== unit.isPlayer) continue;
-
+            if (units.find(u => u.x === nx && u.z === nz && u.hp > 0 && u.isPlayer !== unit.isPlayer)) continue;
             visited.add(`${nx},${nz}`);
             openList.push({ x: nx, z: nz, d: current.d + 1, path: [...current.path, { x: nx, z: nz, h: targetH }] });
         }
