@@ -1,13 +1,14 @@
 /* =================================================================
-   main.js - v8.20.0
+   main.js - v8.20.1
    変更点：
-   1. 初期配置バリデーション（水場・重複回避）
-   2. 3ステップ移動（範囲表示 -> 地点選択/黄色 -> 確認UI）
-   3. 敵AIの2体同時行動（Chunk処理）
-   4. 各種フリーズ防止ガードの強化
+   1. バージョンチェックの緩和（OLDでもゲーム開始可能に修正）
+   2. 初期配置バリデーション（水場・重複回避）
+   3. 3ステップ移動（範囲表示 -> 地点選択/黄色 -> 確認UI）
+   4. 敵AIの2体同時行動（Chunk処理）
+   5. 各種フリーズ防止ガードの強化
    ================================================================= */
 
-export const VERSION = "8.20.0";
+export const VERSION = "8.20.1";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -25,21 +26,21 @@ function checkSystems() {
         "map.js": mapV, "data/stage01.js": sceV
     };
     
-    let allOk = true;
     list.innerHTML = "";
     
     for (let [file, curVer] of Object.entries(currentVersions)) {
-        const isOk = curVer && (curVer.startsWith("8.19") || curVer.startsWith("8.20"));
-        if (!isOk) allOk = false;
-        list.innerHTML += `<div style="color:${isOk ? '#0f0' : '#f00'}">${file.padEnd(16)}: ver ${curVer || '---'} [${isOk ? 'OK' : 'OLD'}]</div>`;
+        // v8.16系以降であれば基本OKとするが、不一致は「OLD」と表示するのみ
+        const isLatest = curVer && (curVer.startsWith("8.20"));
+        const isValid = curVer && curVer.startsWith("8.");
+        
+        list.innerHTML += `<div style="color:${isLatest ? '#0f0' : (isValid ? '#ffcc00' : '#f00')}">
+            ${file.padEnd(16)}: ver ${curVer || '---'} [${isLatest ? 'OK' : (isValid ? 'OLD' : 'ERR')}]
+        </div>`;
     }
 
-    if (allOk) {
-        document.getElementById('btn-start-game').style.display = 'block';
-        list.innerHTML += `<div style="color:#0f0; margin-top:10px; font-weight:bold;">READY TO START!</div>`;
-    } else {
-        list.innerHTML += `<div style="color:#f00; margin-top:10px; font-weight:bold;">! アップデートが必要です。</div>`;
-    }
+    // ★ 変更：バージョンに関わらず「続ける」ボタンは常に表示する
+    document.getElementById('btn-start-game').style.display = 'block';
+    list.innerHTML += `<div style="color:#0f0; margin-top:10px; font-weight:bold;">READY TO START!</div>`;
 }
 
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
@@ -101,7 +102,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
 
-    // ★ ユニット配置：水場・障害物・重複を回避
+    // ★ ユニット配置：水場・障害物・重複を回避して初期位置を決定
     window.units = StageData.units.map(u => {
         let conf = null;
         if(u.id === 'ブラキオサウルス') conf = { tex: braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
@@ -205,7 +206,7 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 2, (node.z * TILE_SIZE) - offZ);
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 2, (node.z * TILE_SIZE) - offsetZ);
         scene.add(mesh);
         highlightMeshes.push(mesh);
     });
@@ -239,12 +240,11 @@ function onPointerClick(event) {
                 }
             } else { uiCtrl.hideAll(); }
         } 
-        // ★ 変更：3ステップ移動のロジック
         else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
             if(route) {
-                clearHighlights(); // 一旦青を消す
-                showHighlight([route], targetHighlightMat); // 選んだ場所を黄色に
+                clearHighlights(); // 青い範囲を消す
+                showHighlight([route], targetHighlightMat); // 選択したタイルを黄色に
                 gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'MOVE', pendingData: route.path });
                 document.getElementById('confirm-text').innerText = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
@@ -290,7 +290,7 @@ function answerConfirm(isYes) {
     const store = getStore(); document.getElementById('confirm-ui').style.display = 'none';
     if(!isYes) {
         clearHighlights();
-        if(store.confirmMode === 'MOVE') return execCommand('move'); // 移動先選択に戻る
+        if(store.confirmMode === 'MOVE') return execCommand('move'); 
         if(store.confirmMode === 'ATTACK') return execCommand('attack'); 
         uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
     }
@@ -327,7 +327,6 @@ function completePlayerAction(unit) {
     }
 }
 
-// ★ 変更：敵AIの2体同時行動（Chunk処理）
 async function processEnemyAI() {
     window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
     const enemies = battleSys.decideEnemyAI(window.units, window.player);
@@ -350,7 +349,7 @@ async function processEnemyAI() {
             }
             enemy.hasActed = true;
         }));
-        await new Promise(res => setTimeout(res, 600)); // チャンク間のウェイト
+        await new Promise(res => setTimeout(res, 600)); 
     }
     
     if (window.player.hp > 0) {
@@ -362,7 +361,7 @@ async function processEnemyAI() {
 
 function checkVictory() {
     gameStore.setState({ gameState: 'FINISHED' });
-    startDialogue(); // 勝利後の会話
+    startDialogue();
 }
 
 function animate() {
