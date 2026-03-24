@@ -1,12 +1,13 @@
 /* =================================================================
-   map.js - v8.20.7
+   map.js - v8.20.9
    修正内容：
-   1. シマウマ模様の解消：Segments方式を廃止し、積み上げ方式でUVを単純化
-   2. plate01.png 仕様準拠：最上段側面と中段側面を個別に割り当て
-   3. 鏡面ループ：偶数段のテクスチャを反転させて継ぎ目を解消
+   1. テクスチャバグの解消：WebGLのV座標(下から上)仕様に合わせ、UV計算値を修正
+      - 床(0-256px) -> V: 128/384(0.333) 〜 384/384(1.0)
+      - 側面1(256-320px) -> V: 64/384(0.166) 〜 128/384(0.333)
+      - 側面2(320-384px) -> V: 0/384(0.0) 〜 64/384(0.166)
    ================================================================= */
 
-export const VERSION = "8.20.7";
+export const VERSION = "8.20.9";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 
@@ -20,10 +21,14 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
     texture.magFilter = THREE.NearestFilter;
     texture.minFilter = THREE.NearestFilter;
     
+    // UV座標の再定義（下端が0、上端が1）
     const wRatio = 256 / 1280; 
-    const vFloorEnd = 256 / 384;   
-    const vSide1End = 320 / 384;   
-    const vSide2End = 384 / 384;   
+    const vFloorStart = 128 / 384;
+    const vFloorEnd   = 384 / 384;
+    const vSide1Start = 64 / 384;
+    const vSide1End   = 128 / 384;
+    const vSide2Start = 0 / 384;
+    const vSide2End   = 64 / 384;
 
     const offsetX = (MAP_W * TILE_SIZE) / 2;
     const offsetZ = (MAP_D * TILE_SIZE) / 2;
@@ -41,7 +46,6 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             const blocksHigh = Math.max(1, cell.h); 
             if (col === 4) window.obstaclesMap.add(`${x},${z}`);
 
-            // 1段ずつ箱を積み上げる
             for (let b = 0; b < blocksHigh; b++) {
                 const isTopBlock = (b === blocksHigh - 1);
                 const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
@@ -57,29 +61,26 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                     if (isTopFace) {
                         if (isTopBlock) {
                             newU = (u + col) * wRatio;
-                            newV = v * vFloorEnd;
+                            newV = vFloorStart + (v * (vFloorEnd - vFloorStart));
                         } else {
                             newU = 0; newV = 0; 
                         }
                     } else if (isBottomFace) {
                         newU = 0; newV = 0; 
                     } else {
-                        // 側面
                         newU = (u + col) * wRatio;
                         if (isTopBlock) {
-                            // 256-320px (側面1)
-                            newV = vFloorEnd + (v * (vSide1End - vFloorEnd));
+                            // 最上段の側面 (256〜320px)
+                            newV = vSide1Start + (v * (vSide1End - vSide1Start));
                         } else {
-                            // 320-384px (側面2) - 鏡面ループ
+                            // 2段目以降の側面 (320〜384px) - 鏡面ループ
                             const distFromTop = (blocksHigh - 1) - b;
                             const isMirror = (distFromTop % 2 === 0);
-                            const vStart = vSide1End;
-                            const vHeight = vSide2End - vSide1End;
-
+                            
                             if (isMirror) {
-                                newV = vStart + ((1.0 - v) * vHeight);
+                                newV = vSide2Start + ((1.0 - v) * (vSide2End - vSide2Start));
                             } else {
-                                newV = vStart + (v * vHeight);
+                                newV = vSide2Start + (v * (vSide2End - vSide2Start));
                             }
                         }
                     }
