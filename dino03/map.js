@@ -1,13 +1,12 @@
 /* =================================================================
-   map.js - v8.20.9
+   map.js - v8.20.12
    修正内容：
-   1. テクスチャバグの解消：WebGLのV座標(下から上)仕様に合わせ、UV計算値を修正
-      - 床(0-256px) -> V: 128/384(0.333) 〜 384/384(1.0)
-      - 側面1(256-320px) -> V: 64/384(0.166) 〜 128/384(0.333)
-      - 側面2(320-384px) -> V: 0/384(0.0) 〜 64/384(0.166)
+   1. ユニット重なりバグの解消：getWalkableNodes において、
+      「敵陣営のみ」だった進入不可判定を「HPが残っている全ユニット」に変更。
+      これにより、敵同士や敵と味方が同じマスで合体する現象を完全に防ぎます。
    ================================================================= */
 
-export const VERSION = "8.20.9";
+export const VERSION = "8.20.12";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 
@@ -136,13 +135,20 @@ export function getWalkableNodes(units, unit, mapData) {
 
         for (const dir of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
             const nx = current.x + dir[0], nz = current.z + dir[1];
+            
+            // マップ外、または探索済みの場合はスキップ
             if (nx < 0 || nx >= MAP_W || nz < 0 || nz >= MAP_D || visited.has(`${nx},${nz}`)) continue;
+            
+            // 障害物（木や岩、川など）がある場合はスキップ
             if (window.obstaclesMap.has(`${nx},${nz}`)) continue;
 
+            // 高低差チェック（自分のジャンプ力より高い/低い段差は登れない/降りられない）
             const targetH = mapData[nz][nx].h;
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
             
-            if (units.find(u => u.x === nx && u.z === nz && u.hp > 0 && u.isPlayer !== unit.isPlayer)) continue;
+            // ★ 修正箇所：ユニットの重なり防止
+            // 敵味方問わず、HPが0より大きい(生きている)ユニットが既にそのマスにいる場合は進入不可
+            if (units.find(u => u.x === nx && u.z === nz && u.hp > 0)) continue;
 
             visited.add(`${nx},${nz}`);
             openList.push({ x: nx, z: nz, d: current.d + 1, path: [...current.path, { x: nx, z: nz, h: targetH }] });
