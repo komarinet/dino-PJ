@@ -3,96 +3,131 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprite Studio v1.3 - Slot Mapper</title>
+    <title>スプライト制作ツール v1.4</title>
     <style>
-        :root { --bg: #0d1117; --panel: #161b22; --accent: #58a6ff; --text: #c9d1d9; --border: #30363d; }
-        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; height: 100vh; overflow: hidden; }
+        :root { --bg: #f0f2f5; --panel: #ffffff; --accent: #007bff; --text: #333; --border: #ddd; }
+        body { font-family: sans-serif; background: var(--bg); color: var(--text); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         
-        /* サイドバー：設定 */
-        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid var(--border); display: flex; flex-direction: column; }
-        .side-content { padding: 20px; overflow-y: auto; flex: 1; }
-        .group { background: rgba(255,255,255,0.03); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid var(--border); }
-        h4 { margin: 0 0 12px 0; font-size: 12px; color: var(--accent); text-transform: uppercase; }
+        /* ヘッダー */
+        header { background: #333; color: white; padding: 10px; font-size: 14px; display: flex; justify-content: space-between; align-items: center; }
 
-        /* メイン：グリッドマップ */
-        .main-stage { flex: 1; display: flex; flex-direction: column; background: #010409; overflow: auto; padding: 20px; align-items: center; }
+        .app-container { display: flex; flex: 1; overflow: hidden; }
+        @media (max-width: 800px) { .app-container { flex-direction: column; overflow-y: auto; } }
+
+        /* 左パネル：設定 */
+        .sidebar { width: 300px; background: var(--panel); border-right: 1px solid var(--border); padding: 15px; overflow-y: auto; box-sizing: border-box; }
+        @media (max-width: 800px) { .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); } }
+
+        .group { background: #f8f9fa; padding: 12px; border-radius: 8px; margin-bottom: 15px; border: 1px solid var(--border); }
+        h4 { margin: 0 0 10px 0; font-size: 13px; color: #555; border-bottom: 2px solid var(--accent); display: inline-block; }
+
+        /* メイン：プレビューエリア */
+        .main-stage { flex: 1; display: flex; flex-direction: column; padding: 15px; align-items: center; overflow: auto; background: #e5e7eb; }
         
-        /* スロットマップUI */
-        .slot-grid { display: grid; gap: 10px; margin-bottom: 40px; }
+        /* スロット配置図 */
+        .slot-grid { display: grid; gap: 8px; margin-bottom: 20px; }
         .slot { 
-            width: 100px; height: 100px; border: 2px dashed #30363d; border-radius: 8px;
+            width: 70px; height: 70px; border: 2px solid #ccc; border-radius: 6px;
             display: flex; align-items: center; justify-content: center; position: relative;
-            cursor: pointer; transition: 0.2s; background: rgba(255,255,255,0.02);
+            cursor: pointer; background: white; transition: 0.2s;
         }
-        .slot:hover { border-color: var(--accent); background: rgba(88, 166, 255, 0.1); }
-        .slot.active { border-color: var(--accent); border-style: solid; box-shadow: 0 0 10px var(--accent); }
+        .slot:hover { border-color: var(--accent); }
+        .slot.selected { border-color: var(--accent); background: #e7f3ff; box-shadow: 0 0 8px rgba(0,123,255,0.5); }
         .slot img { max-width: 90%; max-height: 90%; object-fit: contain; pointer-events: none; }
-        .slot-num { position: absolute; top: 4px; left: 6px; font-size: 10px; color: #484f58; font-weight: bold; }
+        .slot-num { position: absolute; top: 2px; left: 4px; font-size: 9px; color: #999; }
 
-        /* 調整パネル（インスペクター） */
-        .inspector { width: 280px; background: var(--panel); border-left: 1px solid var(--border); padding: 20px; display: none; }
-        input[type="range"] { width: 100%; }
-        input[type="number"] { width: 100%; background: #000; color: #fff; border: 1px solid var(--border); padding: 4px; }
-        label { font-size: 11px; color: #8b949e; display: block; margin-top: 10px; }
-
-        .btn { 
-            background: var(--accent); color: #fff; border: none; padding: 12px; border-radius: 6px; 
-            font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; 
+        /* プレビューキャンバスのラップ */
+        .canvas-wrapper { 
+            max-width: 100%; position: relative;
+            /* 明るいチェッカー背景 */
+            background-color: #fff;
+            background-image: linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee), linear-gradient(45deg, #eee 25%, transparent 25%, transparent 75%, #eee 75%, #eee);
+            background-size: 20px 20px;
+            background-position: 0 0, 10px 10px;
+            border: 1px solid #999;
         }
-        canvas { background-image: conic-gradient(#161b22 0.25turn, #0d1117 0.25turn 0.5turn, #161b22 0.5turn 0.75turn, #0d1117 0.75turn); background-size: 20px 20px; border: 1px solid #30363d; }
+        /* キャンバスを画面幅に収める */
+        canvas { display: block; max-width: 100%; height: auto !important; }
+
+        /* インスペクター（調整用） */
+        .inspector { width: 300px; background: var(--panel); border-left: 1px solid var(--border); padding: 15px; box-sizing: border-box; }
+        @media (max-width: 800px) { .inspector { width: 100%; border-left: none; } }
+        
+        .control-row { margin-bottom: 12px; }
+        label { font-size: 12px; font-weight: bold; display: block; margin-bottom: 4px; }
+        input[type="range"] { width: 100%; }
+        input[type="number"] { width: 100%; padding: 6px; border: 1px solid var(--border); border-radius: 4px; box-sizing: border-box; }
+
+        .btn { background: var(--accent); color: white; border: none; padding: 10px; border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
+        .btn-delete { background: #dc3545; }
+        .hint { font-size: 11px; color: #666; margin-top: 4px; }
     </style>
 </head>
 <body>
 
-<div class="sidebar">
-    <div class="side-content">
+<header>
+    <div style="font-weight:bold">スプライト制作ツール .pre</div>
+    <div style="font-size:10px">v1.4 / 2026 March Build</div>
+</header>
+
+<div class="app-container">
+    <div class="sidebar">
         <div class="group">
-            <h4>1. Grid Config</h4>
+            <h4>1. グリッド設定</h4>
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
-                <label>COLS<input type="number" id="cols" value="3"></label>
-                <label>ROWS<input type="number" id="rows" value="4"></label>
-                <label>CELL W<input type="number" id="cellW" value="128"></label>
-                <label>CELL H<input type="number" id="cellH" value="128"></label>
+                <label>列数<input type="number" id="cols" value="3"></label>
+                <label>行数<input type="number" id="rows" value="4"></label>
+                <label>1マスの幅<input type="number" id="cellW" value="128"></label>
+                <label>1マスの高<input type="number" id="cellH" value="128"></label>
             </div>
         </div>
         <div class="group">
-            <h4>2. Import</h4>
+            <h4>2. 画像の読み込み</h4>
             <input type="file" id="fileInput" multiple accept="image/*">
-            <p style="font-size:10px; color:#666;">※1枚目に基づきサイズを自動調整します</p>
-            <button class="btn" id="dlBtn">EXPORT PNG</button>
+            <p class="hint">※最初の画像に合わせてサイズが自動調整されます</p>
+            <button class="btn" id="dlBtn">透過PNGとして保存</button>
         </div>
+        <p class="hint">【操作】枠を選択して別の枠を押すと入れ替え。枠をクリックして右パネルで調整。</p>
+    </div>
+
+    <div class="main-stage">
+        <h4 style="margin-bottom:10px;">配置マップ (クリックして選択)</h4>
+        <div id="slotGrid" class="slot-grid"></div>
+        
+        <h4 style="margin-bottom:10px;">全体プレビュー (縮小表示中)</h4>
+        <div class="canvas-wrapper">
+            <canvas id="mainCanvas"></canvas>
+        </div>
+    </div>
+
+    <div class="inspector" id="inspector" style="display:none;">
+        <h4 id="inspectTitle">スロット調整</h4>
+        <div class="control-row">
+            <label>拡大率</label>
+            <input type="number" id="scNum" step="0.1">
+            <input type="range" id="scRange" min="0.1" max="5" step="0.1">
+        </div>
+        <div class="control-row">
+            <label>回転 (度)</label>
+            <input type="number" id="rtNum">
+            <input type="range" id="rtRange" min="-180" max="180">
+        </div>
+        <div class="control-row">
+            <label>位置ズレ X</label>
+            <input type="number" id="oxNum">
+            <input type="range" id="oxRange" min="-200" max="200">
+        </div>
+        <div class="control-row">
+            <label>位置ズレ Y</label>
+            <input type="number" id="oyNum">
+            <input type="range" id="oyRange" min="-200" max="200">
+        </div>
+        <button class="btn btn-delete" onclick="clearSlot()">この画像を削除</button>
     </div>
 </div>
 
-<div class="main-stage">
-    <div id="slotGrid" class="slot-grid"></div>
-    <div style="color:var(--accent); font-size:12px; margin-bottom:10px;">PREVIEW (FINAL SHEET)</div>
-    <canvas id="mainCanvas"></canvas>
-</div>
-
-<div class="inspector" id="inspector">
-    <h4 id="inspectTitle">Slot Settings</h4>
-    <label>Scale (数値 / バー)</label>
-    <input type="number" id="scNum" step="0.1">
-    <input type="range" id="scRange" min="0.05" max="3" step="0.05">
-
-    <label>Rotation</label>
-    <input type="number" id="rtNum">
-    <input type="range" id="rtRange" min="-180" max="180">
-
-    <label>Offset X</label>
-    <input type="number" id="oxNum">
-    <input type="range" id="oxRange" min="-100" max="100">
-
-    <label>Offset Y</label>
-    <input type="number" id="oyNum">
-    <input type="range" id="oyRange" min="-100" max="100">
-    
-    <button class="btn" style="background:#f85149; margin-top:30px;" onclick="clearSlot()">Remove Image</button>
-</div>
-
 <script>
-    let sprites = []; // Array of {img, scale, rot, ox, oy}
+    let sprites = []; 
     let selectedIdx = null;
 
     const fileInput = document.getElementById('fileInput');
@@ -101,7 +136,7 @@
     const ctx = canvas.getContext('2d');
     const inspector = document.getElementById('inspector');
 
-    // 初期化：スロット作成
+    // 枠の初期化と描画
     function initSlots() {
         const cols = parseInt(document.getElementById('cols').value);
         const rows = parseInt(document.getElementById('rows').value);
@@ -111,38 +146,61 @@
         for (let i = 0; i < cols * rows; i++) {
             const slot = document.createElement('div');
             slot.className = 'slot';
+            if (i === selectedIdx) slot.classList.add('selected');
             slot.innerHTML = `<span class="slot-num">${i+1}</span>`;
+            
             if (sprites[i]) {
                 const thumb = new Image();
                 thumb.src = sprites[i].img.src;
                 slot.appendChild(thumb);
             }
-            slot.onclick = () => selectSlot(i);
+            slot.onclick = () => handleSlotClick(i);
             slotGrid.appendChild(slot);
         }
-        draw();
+        draw(true); // 補助線ありで描画
     }
 
-    // 白背景除去ロジック
+    // クリックによる選択・入れ替え
+    function handleSlotClick(i) {
+        if (selectedIdx !== null && selectedIdx !== i) {
+            // 入れ替えロジック
+            const temp = sprites[selectedIdx];
+            sprites[selectedIdx] = sprites[i];
+            sprites[i] = temp;
+            selectedIdx = null; // 入れ替え後は一旦選択解除
+            inspector.style.display = 'none';
+        } else {
+            // 選択
+            selectedIdx = (selectedIdx === i) ? null : i;
+        }
+        
+        if (selectedIdx !== null && sprites[selectedIdx]) {
+            inspector.style.display = 'block';
+            document.getElementById('inspectTitle').textContent = `スロット #${selectedIdx + 1} の調整`;
+            syncInspector(sprites[selectedIdx]);
+        } else {
+            inspector.style.display = 'none';
+        }
+        initSlots();
+    }
+
+    // 白抜き処理
     async function processImage(img) {
         const tempCanvas = document.createElement('canvas');
         const tCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = img.width;
-        tempCanvas.height = img.height;
+        tempCanvas.width = img.width; tempCanvas.height = img.height;
         tCtx.drawImage(img, 0, 0);
         const imageData = tCtx.getImageData(0, 0, img.width, img.height);
         const data = imageData.data;
         
         let hasWhite = false;
         for (let i = 0; i < data.length; i += 4) {
-            if (data[i] > 240 && data[i+1] > 240 && data[i+2] > 240) {
-                hasWhite = true; break;
-            }
+            if (data[i] > 245 && data[i+1] > 245 && data[i+2] > 245) { hasWhite = true; break; }
         }
 
-        if (hasWhite && confirm("白背景を検知しました。透過処理を行いますか？")) {
+        if (hasWhite && confirm("白背景を検知しました。透過しますか？")) {
             for (let i = 0; i < data.length; i += 4) {
-                if (data[i] > 240 && data[i+1] > 240 && data[i+2] > 240) data[i+3] = 0;
+                if (data[i] > 245 && data[i+1] > 245 && data[i+2] > 245) data[i+3] = 0;
             }
             tCtx.putImageData(imageData, 0, 0);
             const newImg = new Image();
@@ -160,51 +218,28 @@
             img.src = URL.createObjectURL(file);
             await img.decode();
 
-            // 1枚目ならサイズ自動調整
             if (sprites.filter(s => s).length === 0) {
                 document.getElementById('cellW').value = img.width;
                 document.getElementById('cellH').value = img.height;
             }
 
             img = await processImage(img);
-
-            // 空いているスロットを探して入れる
             const emptyIdx = sprites.findIndex((s, idx) => !s && idx < (parseInt(document.getElementById('cols').value) * parseInt(document.getElementById('rows').value)));
             const targetIdx = emptyIdx === -1 ? sprites.length : emptyIdx;
-
             sprites[targetIdx] = { img, scale: 1.0, rot: 0, ox: 0, oy: 0 };
         }
         initSlots();
     };
 
-    function selectSlot(i) {
-        selectedIdx = i;
-        document.querySelectorAll('.slot').forEach((el, idx) => {
-            el.classList.toggle('active', idx === i);
-        });
-        
-        if (sprites[i]) {
-            inspector.style.display = 'block';
-            document.getElementById('inspectTitle').textContent = `Slot #${i+1} Settings`;
-            syncInspector(sprites[i]);
-        } else {
-            inspector.style.display = 'none';
-        }
-    }
-
     function syncInspector(s) {
-        const mapping = [
-            ['scNum', 'scRange', 'scale'], ['rtNum', 'rtRange', 'rot'],
-            ['oxNum', 'oxRange', 'ox'], ['oyNum', 'oyRange', 'oy']
-        ];
+        const mapping = [['scNum','scRange','scale'], ['rtNum','rtRange','rot'], ['oxNum','oxRange','ox'], ['oyNum','oyRange','oy']];
         mapping.forEach(([nId, rId, prop]) => {
-            const n = document.getElementById(nId);
-            const r = document.getElementById(rId);
+            const n = document.getElementById(nId); const r = document.getElementById(rId);
             n.value = r.value = s[prop];
             n.oninput = r.oninput = (e) => {
                 s[prop] = parseFloat(e.target.value);
                 n.value = r.value = e.target.value;
-                draw();
+                draw(true);
             };
         });
     }
@@ -212,12 +247,14 @@
     function clearSlot() {
         if (selectedIdx !== null) {
             sprites[selectedIdx] = null;
+            selectedIdx = null;
             initSlots();
             inspector.style.display = 'none';
         }
     }
 
-    function draw() {
+    // 描画メイン
+    function draw(showGuides = false) {
         const cw = parseInt(document.getElementById('cellW').value);
         const ch = parseInt(document.getElementById('cellH').value);
         const cols = parseInt(document.getElementById('cols').value);
@@ -226,6 +263,14 @@
         canvas.width = cols * cw;
         canvas.height = rows * ch;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // ガイド線の描画（エクスポート時は消える）
+        if (showGuides) {
+            ctx.strokeStyle = "rgba(0, 123, 255, 0.3)";
+            ctx.lineWidth = 2;
+            for (let c = 0; c <= cols; c++) { ctx.beginPath(); ctx.moveTo(c*cw, 0); ctx.lineTo(c*cw, canvas.height); ctx.stroke(); }
+            for (let r = 0; r <= rows; r++) { ctx.beginPath(); ctx.moveTo(0, r*ch); ctx.lineTo(canvas.width, r*ch); ctx.stroke(); }
+        }
 
         sprites.forEach((s, i) => {
             if (!s || i >= cols * rows) return;
@@ -247,10 +292,12 @@
     });
 
     document.getElementById('dlBtn').onclick = () => {
+        draw(false); // ガイド線なしで再描画
         const link = document.createElement('a');
-        link.download = "spritesheet.png";
+        link.download = "spritesheet_2026.png";
         link.href = canvas.toDataURL();
         link.click();
+        draw(true); // プレビュー用にガイド線戻す
     };
 
     initSlots();
