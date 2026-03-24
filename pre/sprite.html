@@ -3,204 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sprite Studio v1.1</title>
+    <title>Sprite Studio v1.2.0</title>
     <style>
         :root {
-            --bg-color: #121212;
-            --panel-bg: #1e1e1e;
-            --accent: #00e5ff;
-            --border: #333;
-            --text: #e0e0e0;
+            --bg: #0f111a; --panel: #1a1c26; --accent: #00f2ff; --text: #e1e1e6; --border: #2f334d;
         }
         body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--bg-color);
-            color: var(--text);
-            margin: 0;
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-            overflow: hidden;
+            font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text);
+            margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
         }
-
-        /* ヘッダー・バージョン情報 */
         header {
-            padding: 10px 20px;
-            background: var(--panel-bg);
-            border-bottom: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            padding: 12px 20px; background: var(--panel); border-bottom: 1px solid var(--border);
+            display: flex; justify-content: space-between; align-items: center;
         }
-        .version-tag {
-            font-size: 10px;
-            letter-spacing: 2px;
-            color: var(--accent);
-            opacity: 0.7;
-        }
+        .v-info { font-size: 10px; color: var(--accent); letter-spacing: 1px; text-transform: uppercase; }
 
-        /* メインレイアウト */
-        .main-layout {
-            display: flex;
-            flex: 1;
-            overflow: hidden;
-        }
-        @media (max-width: 768px) {
-            .main-layout { flex-direction: column; overflow-y: auto; }
-        }
+        .main { display: flex; flex: 1; overflow: hidden; }
+        @media (max-width: 900px) { .main { flex-direction: column; overflow-y: auto; } }
 
-        /* サイドバー（設定） */
+        /* 左側：設定パネル */
         .sidebar {
-            width: 320px;
-            background: var(--panel-bg);
-            border-right: 1px solid var(--border);
-            padding: 15px;
-            overflow-y: auto;
-            display: flex;
-            flex-direction: column;
-            gap: 15px;
+            width: 350px; background: var(--panel); border-right: 1px solid var(--border);
+            padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 20px;
         }
-        @media (max-width: 768px) { .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); } }
+        @media (max-width: 900px) { .sidebar { width: auto; border-right: none; } }
 
-        /* プレビューエリア */
-        .preview-area {
-            flex: 1;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: flex-start;
-            background: #0a0a0a;
-            overflow: auto;
-            position: relative;
+        .group { background: #24273a; padding: 15px; border-radius: 8px; border: 1px solid var(--border); }
+        h4 { margin: 0 0 12px 0; font-size: 12px; color: var(--accent); border-left: 3px solid var(--accent); padding-left: 8px; }
+        
+        input[type="number"], input[type="range"] { width: 100%; margin-top: 5px; }
+        label { font-size: 11px; color: #9499b8; }
+
+        /* スプライトリスト項目 */
+        .s-item {
+            background: #1a1c26; border: 1px solid var(--border); padding: 10px; margin-top: 8px;
+            border-radius: 6px; cursor: grab;
         }
+        .s-item:active { cursor: grabbing; }
+        .s-head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+        .s-head img { width: 40px; height: 40px; background: #fff; object-fit: contain; border-radius: 4px; }
+        .s-ctrls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
-        /* アニメーションプレビューパネル */
-        .anim-panel {
-            position: sticky;
-            top: 0;
-            background: rgba(30,30,30,0.9);
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid var(--accent);
-            margin-bottom: 20px;
-            text-align: center;
-            backdrop-filter: blur(5px);
-            z-index: 10;
+        /* 右側：プレビュー */
+        .preview { flex: 1; padding: 20px; overflow: auto; display: flex; flex-direction: column; align-items: center; background: #0b0d14; }
+        .anim-box {
+            background: rgba(255,255,255,0.05); padding: 20px; border-radius: 12px; 
+            border: 1px dashed var(--accent); margin-bottom: 20px; text-align: center;
+        }
+        #mainCanvas {
+            background-image: conic-gradient(#161822 0.25turn, #1e202e 0.25turn 0.5turn, #161822 0.5turn 0.75turn, #1e202e 0.75turn);
+            background-size: 20px 20px; border: 2px solid var(--border);
         }
 
-        canvas {
-            /* プレビュー用の格子背景 */
-            background-image: linear-gradient(45deg, #1a1a1a 25%, transparent 25%), linear-gradient(-45deg, #1a1a1a 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1a1a1a 75%), linear-gradient(-45deg, transparent 75%, #1a1a1a 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
-            border: 1px solid var(--border);
-            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        .btn {
+            background: var(--accent); color: #000; border: none; padding: 12px;
+            border-radius: 6px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.2s;
         }
-
-        /* スタイリッシュな入力UI */
-        .group { border: 1px solid var(--border); padding: 10px; border-radius: 5px; }
-        .group h4 { margin: 0 0 10px 0; font-size: 12px; color: var(--accent); text-transform: uppercase; }
-        label { display: block; font-size: 11px; margin-bottom: 5px; color: #aaa; }
-        input[type="number"], input[type="text"] {
-            width: 100%; background: #000; border: 1px solid var(--border); color: #fff; padding: 5px; border-radius: 3px; box-sizing: border-box;
-        }
-        .btn-primary {
-            background: var(--accent); color: #000; border: none; padding: 10px; border-radius: 4px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px;
-        }
-        .btn-primary:hover { opacity: 0.8; }
-
-        .sprite-list { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; }
-        .sprite-item { display: flex; align-items: center; gap: 10px; background: #252525; padding: 5px; font-size: 11px; border-radius: 3px; }
-        .sprite-item img { width: 30px; height: 30px; object-fit: contain; background: #fff; }
-
+        .btn:hover { filter: brightness(1.2); transform: translateY(-2px); }
     </style>
 </head>
 <body>
 
 <header>
-    <div style="font-weight: bold; letter-spacing: 1px;">SPRITE STUDIO <span style="color:var(--accent)">PRO</span></div>
-    <div class="version-tag">VER 1.1.0 / BUILD 2026</div>
+    <div style="font-weight: 800; font-size: 18px;">SPRITE <span style="color:var(--accent)">STUDIO</span></div>
+    <div class="v-info">Build 2026.03 / v1.2.0-ULTIMATE</div>
 </header>
 
-<div class="main-layout">
+<div class="main">
     <div class="sidebar">
         <div class="group">
-            <h4>File Import</h4>
-            <input type="file" id="fileInput" multiple accept="image/*">
-            <button class="btn-primary" id="downloadBtn">EXPORT (.PNG)</button>
+            <h4>1. Import & Export</h4>
+            <input type="file" id="fileInput" multiple accept="image/*" style="font-size: 12px;">
+            <button class="btn" id="dlBtn" style="margin-top:15px;">DOWNLOAD TRANSPARENT PNG</button>
         </div>
 
         <div class="group">
-            <h4>Grid Settings</h4>
-            <label>COLUMNS: <input type="number" id="cols" value="3"></label>
-            <label>ROWS: <input type="number" id="rows" value="4"></label>
-            <label>CELL SIZE: <input type="number" id="cellW" value="128"> x <input type="number" id="cellH" value="128"></label>
+            <h4>2. Grid & Global</h4>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <label>COLS<input type="number" id="cols" value="3"></label>
+                <label>ROWS<input type="number" id="rows" value="4"></label>
+                <label>CELL W<input type="number" id="cellW" value="128"></label>
+                <label>CELL H<input type="number" id="cellH" value="128"></label>
+            </div>
         </div>
 
         <div class="group">
-            <h4>Loop Preview Settings</h4>
-            <label>START INDEX (1~): <input type="number" id="loopStart" value="4"></label>
-            <label>END INDEX (1~): <input type="number" id="loopEnd" value="6"></label>
-            <label>FPS: <input type="number" id="loopFps" value="8"></label>
+            <h4>3. Loop Preview</h4>
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                <label>START #<input type="number" id="lpS" value="4"></label>
+                <label>END #<input type="number" id="lpE" value="6"></label>
+                <label>FPS<input type="number" id="lpFps" value="10"></label>
+            </div>
         </div>
 
-        <div class="group">
-            <h4>Images (<span id="imgCount">0</span>)</h4>
-            <div id="spriteList" class="sprite-list"></div>
+        <div class="group" id="listGroup">
+            <h4>4. Individual Adjust (<span id="count">0</span>)</h4>
+            <div id="spriteList"></div>
         </div>
     </div>
 
-    <div class="preview-area">
-        <div class="anim-panel">
-            <div style="font-size: 10px; margin-bottom: 5px; color: var(--accent);">LOOP PREVIEW</div>
-            <canvas id="animCanvas" width="128" height="128" style="background:none; border:none; box-shadow:none;"></canvas>
+    <div class="preview">
+        <div class="anim-box">
+            <div style="font-size: 10px; color: var(--accent); margin-bottom: 10px;">LIVE LOOP PREVIEW</div>
+            <canvas id="animCanvas"></canvas>
         </div>
-
-        <div style="font-size: 10px; margin-bottom: 10px; color: #666;">SHEET PREVIEW (TRANSPARENT BACKGROUND)</div>
         <canvas id="mainCanvas"></canvas>
     </div>
 </div>
 
 <script>
+    let sprites = [];
+    let dragItem = null;
+    let lastTime = 0;
+    let frameIdx = 0;
+
     const fileInput = document.getElementById('fileInput');
+    const spriteList = document.getElementById('spriteList');
     const mainCanvas = document.getElementById('mainCanvas');
     const mCtx = mainCanvas.getContext('2d');
     const animCanvas = document.getElementById('animCanvas');
     const aCtx = animCanvas.getContext('2d');
-    const spriteList = document.getElementById('spriteList');
 
-    let images = [];
-    let loopFrame = 0;
-    let lastAnimTime = 0;
-
-    // ファイル読み込み
     fileInput.onchange = async (e) => {
         const files = Array.from(e.target.files);
         for (const file of files) {
             const img = new Image();
             img.src = URL.createObjectURL(file);
             await img.decode();
-            images.push({ img, name: file.name });
+            sprites.push({
+                img, name: file.name, id: Math.random(),
+                scale: 1.0, rot: 0, ox: 0, oy: 0
+            });
         }
-        document.getElementById('imgCount').textContent = images.length;
-        updateUI();
-        drawSheet();
+        renderUI();
+        drawAll();
     };
 
-    function updateUI() {
+    function renderUI() {
         spriteList.innerHTML = '';
-        images.forEach((data, i) => {
-            const item = document.createElement('div');
-            item.className = 'sprite-item';
-            item.innerHTML = `<img src="${data.img.src}"> <span>#${i+1}: ${data.name.slice(0,10)}</span>`;
-            spriteList.appendChild(item);
+        document.getElementById('count').textContent = sprites.length;
+        sprites.forEach((s, i) => {
+            const div = document.createElement('div');
+            div.className = 's-item';
+            div.draggable = true;
+            div.innerHTML = `
+                <div class="s-head">
+                    <img src="${s.img.src}">
+                    <div style="font-size:11px; font-weight:bold;">#${i+1} ${s.name.slice(0,12)}</div>
+                </div>
+                <div class="s-ctrls">
+                    <label>Scale<input type="range" min="0.1" max="3" step="0.1" value="${s.scale}" oninput="updateSprite(${i}, 'scale', this.value)"></label>
+                    <label>Rot<input type="range" min="-180" max="180" value="${s.rot}" oninput="updateSprite(${i}, 'rot', this.value)"></label>
+                    <label>X Offset<input type="number" value="${s.ox}" oninput="updateSprite(${i}, 'ox', this.value)"></label>
+                    <label>Y Offset<input type="number" value="${s.oy}" oninput="updateSprite(${i}, 'oy', this.value)"></label>
+                </div>
+            `;
+            // ドラッグ＆ドロップ並び替えロジック
+            div.ondragstart = () => { dragItem = i; div.style.opacity = '0.5'; };
+            div.ondragover = (e) => e.preventDefault();
+            div.ondrop = () => {
+                const moved = sprites.splice(dragItem, 1)[0];
+                sprites.splice(i, 0, moved);
+                renderUI(); drawAll();
+            };
+            div.ondragend = () => div.style.opacity = '1';
+            spriteList.appendChild(div);
         });
     }
 
-    // メインシートの描画
-    function drawSheet() {
-        if (images.length === 0) return;
+    function updateSprite(i, prop, val) {
+        sprites[i][prop] = parseFloat(val);
+        drawAll();
+    }
+
+    function drawSprite(ctx, s, x, y, cw, ch) {
+        const sw = s.img.width * s.scale;
+        const sh = s.img.height * s.scale;
+        ctx.save();
+        ctx.translate(x + cw/2 + s.ox, y + ch/2 + s.oy);
+        ctx.rotate(s.rot * Math.PI / 180);
+        ctx.drawImage(s.img, -sw/2, -sh/2, sw, sh);
+        ctx.restore();
+    }
+
+    function drawAll() {
+        if (sprites.length === 0) return;
         const cw = parseInt(document.getElementById('cellW').value);
         const ch = parseInt(document.getElementById('cellH').value);
         const cols = parseInt(document.getElementById('cols').value);
@@ -208,66 +195,47 @@
 
         mainCanvas.width = cols * cw;
         mainCanvas.height = rows * ch;
-
-        // 重要：透過のためにクリアするだけ（背景色は塗らない）
         mCtx.clearRect(0, 0, mainCanvas.width, mainCanvas.height);
 
-        images.forEach((data, i) => {
+        sprites.forEach((s, i) => {
             if (i >= cols * rows) return;
-            const c = i % cols;
-            const r = Math.floor(i / cols);
-            
-            // 中央に描画
-            const dx = c * cw + (cw - data.img.width) / 2;
-            const dy = r * ch + (ch - data.img.height) / 2;
-            mCtx.drawImage(data.img, dx, dy);
+            const x = (i % cols) * cw;
+            const y = Math.floor(i / cols) * ch;
+            drawSprite(mCtx, s, x, y, cw, ch);
         });
     }
 
-    // ループアニメーションの更新処理
-    function updateAnimation(timestamp) {
-        const start = parseInt(document.getElementById('loopStart').value) - 1;
-        const end = parseInt(document.getElementById('loopEnd').value) - 1;
-        const fps = parseInt(document.getElementById('loopFps').value);
-        
-        if (images.length > 0 && start >= 0 && end < images.length && start <= end) {
-            const interval = 1000 / fps;
-            if (timestamp - lastAnimTime > interval) {
-                loopFrame = loopFrame < start || loopFrame >= end ? start : loopFrame + 1;
-                
-                const cw = parseInt(document.getElementById('cellW').value);
-                const ch = parseInt(document.getElementById('cellH').value);
-                animCanvas.width = cw;
-                animCanvas.height = ch;
-                
+    function loop(time) {
+        const start = parseInt(document.getElementById('lpS').value) - 1;
+        const end = parseInt(document.getElementById('lpE').value) - 1;
+        const fps = parseInt(document.getElementById('lpFps').value);
+        const cw = parseInt(document.getElementById('cellW').value);
+        const ch = parseInt(document.getElementById('cellH').value);
+
+        if (sprites.length > 0 && start >= 0 && end < sprites.length) {
+            if (time - lastTime > 1000 / fps) {
+                frameIdx = (frameIdx < start || frameIdx >= end) ? start : frameIdx + 1;
+                animCanvas.width = cw; animCanvas.height = ch;
                 aCtx.clearRect(0, 0, cw, ch);
-                const img = images[loopFrame].img;
-                aCtx.drawImage(img, (cw - img.width) / 2, (ch - img.height) / 2);
-                
-                lastAnimTime = timestamp;
+                drawSprite(aCtx, sprites[frameIdx], 0, 0, cw, ch);
+                lastTime = time;
             }
         }
-        requestAnimationFrame(updateAnimation);
+        requestAnimationFrame(loop);
     }
 
-    // 設定変更時に描画更新
-    ['cols', 'rows', 'cellW', 'cellH'].forEach(id => {
-        document.getElementById(id).addEventListener('input', drawSheet);
-    });
-
-    // ダウンロード処理
-    document.getElementById('downloadBtn').onclick = () => {
-        // グリッド線などを入れずに、現在のCanvas（背景透明）を保存
+    document.getElementById('dlBtn').onclick = () => {
         const link = document.createElement('a');
-        link.download = `spritesheet_transparent.png`;
-        link.href = mainCanvas.toDataURL('image/png');
+        link.download = `spritesheet_v120.png`;
+        link.href = mainCanvas.toDataURL();
         link.click();
     };
 
-    // アニメーション開始
-    requestAnimationFrame(updateAnimation);
+    ['cols', 'rows', 'cellW', 'cellH'].forEach(id => {
+        document.getElementById(id).oninput = drawAll;
+    });
 
+    requestAnimationFrame(loop);
 </script>
-
 </body>
 </html>
