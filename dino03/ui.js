@@ -1,11 +1,9 @@
-export const VERSION = "8.17.6";
+export const VERSION = "8.18.0";
 
 export class UIControl {
     constructor(cameraControl) {
         this.cameraControl = cameraControl;
         
-        // ★ プロの最適化（DOMキャッシュ）
-        // 起動時に一度だけHTMLの要素を探して記憶しておくことで、毎回の検索負荷をゼロにします。
         this.dom = {
             msg: document.getElementById('msg-ui'),
             statusUi: document.getElementById('status-ui'),
@@ -24,6 +22,10 @@ export class UIControl {
             dtSpd: document.getElementById('dt-spd'),
             dtMag: document.getElementById('dt-mag'),
             commandUi: document.getElementById('command-ui'),
+            // ★ 追加：コマンドボタンのキャッシュ
+            cmdMove: document.getElementById('cmd-move'),
+            cmdAttack: document.getElementById('cmd-attack'),
+            cmdWait: document.getElementById('cmd-wait'),
             targetUi: document.getElementById('target-ui'),
             confirmUi: document.getElementById('confirm-ui'),
             eventUi: document.getElementById('event-ui'),
@@ -45,7 +47,6 @@ export class UIControl {
     }
 
     hideAll() {
-        // キャッシュしたUI要素をまとめて非表示にする
         const windows = [
             this.dom.statusUi, this.dom.detailUi, this.dom.commandUi, 
             this.dom.confirmUi, this.dom.targetUi, this.dom.eventUi
@@ -53,6 +54,19 @@ export class UIControl {
         windows.forEach(el => {
             if (el) el.style.display = 'none';
         });
+    }
+
+    // ★ 追加：移動済み状態によって「移動」ボタンをグレーアウトする処理
+    updateCommandMenu(unit) {
+        if (unit.hasMoved) {
+            this.dom.cmdMove.disabled = true;
+            this.dom.cmdMove.style.color = '#777';
+            this.dom.cmdMove.style.cursor = 'not-allowed';
+        } else {
+            this.dom.cmdMove.disabled = false;
+            this.dom.cmdMove.style.color = 'white';
+            this.dom.cmdMove.style.cursor = 'pointer';
+        }
     }
 
     showStatus(unit) {
@@ -66,7 +80,6 @@ export class UIControl {
         this.dom.stMpLabel.innerHTML = `<ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp"></span>`;
         if(this.dom.btnToggleDetail) this.dom.btnToggleDetail.innerHTML = `<ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼`;
 
-        // 上でinnerHTMLを書き換えたため、内部のspanを再取得して値をいれる
         document.getElementById('st-hp').innerText = `${unit.hp}/${unit.maxHp}`;
         this.dom.stHpBar.style.width = `${(unit.hp / unit.maxHp) * 100}%`;
         
@@ -115,7 +128,6 @@ export class UIControl {
         const x = (vector.x * 0.5 + 0.5) * window.innerWidth;
         const y = (vector.y * -0.5 + 0.5) * window.innerHeight;
         
-        // 浮かび上がるテキストだけは毎回新しく作るのでDOM生成をそのまま使用
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
