@@ -1,4 +1,12 @@
-export const VERSION = "8.20.6";
+/* =================================================================
+   map.js - v8.20.7
+   修正内容：
+   1. シマウマ模様の解消：積み上げ方式でUV計算を単純化
+   2. plate01.png 仕様準拠：最上段側面(256-320px)と中段(320-384px)を分離
+   3. 鏡面ループ：偶数段のUVを反転焼き付け
+   ================================================================= */
+
+export const VERSION = "8.20.7";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 export const MAP_W = 10;
@@ -52,13 +60,17 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                     } else if (isBottomFace) {
                         newU = 0; newV = 0; 
                     } else {
+                        // 側面描画
                         newU = (u + col) * wRatio;
                         if (isTopBlock) {
+                            // 最上段側面 (256-320px)
                             newV = vFloorEnd + (v * (vSide1End - vFloorEnd));
                         } else {
+                            // 中段側面 (320-384px) 鏡面ループ
                             const distFromTop = (blocksHigh - 1) - b;
                             const isMirror = (distFromTop % 2 === 0);
-                            const vStart = vSide1End, vHeight = vSide2End - vSide1End;
+                            const vStart = vSide1End;
+                            const vHeight = vSide2End - vSide1End;
                             newV = isMirror ? vStart + ((1.0 - v) * vHeight) : vStart + (v * vHeight);
                         }
                     }
@@ -77,7 +89,7 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             }
         }
     }
-    // 障害物描画
+
     if (obstacles) {
         const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
         const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
@@ -101,17 +113,22 @@ export function getWalkableNodes(units, unit, mapData) {
     const openList = [{ x: unit.x, z: unit.z, d: 0, path: [] }];
     const visited = new Set();
     visited.add(`${unit.x},${unit.z}`);
+
     while (openList.length > 0) {
         const current = openList.shift();
         if (current.d > unit.move) continue;
         nodes.push(current);
+
         for (const dir of [[0, 1], [1, 0], [0, -1], [-1, 0]]) {
             const nx = current.x + dir[0], nz = current.z + dir[1];
             if (nx < 0 || nx >= MAP_W || nz < 0 || nz >= MAP_D || visited.has(`${nx},${nz}`)) continue;
             if (window.obstaclesMap.has(`${nx},${nz}`)) continue;
+
             const targetH = mapData[nz][nx].h;
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
+            
             if (units.find(u => u.x === nx && u.z === nz && u.hp > 0 && u.isPlayer !== unit.isPlayer)) continue;
+
             visited.add(`${nx},${nz}`);
             openList.push({ x: nx, z: nz, d: current.d + 1, path: [...current.path, { x: nx, z: nz, h: targetH }] });
         }
