@@ -1,14 +1,14 @@
 /* =================================================================
-   main.js
-   修正・復旧内容：
-   1. 致命的バグの修正：欠落していた OrbitControls の初期化を復元し、起動不能を解消
-   2. 会話システム：name/face プロパティに対応し undefined を解消
-   3. UI再配置：ステータス窓を左下へ移動(メッセージとの重複回避)
-   4. 描画順修正：ハイライトを最前面(renderOrder 999)かつ高度+10へ
-   5. 演出修正：敵の初期向きを左(-1)に完全固定
+   main.js - v8.20.10
+   修正・機能追加内容：
+   1. シネマティックカメラ：会話中、発言者(name)の座標を取得し、
+      cameraCtrl.centerOn() でカメラが自動追従するロジックを追加。
+   2. 会話終了時：カメラのズームを戻すとともに、操作キャラ(プレイヤー)に
+      視点を自動で戻す処理を追加。
+   3. バグ修正維持：OrbitControlsの生成、UI位置、ハイライト最前面表示などは全て維持。
    ================================================================= */
 
-export const VERSION = "8.20.8";
+export const VERSION = "8.20.10";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -87,7 +87,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     
     buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, StageData.obstacles);
 
-    // ★修正箇所：欠落していた OrbitControls の生成処理を復元しました
     cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
     
     uiCtrl = new UIControl(cameraCtrl);
@@ -144,14 +143,30 @@ function startDialogue() {
     uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
     document.getElementById('event-ui').style.display = 'flex';
     
+    // ★ 修正箇所：指定したインデックスのセリフを再生し、カメラを発言者に向ける関数
+    const playLine = (idx) => {
+        const lineData = StageData.preBattleTalk[idx];
+        uiCtrl.renderTalkLine(lineData, window.units, window.player);
+        
+        // 発言者を探してカメラをセンタリング
+        const speaker = window.units.find(u => u.id === lineData.name);
+        if (speaker && speaker.sprite) {
+            cameraCtrl.centerOn(speaker.sprite.position);
+        }
+    };
+
     window.onGlobalTap = () => {
         const idx = getStore().talkIndex + 1;
         if(idx < StageData.preBattleTalk.length) {
             gameStore.setState({ talkIndex: idx });
-            uiCtrl.renderTalkLine(StageData.preBattleTalk[idx], window.units, window.player);
+            playLine(idx);
         } else {
             document.getElementById('event-ui').style.display = 'none';
-            cameraCtrl.setZoom(1.5); 
+            cameraCtrl.setZoom(1.5);
+            
+            // ★ 修正箇所：会話終了後、カメラをプレイヤー(ティラノ)の座標に戻す
+            cameraCtrl.centerOn(window.player.sprite.position);
+            
             gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
             const overlay = document.getElementById('battle-start-overlay');
             gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
@@ -159,7 +174,9 @@ function startDialogue() {
             }});
         }
     };
-    uiCtrl.renderTalkLine(StageData.preBattleTalk[0], window.units, window.player);
+    
+    // 最初のセリフを再生（カメラも最初の発言者へ向く）
+    playLine(0);
 }
 
 function setupEventListeners() {
