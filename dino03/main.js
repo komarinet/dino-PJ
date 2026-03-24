@@ -1,13 +1,13 @@
 /* =================================================================
-   main.js - v8.20.16
+   main.js - v8.20.18
    修正・機能追加内容：
-   1. 進行不能（ソフトロック）バグの修正：
-      onPointerClick 内の Raycaster（タップ判定）において、
-      HPが0以下のキャラクター（死体）を判定対象から完全に除外。
-      これにより、倒した敵のマスやキャラクターを正常にタップできるようになります。
+   1. ダイナミック・カメラフォーカス：
+      注視点を「座標 + 固定値」ではなく、Three.jsの Box3 を使用して
+      「キャラクターのスプライト自体の中心点」を動的に計算するよう修正。
+      これにより、どんなサイズのユニットでも常に画面中央に捉えます。
    ================================================================= */
 
-export const VERSION = "8.20.16";
+export const VERSION = "8.20.18";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -127,9 +127,10 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     setupEventListeners();
     animate();
 
-    const initPos = window.player.sprite.position.clone();
-    initPos.y += 60;
-    cameraCtrl.setInitialAngle(initPos);
+    // ★ 修正箇所：初期カメラ位置をプレイヤーアイコンの中心にする
+    const playerCenter = new THREE.Vector3();
+    new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
+    cameraCtrl.setInitialAngle(playerCenter);
     
     uiCtrl.hideAll();
     if(statusUI) statusUI.style.display = 'none';
@@ -156,9 +157,10 @@ function startDialogue() {
         
         const speaker = window.units.find(u => u.id === lineData.name);
         if (speaker && speaker.sprite) {
-            const targetPos = speaker.sprite.position.clone();
-            targetPos.y += 60;
-            cameraCtrl.centerOn(targetPos);
+            // ★ 修正箇所：スプライト自体の中心点を計算して注視
+            const targetCenter = new THREE.Vector3();
+            new THREE.Box3().setFromObject(speaker.sprite).getCenter(targetCenter);
+            cameraCtrl.centerOn(targetCenter);
         }
     };
 
@@ -171,9 +173,10 @@ function startDialogue() {
             document.getElementById('event-ui').style.display = 'none';
             cameraCtrl.setZoom(1.5);
             
-            const playerPos = window.player.sprite.position.clone();
-            playerPos.y += 60;
-            cameraCtrl.centerOn(playerPos);
+            // ★ 修正箇所：プレイヤーアイコンの中心に戻す
+            const playerCenter = new THREE.Vector3();
+            new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
+            cameraCtrl.centerOn(playerCenter);
             
             gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
             const overlay = document.getElementById('battle-start-overlay');
@@ -205,9 +208,10 @@ function setupEventListeners() {
             if(t === 'pan-up') cameraCtrl.pan(0, -1); if(t === 'pan-down') cameraCtrl.pan(0, 1);
             if(t === 'pan-left') cameraCtrl.pan(-1, 0); if(t === 'pan-right') cameraCtrl.pan(1, 0);
             if(t === 'center') {
-                const playerPos = window.player.sprite.position.clone();
-                playerPos.y += 60;
-                cameraCtrl.centerOn(playerPos);
+                // ★ 修正箇所：中心に戻すボタンもアイコン中央を注視
+                const playerCenter = new THREE.Vector3();
+                new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
+                cameraCtrl.centerOn(playerCenter);
             }
             if(t === 'zoom-in') cameraCtrl.setZoom(camera.zoom + 0.3); if(t === 'zoom-out') cameraCtrl.setZoom(camera.zoom - 0.3);
         };
@@ -219,7 +223,7 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offsetZ);
         mesh.renderOrder = 999;
         scene.add(mesh);
         highlightMeshes.push(mesh);
@@ -239,7 +243,6 @@ function onPointerClick(event) {
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
     
-    // ★ 修正箇所：生きているユニットのSpriteだけを抽出し、タップ判定の対象にする（死体を無視）
     const activeUnits = window.units.filter(u => u.hp > 0);
     const activeSprites = activeUnits.filter(u => u.sprite).map(u => u.sprite);
     
@@ -250,7 +253,6 @@ function onPointerClick(event) {
         const data = obj.userData.isUnit ? { x: obj.userData.unit.x, z: obj.userData.unit.z } : obj.userData;
         
         if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
-            // ★ 修正箇所：検索時も生きているユニットだけを対象にする
             const u = getUnitAt(activeUnits, data.x, data.z);
             if(u) { 
                 uiCtrl.showStatus(u); 
