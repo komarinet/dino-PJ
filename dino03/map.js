@@ -1,12 +1,15 @@
-export const VERSION = "8.19.0";
+/* =================================================================
+   map.js - v8.20.0
+   変更点：水場(type: 4)を obstaclesMap に自動登録するロジックを追加
+   ================================================================= */
+
+export const VERSION = "8.20.0";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 
-// ★ 変更：マップサイズを 10x15 に縮小
 export const MAP_W = 10;
 export const MAP_D = 15;
 
-// ★ 変更：木と岩のテクスチャ、および障害物データ(obstacles)を受け取るように変更
 export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obstacles) {
     if (!mapData) return;
 
@@ -23,7 +26,7 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
 
     window.tilesMeshMap = {};
     window.interactableTiles = [];
-    window.obstaclesMap = new Set(); // ★ 追加：障害物のある座標を記憶
+    window.obstaclesMap = new Set(); // 障害物・水場のある座標を記憶
 
     const material = new THREE.MeshLambertMaterial({ map: texture, transparent: true });
 
@@ -37,6 +40,11 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             const uvAttr = geo.attributes.uv;
 
             const col = cell.type;
+            
+            // ★ 追加：地形タイプが 4 (水) の場合は障害物マップに登録
+            if (col === 4) {
+                window.obstaclesMap.add(`${x},${z}`);
+            }
 
             for (let i = 0; i < uvAttr.count; i++) {
                 const u = uvAttr.getX(i);
@@ -85,22 +93,18 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
         }
     }
 
-    // ★ 追加：ビルボードクロス（十字交差）方式で障害物を配置
     if (obstacles) {
         if (treeTex) { treeTex.magFilter = THREE.NearestFilter; treeTex.minFilter = THREE.NearestFilter; }
         if (rockTex) { rockTex.magFilter = THREE.NearestFilter; rockTex.minFilter = THREE.NearestFilter; }
         
-        // alphaTest: 0.5 を指定することで、背景透明な画像を交差させても描画が破綻しません
         const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
         const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
         
-        // 2枚の板を用意して片方を90度回転させる
         const obsGeo1 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
         const obsGeo2 = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
         obsGeo2.rotateY(Math.PI / 2);
 
         obstacles.forEach(obs => {
-            // 歩けないようにリストに登録
             window.obstaclesMap.add(`${obs.x},${obs.z}`);
             
             const cell = mapData[obs.z][obs.x];
@@ -113,7 +117,6 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             group.add(mesh1);
             group.add(mesh2);
             
-            // ブロックの上面の高さに合わせ、少しランダムに回転させて自然に見せる
             group.position.set(obs.x * TILE_SIZE - offsetX, (cell.h * H_STEP) + (TILE_SIZE / 2), obs.z * TILE_SIZE - offsetZ);
             group.rotation.y = Math.random() * Math.PI;
             
@@ -137,11 +140,9 @@ export function getWalkableNodes(units, unit, mapData) {
             const nx = current.x + dir[0], nz = current.z + dir[1];
             if (nx < 0 || nx >= MAP_W || nz < 0 || nz >= MAP_D || visited.has(`${nx},${nz}`)) continue;
 
-            // ★ 追加：障害物があるマスは進入不可
             if (window.obstaclesMap && window.obstaclesMap.has(`${nx},${nz}`)) continue;
 
             const targetH = mapData[nz][nx].h;
-            // 高低差がジャンプ力より大きい場合は進入不可（コンプなら2段までOK）
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
             
             const blocker = units.find(u => u.x === nx && u.z === nz && u.hp > 0);
