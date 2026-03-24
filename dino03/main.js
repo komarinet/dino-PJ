@@ -1,4 +1,4 @@
-export const VERSION = "8.18.0";
+export const VERSION = "8.19.0";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -20,7 +20,8 @@ function checkSystems() {
     list.innerHTML = "";
     
     for (let [file, curVer] of Object.entries(currentVersions)) {
-        const isOk = curVer && (curVer.startsWith("8.16") || curVer.startsWith("8.17") || curVer.startsWith("8.18"));
+        // v8.19系まで許可するように更新
+        const isOk = curVer && (curVer.startsWith("8.16") || curVer.startsWith("8.17") || curVer.startsWith("8.18") || curVer.startsWith("8.19"));
         if (!isOk) allOk = false;
         list.innerHTML += `<div style="color:${isOk ? '#0f0' : '#f00'}">${file.padEnd(16)}: ver ${curVer || '---'} [${isOk ? 'OK' : 'OLD'}]</div>`;
     }
@@ -36,11 +37,10 @@ function checkSystems() {
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 const mapData = StageData.generateLayout();
 
-// ★ 追加：ハイライト用のパネルを管理する配列とマテリアル
 let highlightMeshes = [];
 const moveHighlightMat = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.5, depthWrite: false });
 const attackHighlightMat = new THREE.MeshBasicMaterial({ color: 0xff5555, transparent: true, opacity: 0.5, depthWrite: false });
-const targetHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.7, depthWrite: false }); // 選択中のターゲット用
+const targetHighlightMat = new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.7, depthWrite: false });
 const highlightGeo = new THREE.PlaneGeometry(TILE_SIZE * 0.9, TILE_SIZE * 0.9);
 
 window.addEventListener('load', () => {
@@ -65,14 +65,22 @@ async function runGame() {
         const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
         sheetImg.onload = async () => {
-            const [braTex, rexTex, compTex] = await Promise.all([loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png')]);
-            init(sheetImg, braTex, rexTex, compTex);
+            // ★ 追加：木(tree01.png)と岩(rock01.png)の画像を非同期で読み込む
+            const [braTex, rexTex, compTex, treeTex, rockTex] = await Promise.all([
+                loadTex('img/bra.png'), 
+                loadTex('img/tactyrano01.png'), 
+                loadTex('img/comp.png'),
+                loadTex('img/tree01.png'),
+                loadTex('img/rock01.png')
+            ]);
+            init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex);
             document.getElementById('loading-screen').style.display = 'none';
         };
     } catch (e) { console.error(e); }
 }
 
-function init(sheetImg, braTex, rexTex, compTex) {
+// ★ 追加：引数に treeTex, rockTex を追加
+function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     const container = document.getElementById('canvas-container');
     scene = new THREE.Scene();
     const w = container.clientWidth, h = container.clientHeight;
@@ -81,7 +89,8 @@ function init(sheetImg, braTex, rexTex, compTex) {
     container.appendChild(renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     
-    buildMapMeshes(scene, sheetImg, mapData);
+    // ★ 変更：テクスチャと障害物データを map.js に引き渡す
+    buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, StageData.obstacles);
 
     cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
     uiCtrl = new UIControl(cameraCtrl);
@@ -106,7 +115,6 @@ function init(sheetImg, braTex, rexTex, compTex) {
         return unit;
     });
 
-    // ★ 追加：オープニングの睨み合い演出（敵全員をティラノの方へ向かせる）
     window.units.forEach(u => {
         if (!u.isPlayer) u.lookAtNode(window.player.x, window.player.z);
     });
@@ -141,7 +149,6 @@ function startDialogue() {
         } else {
             document.getElementById('event-ui').style.display = 'none';
             cameraCtrl.setZoom(1.5); 
-            // ★ 変更：ゲーム開始時、明確に「プレイヤーフェイズ」と設定する
             gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
             
             const overlay = document.getElementById('battle-start-overlay');
@@ -178,9 +185,8 @@ function setupEventListeners() {
     });
 }
 
-// ★ 追加：ハイライトの表示処理（パネルを置く方式）
 function showHighlight(nodeList, mat) {
-    clearHighlights(); // 古いハイライトを消す
+    clearHighlights(); 
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
@@ -213,26 +219,23 @@ function onPointerClick(event) {
             const u = getUnitAt(window.units, data.x, data.z);
             if(u) { 
                 uiCtrl.showStatus(u); 
-                // ★ 変更：自分が行動完了（hasActed）でなければコマンドを出す
                 if(u.isPlayer && !u.hasActed) {
-                    uiCtrl.updateCommandMenu(u); // 移動済みかどうかでボタンをグレーアウト
+                    uiCtrl.updateCommandMenu(u); 
                     document.getElementById('command-ui').style.display = 'block'; 
                 }
             } else { uiCtrl.hideAll(); }
         } else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
             if(route) {
-                // ★ 追加：選んだマスを黄色く光らせる（他の緑は残す）
                 const highlightTarget = [{x: route.x, z: route.z, h: route.h}];
-                showHighlight(store.walkableTiles, moveHighlightMat); // 全体を緑で再描画
+                showHighlight(store.walkableTiles, moveHighlightMat); 
                 
-                // 黄色いパネルを重ねて置く
                 const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
                 const mesh = new THREE.Mesh(highlightGeo, targetHighlightMat);
                 mesh.rotation.x = -Math.PI / 2;
                 mesh.position.set((route.x * TILE_SIZE) - offX, (route.h * H_STEP) + 3, (route.z * TILE_SIZE) - offZ);
                 scene.add(mesh);
-                highlightMeshes.push(mesh); // 消すリストに入れておく
+                highlightMeshes.push(mesh); 
 
                 gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'MOVE', pendingData: route.path, selectedTileKey: `${route.x},${route.z}` });
                 document.getElementById('confirm-text').innerText = "ここへ移動しますか？";
@@ -246,7 +249,7 @@ function execCommand(cmd) {
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, window.player, mapData);
         gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
-        showHighlight(tiles, moveHighlightMat); // ★ 追加：移動可能マスを緑に
+        showHighlight(tiles, moveHighlightMat); 
         document.getElementById('command-ui').style.display = 'none';
     } else if(cmd === 'attack') {
         const targets = getAttackableEnemies(window.units, window.player);
@@ -258,7 +261,7 @@ function execCommand(cmd) {
             const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
             btn.onclick = () => selectTarget(t); list.appendChild(btn);
         });
-        showHighlight(targets, attackHighlightMat); // ★ 追加：攻撃可能マスを赤に
+        showHighlight(targets, attackHighlightMat); 
         document.getElementById('command-ui').style.display = 'none'; document.getElementById('target-ui').style.display = 'block';
     } else if(cmd === 'wait') {
         gameStore.setState({ confirmMode: 'WAIT', pendingData: null });
@@ -271,7 +274,6 @@ function selectTarget(t) {
     gameStore.setState({ confirmMode: 'ATTACK', pendingData: t });
     document.getElementById('target-ui').style.display = 'none';
     
-    // ★ 追加：選んだ敵の足元だけ濃い赤（黄色）にする
     clearHighlights();
     showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
 
@@ -286,7 +288,7 @@ function answerConfirm(isYes) {
         uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
     }
     
-    clearHighlights(); // 確定したらハイライトは消す
+    clearHighlights(); 
     gameStore.setState({ gameState: 'ANIMATING' });
     
     if(store.confirmMode === 'MOVE') {
@@ -297,31 +299,26 @@ function answerConfirm(isYes) {
             document.getElementById('command-ui').style.display = 'block'; 
         });
     } else if(store.confirmMode === 'ATTACK') {
-        // 攻撃後、行動完了にする処理を渡す
         battleSys.executeAttack(window.player, store.pendingData, window.units, camera, () => completePlayerAction(window.player), scene);
     } else { 
         completePlayerAction(window.player); 
     }
 }
 
-// ★ 追加：キャラクターの行動完了処理（全員終わったら敵ターンへ）
 function completePlayerAction(unit) {
     unit.hasMoved = true; 
     unit.hasAttacked = true;
-    unit.hasActed = true; // 行動完了フラグ
+    unit.hasActed = true; 
     
-    // プレイヤー軍でまだ動けるキャラがいるかチェック
     const activePlayers = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
     
     const boss = window.units.find(u => u.id === 'ブラキオサウルス');
     if(boss && boss.hp <= 0) return checkVictory();
 
     if (activePlayers.length > 0) {
-        // まだ動ける味方がいるならフェイズ継続
         gameStore.setState({ gameState: 'IDLE' });
         uiCtrl.hideAll();
     } else {
-        // 全員動いたので敵のフェイズへ移行
         gameStore.setState({ gameState: 'ENEMY_TURN', phase: 'ENEMY_PHASE' });
         uiCtrl.hideAll();
         uiCtrl.setMsg("敵の番です...", "#ff5555");
@@ -330,7 +327,6 @@ function completePlayerAction(unit) {
 }
 
 async function processEnemyAI() {
-    // 敵全員の行動完了フラグをリセット
     window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
 
     const enemies = battleSys.decideEnemyAI(window.units, window.player);
@@ -350,7 +346,6 @@ async function processEnemyAI() {
         enemy.hasActed = true;
     }
     
-    // 敵フェイズ終了 → プレイヤーフェイズ開始
     window.units.filter(u => u.isPlayer).forEach(u => {
         u.hasMoved = false; u.hasAttacked = false; u.hasActed = false;
     });
