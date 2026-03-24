@@ -1,89 +1,112 @@
-export const VERSION = "8.16.1";
+export const VERSION = "8.18.0";
+import { TILE_SIZE, H_STEP, MAP_W, MAP_D } from './map.js';
 
 export class BattleSystem {
-    constructor(ui, cameraControl) {
-        this.ui = ui;
+    constructor(uiCtrl, cameraControl) {
+        this.uiCtrl = uiCtrl;
         this.cameraControl = cameraControl;
     }
 
-    // sceneを受け取って、敵を倒した時に完全に消去する
-    executeAttack(attacker, defender, units, camera, onComplete, scene) {
-        attacker.lookAtNode(defender.x, defender.z);
-        defender.lookAtNode(attacker.x, attacker.z);
-        
-        if(attacker.texture) attacker.setAction('ATTACK');
-        if(defender.texture) defender.setAction('HURT');
+    executeMovement(unit, path, onComplete) {
+        if (!path || path.length === 0) {
+            if (onComplete) onComplete();
+            return;
+        }
 
-        const damage = Math.max(1, (attacker.str - defender.def) + (attacker.h - defender.h) * 2);
-        const origPos = attacker.sprite.position.clone();
-        
-        // 攻撃アニメーションの移動量計算
-        const dx = (defender.sprite.position.x - attacker.sprite.position.x) * 0.5;
-        const dz = (defender.sprite.position.z - attacker.sprite.position.z) * 0.5;
+        const offX = (MAP_W * TILE_SIZE) / 2;
+        const offZ = (MAP_D * TILE_SIZE) / 2;
 
-        const tl = gsap.timeline({ onComplete: () => {
-            defender.hp -= damage;
-            this.ui.showFloatingText(defender, damage, 'damage', camera);
-            
-            if(attacker.texture) attacker.setIdle();
-            if(defender.texture && defender.hp > 0) defender.setIdle();
-            
-            if(defender.hp <= 0) {
-                if(defender.texture) defender.setAction('DOWN');
-                if(attacker.isPlayer) {
-                    attacker.exp += 100;
-                    attacker.levelUp();
-                    setTimeout(() => { 
-                        this.ui.showFloatingText(attacker, "LEVEL UP!", 'levelup', camera); 
-                        this.ui.showStatus(attacker); 
-                    }, 400);
-                }
-                // 敵の消滅演出＋物理削除
-                gsap.to(defender.sprite.scale, { delay: 0.3, x: 0, y: 0, duration: 0.5, onComplete: () => {
-                    defender.dispose(scene); // ★完全消去
-                    onComplete();
-                }});
-            } else {
-                onComplete();
+        let tl = gsap.timeline({
+            onComplete: () => {
+                const lastNode = path[path.length - 1];
+                unit.x = lastNode.x;
+                unit.z = lastNode.z;
+                unit.h = lastNode.h;
+                if(onComplete) onComplete();
             }
-        }});
-        
-        tl.to(attacker.sprite.position, { x: origPos.x + dx, z: origPos.z + dz, duration: 0.15, ease: "power2.in" });
-        tl.to(attacker.sprite.position, { x: origPos.x, z: origPos.z, duration: 0.2 });
+        });
+
+        path.forEach(node => {
+            tl.to(unit.sprite.position, {
+                x: (node.x * TILE_SIZE) - offX,
+                z: (node.z * TILE_SIZE) - offZ,
+                y: node.h * H_STEP,
+                duration: 0.2,
+                ease: "linear",
+                onStart: () => {
+                    unit.lookAtNode(node.x, node.z);
+                }
+            });
+        });
     }
 
-    executeMovement(unit, path, onComplete, followCamera = false) {
-        const tl = gsap.timeline({ onComplete: () => {
-            const last = path[path.length - 1];
-            unit.x = last.x; unit.z = last.z; unit.h = last.h;
-            onComplete();
-        }});
+    // ★ 変更：反撃（isCounter）を判定して連鎖させるロジックを追加
+    executeAttack(attacker, defender, units, camera, onComplete, scene, isCounter = false) {
+        attacker.setAction('ATTACK');
         
-        path.forEach(step => {
-            const tX = (step.x * 60) - (25 * 60) / 2;
-            const tZ = (step.z * 60) - (25 * 60) / 2;
-            const tY = step.h * 30;
-            
-            tl.call(() => unit.lookAtNode(step.x, step.z));
-            tl.to(unit.sprite.position, { x: tX, z: tZ, duration: 0.25, onUpdate: () => { 
-                if(followCamera) this.cameraControl.controls.target.copy(unit.sprite.position); 
-            }});
-            tl.to(unit.sprite.position, { y: tY + 20, duration: 0.125, yoyo: true, repeat: 1 }, "<");
-            tl.set(unit.sprite.position, { y: tY });
+        const origX = attacker.sprite.position.x;
+        const targetX = defender.sprite.position.x;
+        const atkDir = targetX > origX ? 1 : -1;
+        
+        attacker.facing = atkDir;
+        if(attacker.sprite) attacker.sprite.scale.x = attacker.baseScaleX * atkDir;
+
+        // 突撃して戻るアニメーション（yoyo）
+        gsap.to(attacker.sprite.position, {
+            x: targetX - (20 * atkDir),
+            duration: 0.2,
+            yoyo: true,
+            repeat: 1,
+            onRepeat: () => {
+                // ぶつかった瞬間の処理
+                defender.setAction('HURT');
+                
+                // ダメージ計算（最低1ダメージ）
+                let dmg = Math.max(1, attacker.str - defender.def);
+                defender.hp -= dmg;
+                this.uiCtrl.showFloatingText(defender, dmg, 'damage', camera);
+
+                if (defender.hp <= 0) {
+                    defender.setAction('DOWN');
+                    // やられたらフェードアウトして消滅させる
+                    gsap.to(defender.sprite.material, { 
+                        opacity: 0, 
+                        delay: 0.5, 
+                        duration: 0.5, 
+                        onComplete: () => defender.dispose(scene) 
+                    });
+                }
+            },
+            onComplete: () => {
+                attacker.setIdle();
+                
+                if (defender.hp > 0) {
+                    defender.setIdle();
+                    
+                    // ★ 変更：防御側が生きていて、かつこれが反撃でなければ、反撃チェック！
+                    if (!isCounter) {
+                        const dist = Math.abs(attacker.x - defender.x) + Math.abs(attacker.z - defender.z);
+                        if (dist <= 1) { // 射程1なら反撃発動
+                            setTimeout(() => {
+                                this.uiCtrl.setMsg(`${defender.id} の反撃！`, "#ffcc00");
+                                // 攻守を入れ替えて、isCounter = true でもう一度実行
+                                this.executeAttack(defender, attacker, units, camera, onComplete, scene, true);
+                            }, 500);
+                            return; // 反撃が終わるまで onComplete は呼ばない
+                        }
+                    }
+                }
+                
+                // すべての攻撃（または反撃）が終わったらターン進行へ
+                setTimeout(() => {
+                    if (onComplete) onComplete();
+                }, 500);
+            }
         });
     }
 
     decideEnemyAI(units, player) {
-        const enemies = units.filter(u => !u.isPlayer && u.hp > 0);
-        const compAB_alive = enemies.some(u => u.id === 'コンプソグナトゥスA' || u.id === 'コンプソグナトゥスB');
-        const anyComp_alive = enemies.some(u => u.id.includes('コンプソグナトゥス'));
-
-        return enemies.filter(e => {
-            const dist = Math.abs(e.x - player.x) + Math.abs(e.z - player.z);
-            if (e.id.match(/[AB]$/)) return true;
-            if (e.id.match(/[CD]$/)) return (!compAB_alive || dist <= 5);
-            if (e.id === 'ブラキオサウルス') return !anyComp_alive;
-            return false;
-        });
+        // まだ行動していない生きている敵だけを抽出する
+        return units.filter(u => !u.isPlayer && u.hp > 0 && !u.hasActed);
     }
 }
