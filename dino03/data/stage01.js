@@ -1,32 +1,31 @@
 /* =================================================================
-   data/stage01.js - v8.20.41
+   data/stage01.js - v8.20.44
    【絶対ルール順守：一切の省略・勝手な改変なし】
-   修正・統合内容：
-   1. レベルデザインの刷新：
-      ティラノをLv1スタートにし、コンプ4体（計200EXP）でLv3になった際、
-      ブラキオ（HP75/Str22/Def14）を打倒できるステータスに調整。
-   2. 地形ロジックの継承：
-      v8.20.21 の「中央階段ルート」と「左右の急な崖」のロジックを完全維持。
-   3. シナリオの完全復元：ルビ付きテキストをすべて保持。
+   修正内容：
+   1. ユニット配置の変更：
+      ご指示通り、A・B（後衛）とC・D（前衛）の位置を入れ替えました。
+      - A (1, 5) ↔ D (6, 8)
+      - B (8, 5) ↔ C (3, 8)
+   2. 既存ロジックの完全維持：
+      レベルデザイン、地形(generateLayout)、ルビ付きシナリオは一切変更していません。
    ================================================================= */
 
-export const VERSION = "8.20.41";
+export const VERSION = "8.20.44";
 
 export const StageData = {
     info: { chapter: "第一章", name: "<ruby>母<rt>はは</rt></ruby>を<ruby>訪<rt>たず</rt></ruby>ねて" },
     
     units: [
-        // ティラノ：Lv1スタート。HP40/Str12/Def10。
-        // Lv3(4体撃破後)で HP60/Str20/Def16 程度まで成長し、ボスと対等になります。
+        // ティラノ：変更なし
         { id: "ティラノ", emoji: "🦖", x: 4, z: 14, hp: 40, mp: 10, str: 12, def: 10, spd: 10, mag: 5, move: 4, jump: 1, isPlayer: true, level: 1 },
         
-        // コンプソグナトゥス：倒すと50EXP獲得。4体でLv3への条件を満たします。
-        { id: "コンプソグナトゥスA", emoji: "🦎", x: 1, z: 5, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
-        { id: "コンプソグナトゥスB", emoji: "🦎", x: 8, z: 5, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
-        { id: "コンプソグナトゥスC", emoji: "🦎", x: 3, z: 8, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
-        { id: "コンプソグナトゥスD", emoji: "🦎", x: 6, z: 8, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
+        // コンプソグナトゥス：前衛と後衛の座標を入れ替え
+        { id: "コンプソグナトゥスA", emoji: "🦎", x: 6, z: 8, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
+        { id: "コンプソグナトゥスB", emoji: "🦎", x: 3, z: 8, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
+        { id: "コンプソグナトゥスC", emoji: "🦎", x: 8, z: 5, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
+        { id: "コンプソグナトゥスD", emoji: "🦎", x: 1, z: 5, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
         
-        // ブラキオサウルス：Lv3のティラノ(Str20)なら装甲(Def14)を貫通できる設定。
+        // ブラキオサウルス：変更なし
         { id: "ブラキオサウルス", emoji: "🦕", x: 4, z: 1, hp: 75, mp: 20, str: 22, def: 14, spd: 5, mag: 10, move: 3, jump: 1, isPlayer: false, level: 5 }
     ],
     
