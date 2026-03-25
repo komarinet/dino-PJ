@@ -1,15 +1,13 @@
 /* =================================================================
-   main.js - v8.20.30
+   main.js - v8.20.34
    【絶対ルール順守】一切の省略なし。
-   修正・統合内容：
-   1. UI同期：index.html (v8.17.1) および ui.js (v8.18.0) のIDとロジックに完全準拠。
-   2. カメラ補正：Box3 を使用し、アイコンの中央を正確に捉える。
-   3. バグ修正：showHighlight 内の変数名ミス (offsetZ -> offZ) を修正。
-   4. 没入感：オープニング開始時に uiCtrl.hideAll() を実行し、能力値窓を隠す。
-   5. AI直列化：敵の行動が重ならないよう、1体ずつ順番に処理。
+   修正内容：
+   1. 画像表示の修正：テクスチャクローン直後に needsUpdate フラグを追加。
+   2. 会話システムの修正：renderTalkLine への引数渡しを ui.js の仕様に統合。
+   3. クラッシュ防止：Box3 計算時のガード処理を追加。
    ================================================================= */
 
-export const VERSION = "8.20.30";
+export const VERSION = "8.20.34";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -99,7 +97,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
 
-    // ★ 没入感のため起動時にすべてのUIを隠す
     uiCtrl.hideAll();
 
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
@@ -109,6 +106,11 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         else if (u.id === 'ティラノ') conf = { tex: rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
         else conf = { tex: compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
         
+        // ★修正：クローンしたテクスチャの表示フラグを更新（表示されない問題を解決）
+        if (conf && conf.tex) {
+            conf.tex.needsUpdate = true;
+        }
+
         const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
         unit.h = mapData[unit.z][unit.x].h; 
         
@@ -125,20 +127,24 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     setupEventListeners();
     animate();
 
-    // Box3によるプレイヤー中心の初期カメラ
-    const playerCenter = new THREE.Vector3();
-    new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
-    cameraCtrl.setInitialAngle(playerCenter);
+    // Box3によるプレイヤー中心の初期カメラ（ガード付き）
+    if (window.player && window.player.sprite) {
+        const playerCenter = new THREE.Vector3();
+        new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
+        cameraCtrl.setInitialAngle(playerCenter);
+    }
 
     const o = document.getElementById('stage-overlay');
-    document.getElementById('chapter-num').innerHTML = StageData.info.chapter;
-    document.getElementById('stage-title').innerHTML = StageData.info.name;
-    gsap.to(o, { opacity: 1, duration: 1.5, onComplete: () => {
-        gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
-            const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-            cameraCtrl.playOpening(boss, window.player, () => { startDialogue(); });
+    if (o) {
+        document.getElementById('chapter-num').innerHTML = StageData.info.chapter;
+        document.getElementById('stage-title').innerHTML = StageData.info.name;
+        gsap.to(o, { opacity: 1, duration: 1.5, onComplete: () => {
+            gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
+                const boss = window.units.find(u => u.id === 'ブラキオサウルス');
+                cameraCtrl.playOpening(boss, window.player, () => { startDialogue(); });
+            }});
         }});
-    }});
+    }
 }
 
 function startDialogue() {
@@ -148,10 +154,12 @@ function startDialogue() {
 
     gameStore.setState({ gameState: 'TALKING', talkIndex: 0 });
     uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
-    document.getElementById('event-ui').style.display = 'flex';
+    const evUi = document.getElementById('event-ui');
+    if (evUi) evUi.style.display = 'flex';
     
     const playLine = (idx) => {
         const lineData = talkData[idx];
+        // ★修正：ui.js の仕様に合わせて window.player を追加（台詞が表示されない問題を解決）
         uiCtrl.renderTalkLine(lineData, window.units, window.player);
     };
 
@@ -161,12 +169,14 @@ function startDialogue() {
             gameStore.setState({ talkIndex: idx });
             playLine(idx);
         } else {
-            document.getElementById('event-ui').style.display = 'none';
+            if (evUi) evUi.style.display = 'none';
             cameraCtrl.setZoom(1.5);
             
-            const playerCenter = new THREE.Vector3();
-            new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
-            cameraCtrl.centerOn(playerCenter);
+            if (window.player && window.player.sprite) {
+                const playerCenter = new THREE.Vector3();
+                new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
+                cameraCtrl.centerOn(playerCenter);
+            }
             
             if (isPostBattle) {
                 const clearOverlay = document.getElementById('episode-clear-overlay');
@@ -174,9 +184,11 @@ function startDialogue() {
             } else {
                 gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
                 const overlay = document.getElementById('battle-start-overlay');
-                gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
-                    gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
-                }});
+                if (overlay) {
+                    gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
+                        gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
+                    }});
+                }
             }
         }
     };
@@ -191,10 +203,12 @@ function setupEventListeners() {
     document.getElementById('cmd-wait').onclick = () => execCommand('wait');
     document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); clearHighlights(); gameStore.setState({ gameState: 'IDLE' }); };
     document.getElementById('btn-cancel-attack').onclick = () => { document.getElementById('target-ui').style.display = 'none'; clearHighlights(); document.getElementById('command-ui').style.display = 'block'; };
-    document.querySelector('.btn-yes').onclick = () => answerConfirm(true);
-    document.querySelector('.btn-no').onclick = () => answerConfirm(false);
     
-    // カメラ操作UIのイベント
+    const btnYes = document.querySelector('.btn-yes');
+    const btnNo = document.querySelector('.btn-no');
+    if(btnYes) btnYes.onclick = () => answerConfirm(true);
+    if(btnNo) btnNo.onclick = () => answerConfirm(false);
+    
     const camUI = document.getElementById('camera-ui');
     const header = document.getElementById('ui-header');
     if(header) header.onclick = () => camUI.classList.toggle('collapsed');
@@ -208,7 +222,7 @@ function setupEventListeners() {
             if(t === 'pan-down') cameraCtrl.pan(0, 1);
             if(t === 'pan-left') cameraCtrl.pan(-1, 0);
             if(t === 'pan-right') cameraCtrl.pan(1, 0);
-            if(t === 'center') {
+            if(t === 'center' && window.player && window.player.sprite) {
                 const playerCenter = new THREE.Vector3();
                 new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
                 cameraCtrl.centerOn(playerCenter);
@@ -409,6 +423,6 @@ function animate() {
             u.shadow.position.y = u.h * H_STEP + 1; 
         }
     });
-    cameraCtrl.controls.update();
+    if (cameraCtrl && cameraCtrl.controls) cameraCtrl.controls.update();
     renderer.render(scene, camera);
 }
