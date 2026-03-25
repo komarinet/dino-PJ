@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ちびっこティラノ：タクティクス (v8.20.25)</title>
+    <title>ちびっこティラノ：タクティクス (v8.20.26)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -12,7 +12,7 @@
 <body>
 
 <div id="boot-screen" style="position:fixed; inset:0; background:#111; color:#fff; z-index:20000; padding:20px; font-family:monospace; display:flex; flex-direction:column;">
-    <h2 style="color:#0f0; border-bottom:1px solid #333;">SYSTEM DIAGNOSTICS v8.20.25</h2>
+    <h2 style="color:#0f0; border-bottom:1px solid #333;">SYSTEM DIAGNOSTICS v8.20.26</h2>
     <div id="ver-list" style="flex:1; overflow-y:auto; margin:10px 0; font-size:14px; line-height:1.6;"></div>
     <div style="display:flex; gap:10px;">
         <button id="btn-clear-data" style="flex:1; padding:15px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold;">データオールクリア</button>
@@ -20,11 +20,12 @@
     </div>
 </div>
 
+<div id="error-log" style="position:fixed; top:0; left:0; width:100%; background:#f00; color:#fff; z-index:30000; padding:10px; display:none; white-space:pre-wrap;"></div>
 <div id="loading-screen" style="display:none;"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.20.25 (Cinematic & Ruby Integrated)</div>
+<div id="version-display">v8.20.26 (Total Integration)</div>
 
 <div id="canvas-container"></div>
-<div id="msg-area" style="position:absolute; top:20px; left:50%; transform:translateX(-50%); color:#fff; z-index:10000; font-weight:bold; text-shadow:2px 2px 2px #000; pointer-events:none; opacity:0; transition:opacity 0.3s;"></div>
+<div id="msg-ui" class="rpg-window"></div>
 
 <div id="event-ui" class="rpg-window">
     <div class="ev-left">
@@ -37,20 +38,35 @@
     </div>
 </div>
 
-<div id="status-ui" class="rpg-window" style="display:none;"></div>
-<div id="detail-ui" class="rpg-window" style="display:none;"></div>
+<div id="status-ui" class="rpg-window" style="display:none;">
+    <div id="st-name" class="unit-name"></div>
+    <div class="stat-row" style="border:none; margin-bottom:0;"><span>🌟 Lv</span><span id="st-lv"></span></div>
+    <div id="st-hp-label" style="font-size:0.8rem;"><ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id="st-hp"></span></div>
+    <div class="bar-bg"><div id="st-hp-bar" class="hp-bar"></div></div>
+    <div id="st-mp-label" style="font-size:0.8rem;"><ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp"></span></div>
+    <div class="bar-bg"><div id="st-mp-bar" class="mp-bar"></div></div>
+    <button class="btn-detail" id="btn-toggle-detail"><ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼</button>
+</div>
+
+<div id="detail-ui" class="rpg-window" style="display:none;">
+    <div class="unit-name"><ruby>能力値<rt>のうりょくち</rt></ruby></div>
+    <div class="stat-row"><span>💪 <ruby>力<rt>ちから</rt></ruby></span><span id="dt-str"></span></div>
+    <div class="stat-row"><span>🛡️ <ruby>防御<rt>ぼうぎょ</rt></ruby></span><span id="dt-def"></span></div>
+    <div class="stat-row"><span>👟 <ruby>速度<rt>そくど</rt></ruby></span><span id="dt-spd"></span></div>
+    <div class="stat-row"><span>✨ <ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby></span><span id="dt-mag"></span></div>
+</div>
 
 <div id="command-ui" class="rpg-window" style="display:none;">
     <button id="cmd-move" class="cmd-btn">🚶 <ruby>移動<rt>いどう</rt></ruby></button>
     <button id="cmd-attack" class="cmd-btn">⚔️ <ruby>攻撃<rt>こうげき</rt></ruby></button>
     <button id="cmd-wait" class="cmd-btn">⏳ <ruby>待機<rt>たいき</rt></ruby></button>
-    <button id="cmd-cancel" class="cmd-btn" style="color:#ff8888;">↩ <ruby>戻<rt>もど</rt></ruby>る</button>
+    <button id="cmd-cancel" class="cmd-btn" style="color:#ff8888; border-top:1px dashed #555;">↩ <ruby>戻<rt>もど</rt></ruby>る</button>
 </div>
 
 <div id="target-ui" class="rpg-window" style="display:none;">
     <div class="unit-name">誰を<ruby>攻撃<rt>こうげき</rt></ruby>する？</div>
     <div id="target-list"></div>
-    <button class="cmd-btn" id="btn-cancel-attack">❌ キャンセル</button>
+    <button class="cmd-btn" id="btn-cancel-attack" style="border-top:1px dashed #555;">❌ キャンセル</button>
 </div>
 
 <div id="confirm-ui" class="rpg-window" style="display:none;">
@@ -62,17 +78,17 @@
 </div>
 
 <div id="camera-ui" class="rpg-window collapsed">
-    <div id="ui-header">📷 カメラ<ruby>操作<rt>そうさ</rt></ruby></div>
+    <div id="ui-header">📷 カメラ<ruby>操作<rt>そうさ</rt></ruby> (<ruby>開閉<rt>かいへい</rt></ruby>)</div>
     <div class="ui-grid">
-        <button class="ui-btn" data-cam="rotate-left">◀</button>
-        <button class="ui-btn" data-cam="pan-up">▲</button>
-        <button class="ui-btn" data-cam="rotate-right">▶</button>
-        <button class="ui-btn" data-cam="pan-left">左</button>
-        <button class="ui-btn" data-cam="center">中</button>
-        <button class="ui-btn" data-cam="pan-right">右</button>
-        <button class="ui-btn" data-cam="zoom-in">＋</button>
-        <button class="ui-btn" data-cam="pan-down">▼</button>
-        <button class="ui-btn" data-cam="zoom-out">ー</button>
+        <button class="ui-btn" data-cam="rotate-left"><ruby>回<rt>まわ</rt></ruby>す ◀</button>
+        <button class="ui-btn" data-cam="pan-up"><ruby>上<rt>うえ</rt></ruby></button>
+        <button class="ui-btn" data-cam="rotate-right">▶ <ruby>回<rt>まわ</rt></ruby>す</button>
+        <button class="ui-btn" data-cam="pan-left"><ruby>左<rt>ひだり</rt></ruby></button>
+        <button class="ui-btn" data-cam="center"><ruby>中心<rt>ちゅうしん</rt></ruby></button>
+        <button class="ui-btn" data-cam="pan-right"><ruby>右<rt>みぎ</rt></ruby></button>
+        <button class="ui-btn" data-cam="zoom-in"><ruby>寄<rt>よ</rt></ruby>る ＋</button>
+        <button class="ui-btn" data-cam="pan-down"><ruby>下<rt>した</rt></ruby></button>
+        <button class="ui-btn" data-cam="zoom-out">ー <ruby>引<rt>ひ</rt></ruby>く</button>
     </div>
 </div>
 
@@ -81,7 +97,8 @@
     <div id="stage-title" class="cool-text"></div>
 </div>
 <div id="battle-start-overlay" class="big-text-overlay"><div class="battle-text">BATTLE START！</div></div>
+<div id="episode-clear-overlay" class="big-text-overlay"><div class="clear-text">第1話 クリア</div></div>
 
-<script type="module" src="main.js?v=2025"></script>
+<script type="module" src="main.js?v=20260325"></script>
 </body>
 </html>
