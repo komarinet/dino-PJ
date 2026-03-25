@@ -1,16 +1,14 @@
 /* =================================================================
-   ui.js - v8.20.58
+   ui.js - v8.20.61
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. セレクター修正：btnToggleDetail を ID 取得に変更（html v8.20.58 に準拠）。
-   2. 演出の完備：
-      - LEVEL UP!: 頭上（heightOffset）から発生し、空へ昇るアニメ。
-      - Damage: 胸あたりから発生し、足元へ落ちて弾む（bounce）アニメ。
-   3. 整合性維持：main.js および units.js からの引数渡しに完全対応。
-   4. 機能維持：顔グラフィック切り出し、Rubyタグ、コマンド制御を完備。
+   1. ターゲットプレビュー対応：showTargetPreview を追加し、敵のHP/Defを表示可能に。
+   2. DOM取得更新：target-preview-ui 関連のID取得をコンストラクタに統合。
+   3. 管理強化：hideAll にターゲットプレビュー窓を追加。
+   4. 既存維持：バウンドダメージ、上昇レベルアップ演出、顔グラ、Rubyタグを完備。
    ================================================================= */
 
-export const VERSION = "8.20.58";
+export const VERSION = "8.20.61";
 
 export class UIControl {
     constructor(cameraControl) {
@@ -27,7 +25,6 @@ export class UIControl {
             stMpLabel: document.getElementById('st-mp-label'),
             stMp: document.getElementById('st-mp'),
             stMpBar: document.getElementById('st-mp-bar'),
-            // ★修正：IDで取得するように変更（HTML v8.20.58 準拠）
             btnToggleDetail: document.getElementById('btn-toggle-detail'),
             detailUi: document.getElementById('detail-ui'),
             dtStr: document.getElementById('dt-str'),
@@ -44,7 +41,14 @@ export class UIControl {
             evPortrait: document.getElementById('ev-portrait'),
             evNamePlate: document.getElementById('ev-name-plate'),
             evText: document.getElementById('ev-text'),
-            evTextArea: document.getElementById('ev-text-area')
+            evTextArea: document.getElementById('ev-text-area'),
+            // ★追加：ターゲットプレビュー用
+            targetPreviewUi: document.getElementById('target-preview-ui'),
+            tpName: document.getElementById('tp-name'),
+            tpLv: document.getElementById('tp-lv'),
+            tpHp: document.getElementById('tp-hp'),
+            tpHpBar: document.getElementById('tp-hp-bar'),
+            tpDef: document.getElementById('tp-def')
         };
     }
 
@@ -59,10 +63,14 @@ export class UIControl {
         }
     }
 
+    /**
+     * すべてのウィンドウを非表示にする（ターゲットプレビューも含む）
+     */
     hideAll() {
         const windows = [
             this.dom.statusUi, this.dom.detailUi, this.dom.commandUi, 
-            this.dom.confirmUi, this.dom.targetUi, this.dom.eventUi
+            this.dom.confirmUi, this.dom.targetUi, this.dom.eventUi,
+            this.dom.targetPreviewUi // ★追加
         ];
         windows.forEach(el => {
             if (el) el.style.display = 'none';
@@ -108,6 +116,22 @@ export class UIControl {
         if (this.dom.dtMag) this.dom.dtMag.innerText = unit.mag;
     }
 
+    /**
+     * 攻撃対象のステータスプレビューを表示
+     */
+    showTargetPreview(unit) {
+        if (!this.dom.targetPreviewUi) return;
+        this.dom.targetPreviewUi.style.display = 'block';
+        
+        if (this.dom.tpName) this.dom.tpName.innerText = unit.id;
+        if (this.dom.tpLv) this.dom.tpLv.innerText = unit.level;
+        if (this.dom.tpHp) this.dom.tpHp.innerText = `${unit.hp}/${unit.maxHp}`;
+        if (this.dom.tpHpBar) {
+            this.dom.tpHpBar.style.width = `${(unit.hp / unit.maxHp) * 100}%`;
+        }
+        if (this.dom.tpDef) this.dom.tpDef.innerText = unit.def;
+    }
+
     renderTalkLine(data, units, player) {
         if (!this.dom.evNamePlate || !this.dom.evText) return;
         this.dom.evNamePlate.innerText = data.name;
@@ -142,7 +166,6 @@ export class UIControl {
     }
 
     showDamageText(unit, text, scene, camera) {
-        // ダメージは胸の高さ（+30）から開始。
         this.showFloatingText(unit, text, 'damage', camera, 30);
     }
 
@@ -172,7 +195,6 @@ export class UIControl {
         document.body.appendChild(el);
         
         if (type === 'levelup') {
-            // レベルアップ：空高く昇る（y coordinate 減少）
             gsap.to(el, { 
                 y: "-=60", 
                 opacity: 0, 
@@ -181,7 +203,6 @@ export class UIControl {
                 onComplete: () => el.remove() 
             });
         } else {
-            // ダメージ：足元へ落ちて弾む（y coordinate 増加）
             gsap.to(el, { 
                 y: "+=40", 
                 opacity: 0, 
