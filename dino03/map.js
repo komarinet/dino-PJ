@@ -1,14 +1,15 @@
 /* =================================================================
-   map.js - v8.20.39
-   【絶対ルール遵守：一切の省略・勝手な関数追加なし】
-   修正・維持内容：
-   1. 水面表示の復元：blocksHigh が 0 の地点に、透明な板ではなく、
-      正しくテクスチャを適用した Plane を配置し、水が見えるように修正。
-   2. 埋没防止の継続：高さ0の地点でユニットが埋まらないよう blocksHigh = cell.h を維持。
-   3. 重なり判定の維持：getWalkableNodes 内の Math.round による厳格判定を完備。
+   map.js - v8.20.47
+   【絶対ルール順守：一切の省略・勝手な改変なし】
+   修正内容：
+   1. 水面描画の同期：判定条件を「blocksHigh <= 0」から「col === 4」に変更。
+      これにより、stage01.js で設定した高さ h に合わせて水面が描画されます。
+   2. 水位の上昇：水面の Plane を (blocksHigh * H_STEP) - 0.5 の高さに配置。
+      地面と同じ高さに水を表示しつつ、キャラが埋まるのを防いでいます。
+   3. 既存ロジックの完全維持：Math.round 重なり判定、UV計算等はすべて継承。
    ================================================================= */
 
-export const VERSION = "8.20.39";
+export const VERSION = "8.20.47";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 export const MAP_W = 10;
@@ -37,51 +38,11 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
             const blocksHigh = cell.h; 
             if (col === 4) window.obstaclesMap.add(`${x},${z}`);
 
-            // 1. 高さがある場合のブロック描画ロジック（変更なし）
-            for (let b = 0; b < blocksHigh; b++) {
-                const isTopBlock = (b === blocksHigh - 1);
-                const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
-                const uvAttr = geo.attributes.uv;
-                for (let i = 0; i < uvAttr.count; i++) {
-                    let u = uvAttr.getX(i), v = uvAttr.getY(i);
-                    const isTopFace = (i >= 8 && i <= 11);
-                    const isBottomFace = (i >= 12 && i <= 15);
-                    let newU, newV;
-                    if (isTopFace) {
-                        if (isTopBlock) {
-                            newU = (u + col) * wRatio;
-                            newV = vFloorStart + (v * (vFloorEnd - vFloorStart));
-                        } else { newU = 0; newV = 0; }
-                    } else if (isBottomFace) { newU = 0; newV = 0; }
-                    else {
-                        newU = (u + col) * wRatio;
-                        if (isTopBlock) newV = vSide1Start + (v * (vSide1End - vSide1Start));
-                        else {
-                            const distFromTop = (blocksHigh - 1) - b;
-                            if (distFromTop % 2 === 0) newV = vSide2Start + ((1.0 - v) * (vSide2End - vSide2Start));
-                            else newV = vSide2Start + (v * (vSide2End - vSide2Start));
-                        }
-                    }
-                    uvAttr.setXY(i, newU, newV);
-                }
-                uvAttr.needsUpdate = true;
-                const mesh = new THREE.Mesh(geo, material);
-                mesh.position.set(x * TILE_SIZE - offsetX, (b * H_STEP) + (H_STEP / 2), z * TILE_SIZE - offsetZ);
-                if (isTopBlock) {
-                    mesh.userData = { x, z, h: cell.h };
-                    window.tilesMeshMap[`${x},${z}`] = mesh;
-                    window.interactableTiles.push(mesh);
-                }
-                scene.add(mesh);
-            }
-
-            // 2. ★修正：高さ0（水面など）の描画ロジック
-            // 不可視設定を解除し、正しくテクスチャを適用します
-            if (blocksHigh <= 0) {
+            // ★ 修正：水（type: 4）の場合は、高さ h の位置に水面の板を描画する
+            if (col === 4) {
                 const floorGeo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
                 const uvAttr = floorGeo.attributes.uv;
                 
-                // 水面用タイルのUVを設定
                 for (let i = 0; i < uvAttr.count; i++) {
                     let u = uvAttr.getX(i), v = uvAttr.getY(i);
                     let newU = (u + col) * wRatio;
@@ -90,22 +51,70 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                 }
                 uvAttr.needsUpdate = true;
 
-                // マテリアルを適用し、表示(visible: true)にします
                 const floorMesh = new THREE.Mesh(floorGeo, material);
                 floorMesh.rotation.x = -Math.PI / 2;
                 
-                // Zファイティング（チラつき）防止のため、ごくわずかに地面より下げて配置
-                floorMesh.position.set(x * TILE_SIZE - offsetX, -0.5, z * TILE_SIZE - offsetZ);
-                floorMesh.userData = { x, z, h: 0 };
+                // データ上の高さ(blocksHigh * H_STEP)に合わせる。Zファイティング防止で -0.5。
+                floorMesh.position.set(x * TILE_SIZE - offsetX, (blocksHigh * H_STEP) - 0.5, z * TILE_SIZE - offsetZ);
+                floorMesh.userData = { x, z, h: blocksHigh };
                 
                 window.tilesMeshMap[`${x},${z}`] = floorMesh;
                 window.interactableTiles.push(floorMesh);
                 scene.add(floorMesh);
+            } 
+            else {
+                // 陸地の場合のブロック積層描画
+                for (let b = 0; b < blocksHigh; b++) {
+                    const isTopBlock = (b === blocksHigh - 1);
+                    const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
+                    const uvAttr = geo.attributes.uv;
+                    for (let i = 0; i < uvAttr.count; i++) {
+                        let u = uvAttr.getX(i), v = uvAttr.getY(i);
+                        const isTopFace = (i >= 8 && i <= 11);
+                        const isBottomFace = (i >= 12 && i <= 15);
+                        let newU, newV;
+                        if (isTopFace) {
+                            if (isTopBlock) {
+                                newU = (u + col) * wRatio;
+                                newV = vFloorStart + (v * (vFloorEnd - vFloorStart));
+                            } else { newU = 0; newV = 0; }
+                        } else if (isBottomFace) { newU = 0; newV = 0; }
+                        else {
+                            newU = (u + col) * wRatio;
+                            if (isTopBlock) newV = vSide1Start + (v * (vSide1End - vSide1Start));
+                            else {
+                                const distFromTop = (blocksHigh - 1) - b;
+                                if (distFromTop % 2 === 0) newV = vSide2Start + ((1.0 - v) * (vSide2End - vSide2Start));
+                                else newV = vSide2Start + (v * (vSide2End - vSide2Start));
+                            }
+                        }
+                        uvAttr.setXY(i, newU, newV);
+                    }
+                    uvAttr.needsUpdate = true;
+                    const mesh = new THREE.Mesh(geo, material);
+                    mesh.position.set(x * TILE_SIZE - offsetX, (b * H_STEP) + (H_STEP / 2), z * TILE_SIZE - offsetZ);
+                    if (isTopBlock) {
+                        mesh.userData = { x, z, h: cell.h };
+                        window.tilesMeshMap[`${x},${z}`] = mesh;
+                        window.interactableTiles.push(mesh);
+                    }
+                    scene.add(mesh);
+                }
+
+                // 高さが0の場合のクリック判定用透明パネル（陸地用）
+                if (blocksHigh <= 0) {
+                    const floorGeo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+                    const floorMesh = new THREE.Mesh(floorGeo, new THREE.MeshBasicMaterial({ visible: false }));
+                    floorMesh.rotation.x = -Math.PI / 2;
+                    floorMesh.position.set(x * TILE_SIZE - offsetX, 0, z * TILE_SIZE - offsetZ);
+                    floorMesh.userData = { x, z, h: 0 };
+                    window.interactableTiles.push(floorMesh);
+                    scene.add(floorMesh);
+                }
             }
         }
     }
 
-    // 3. 障害物描画ロジック（変更なし）
     if (obstacles) {
         const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
         const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
@@ -124,7 +133,6 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
     }
 }
 
-// 4. 移動ノード探索ロジック（重なり判定Math.roundを完全維持）
 export function getWalkableNodes(units, unit, mapData) {
     const nodes = [];
     const startH = mapData[unit.z][unit.x].h;
@@ -145,7 +153,6 @@ export function getWalkableNodes(units, unit, mapData) {
             const targetH = mapData[nz][nx].h;
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
             
-            // ユニット同士の重なり判定（Math.round を使用）
             const isOccupied = units.some(u => u !== unit && u.hp > 0 && Math.round(u.x) === nx && Math.round(u.z) === nz);
             if (isOccupied) continue;
 
