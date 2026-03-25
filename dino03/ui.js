@@ -1,14 +1,16 @@
 /* =================================================================
-   ui.js - v8.20.57
+   ui.js - v8.20.58
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. レベルアップ演出強化：頭上（heightOffset）から発生し、上へ昇るアニメに変更。
-   2. ダメージ演出修正：ご要望通り、数値が上から下へ落ちるように変更。
-   3. 整合性維持：main.js および units.js からの新しい引数渡しに完全対応。
-   4. 機能維持：顔グラフィック、Rubyタグ、コマンド制御を完備。
+   1. セレクター修正：btnToggleDetail を ID 取得に変更（html v8.20.58 に準拠）。
+   2. 演出の完備：
+      - LEVEL UP!: 頭上（heightOffset）から発生し、空へ昇るアニメ。
+      - Damage: 胸あたりから発生し、足元へ落ちて弾む（bounce）アニメ。
+   3. 整合性維持：main.js および units.js からの引数渡しに完全対応。
+   4. 機能維持：顔グラフィック切り出し、Rubyタグ、コマンド制御を完備。
    ================================================================= */
 
-export const VERSION = "8.20.57";
+export const VERSION = "8.20.58";
 
 export class UIControl {
     constructor(cameraControl) {
@@ -25,7 +27,8 @@ export class UIControl {
             stMpLabel: document.getElementById('st-mp-label'),
             stMp: document.getElementById('st-mp'),
             stMpBar: document.getElementById('st-mp-bar'),
-            btnToggleDetail: document.querySelector('#status-ui .btn-toggle-detail'),
+            // ★修正：IDで取得するように変更（HTML v8.20.58 準拠）
+            btnToggleDetail: document.getElementById('btn-toggle-detail'),
             detailUi: document.getElementById('detail-ui'),
             dtStr: document.getElementById('dt-str'),
             dtDef: document.getElementById('dt-def'),
@@ -139,19 +142,14 @@ export class UIControl {
     }
 
     showDamageText(unit, text, scene, camera) {
-        // ダメージは通常の高さ（胸あたり）から。
+        // ダメージは胸の高さ（+30）から開始。
         this.showFloatingText(unit, text, 'damage', camera, 30);
     }
 
-    /**
-     * 浮遊テキスト表示（演出の撃ち分け対応）
-     * @param {number} heightOffset - 発生させる高さの調整値
-     */
     showFloatingText(unit, text, type, camera, heightOffset = 50) {
         if (!unit || !unit.sprite || !camera) return;
         const vector = unit.sprite.position.clone();
         
-        // ワールド座標の段階で高さをオフセット
         vector.y += heightOffset; 
         vector.project(camera);
         
@@ -165,7 +163,6 @@ export class UIControl {
         el.className = 'floating-text';
         el.innerText = text;
         
-        // 種類に応じた色設定
         el.style.color = (type === 'levelup') ? '#ffff00' : (type === 'heal' ? '#00ffff' : '#ffffff');
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
@@ -174,9 +171,8 @@ export class UIControl {
         el.style.zIndex = '5000';
         document.body.appendChild(el);
         
-        // ★演出の撃ち分け
         if (type === 'levelup') {
-            // レベルアップ：頭上にピタッと出て、さらに「上」へ昇る
+            // レベルアップ：空高く昇る（y coordinate 減少）
             gsap.to(el, { 
                 y: "-=60", 
                 opacity: 0, 
@@ -185,12 +181,12 @@ export class UIControl {
                 onComplete: () => el.remove() 
             });
         } else {
-            // ダメージ等：発生場所から「下」へ落ちる
+            // ダメージ：足元へ落ちて弾む（y coordinate 増加）
             gsap.to(el, { 
                 y: "+=40", 
                 opacity: 0, 
                 duration: 1.2, 
-                ease: "bounce.out", // 少し弾む演出
+                ease: "bounce.out", 
                 onComplete: () => el.remove() 
             });
         }
