@@ -1,14 +1,14 @@
 /* =================================================================
-   main.js - v8.20.52
+   main.js - v8.20.53
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. イベント演出復元：checkVictory 内でボスの消滅状態を解除。
-      scale を戻し、setAction('HURT') で「やられた状態での対話」を可能に。
-   2. 既存機能の維持：ユニット優先タップ、味方セレクター、AI思考演出、
-      カメラ補正、テクスチャ更新フラグ等をすべて完備。
+   1. エンディング演出：ティラノが最後から2番目のセリフの後にマップ外へ歩き去る。
+   2. ボスの独白：ティラノ退場後にカメラをボスに戻し、最後の一言を表示。
+   3. クリア演出：会話終了時にステージクリアのオーバーレイをアニメーション表示。
+   4. 既存機能の維持：ユニット優先タップ、AI思考演出、ボス復活等をすべて完備。
    ================================================================= */
 
-export const VERSION = "8.20.52";
+export const VERSION = "8.20.53";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -161,26 +161,65 @@ function startDialogue() {
         uiCtrl.renderTalkLine(lineData, window.units, window.player);
     };
 
-    window.onGlobalTap = () => {
+    window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
+        
+        // ★修正：エンディング演出の分岐
+        if(isPostBattle && idx === 7) {
+            // ティラノが「僕はお母さんを助けたいだけだ」と言い終えた後、退場する演出
+            if (evUi) evUi.style.display = 'none';
+            gameStore.setState({ gameState: 'ANIMATING' });
+            
+            // マップ外（カメラ外）へ歩かせるパスを作成
+            const exitPath = [];
+            for(let i=1; i<=3; i++) {
+                exitPath.push({ x: window.player.x, z: window.player.z + i, h: window.player.h });
+            }
+            
+            // ゆっくり去っていく（battle.jsの標準速度で移動）
+            await new Promise(res => battleSys.executeMovement(window.player, exitPath, res));
+            
+            // マップから消す
+            window.player.dispose(scene);
+            
+            // カメラをボスに戻す
+            const boss = window.units.find(u => u.id === 'ブラキオサウルス');
+            if(boss && boss.sprite) {
+                const bossCenter = new THREE.Vector3();
+                new THREE.Box3().setFromObject(boss.sprite).getCenter(bossCenter);
+                cameraCtrl.centerOn(bossCenter);
+            }
+
+            // ボスの最後の一言を表示
+            if (evUi) evUi.style.display = 'flex';
+            gameStore.setState({ talkIndex: idx });
+            playLine(idx);
+            gameStore.setState({ gameState: 'TALKING' });
+            return;
+        }
+
         if(idx < talkData.length) {
             gameStore.setState({ talkIndex: idx });
             playLine(idx);
         } else {
+            // 全ての会話が終了
             if (evUi) evUi.style.display = 'none';
             cameraCtrl.setZoom(1.5);
             
-            if (window.player && window.player.sprite) {
-                const playerCenter = new THREE.Vector3();
-                new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
-                cameraCtrl.centerOn(playerCenter);
-            }
-            
             if (isPostBattle) {
+                // ★修正：ステージクリアのバーンとなる演出
                 const clearOverlay = document.getElementById('episode-clear-overlay');
-                if(clearOverlay) clearOverlay.style.display = 'flex';
+                if(clearOverlay) {
+                    clearOverlay.style.display = 'flex';
+                    gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
+                }
             } else {
                 gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
+                if (window.player && window.player.sprite) {
+                    const playerCenter = new THREE.Vector3();
+                    new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
+                    cameraCtrl.centerOn(playerCenter);
+                }
                 const overlay = document.getElementById('battle-start-overlay');
                 if (overlay) {
                     gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
@@ -440,21 +479,12 @@ async function processEnemyAI() {
     }
 }
 
-/**
- * ★修正：勝利判定後の処理
- * ボス（ブラキオサウルス）を再出現させ、会話を始める。
- */
 function checkVictory() {
     const boss = window.units.find(u => u.id === 'ブラキオサウルス');
     if (boss && boss.sprite) {
-        // 消滅していたスプライトのスケールを元に戻す
         const h = (boss.spriteConfig && boss.spriteConfig.type === 'bra') ? 90 : 60;
         boss.sprite.scale.set(boss.baseScaleX * boss.facing, h, 1);
-        
-        // 影も戻す
         if (boss.shadow) boss.shadow.visible = true;
-        
-        // 「立ち上がった（やられた）」状態のポーズにする
         if (boss.setAction) boss.setAction('HURT');
     }
 
