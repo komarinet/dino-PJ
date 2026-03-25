@@ -1,12 +1,19 @@
 /* =================================================================
-   main.js - v8.20.22
-   修正内容：
-   1. 変数名エラー修正：showHighlight 内の offsetZ を offZ に修正。
-      これにより、移動ボタンを押した際のフリーズを解消。
-   2. AI判定の強化：重なり防止のため、より厳密な判定を適用。
+   main.js - v8.20.24
+   修正・統合内容：
+   1. オープニング没入感の復活：
+      init 関数内でオープニング開始時に uiCtrl.hideAll() を実行し、
+      ステータス画面などの不要なUIを確実に非表示にしました。
+   2. 会話システムのエラー修正：
+      renderDialogueLine（誤）を renderTalkLine（正）に修正。
+      これにより、ルビ付きの台詞が正常に表示されるようになります。
+   3. カメラロジックの統合：
+      Box3 を使用した「アイコンの中心を捉えるカメラ」を維持。
+   4. 変数名エラー修正：
+      showHighlight 内の offsetZ を offZ に修正。
    ================================================================= */
 
-export const VERSION = "8.20.22";
+export const VERSION = "8.20.24";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -130,6 +137,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
     cameraCtrl.setInitialAngle(playerCenter);
     
+    // ★ 修正箇所：オープニング開始時にUIを非表示にして没入感を高める
     uiCtrl.hideAll();
     if(statusUI) statusUI.style.display = 'none';
     
@@ -145,12 +153,18 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
 }
 
 function startDialogue() {
+    const store = getStore();
+    const isPostBattle = store.gameState === 'FINISHED';
     gameStore.setState({ gameState: 'TALKING', talkIndex: 0 });
+    
     uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
     document.getElementById('event-ui').style.display = 'flex';
     
+    const talkData = isPostBattle ? StageData.postBattleTalk : StageData.preBattleTalk;
+
     const playLine = (idx) => {
-        const lineData = StageData.preBattleTalk[idx];
+        const lineData = talkData[idx];
+        // ★ 修正箇所：renderDialogueLine ではなく renderTalkLine を呼び出す
         uiCtrl.renderTalkLine(lineData, window.units, window.player);
         
         const speaker = window.units.find(u => u.id === lineData.name);
@@ -163,7 +177,7 @@ function startDialogue() {
 
     window.onGlobalTap = () => {
         const idx = getStore().talkIndex + 1;
-        if(idx < StageData.preBattleTalk.length) {
+        if(idx < talkData.length) {
             gameStore.setState({ talkIndex: idx });
             playLine(idx);
         } else {
@@ -174,11 +188,17 @@ function startDialogue() {
             new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
             cameraCtrl.centerOn(playerCenter);
             
-            gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
-            const overlay = document.getElementById('battle-start-overlay');
-            gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
-                gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
-            }});
+            if (isPostBattle) {
+                // 戦闘後の会話が終わったら（次のステージへの準備など、現状は一旦リロードボタンを表示）
+                uiCtrl.setMsg("第一章 完", "#ffcc00");
+                document.getElementById('boot-screen').style.display = 'flex';
+            } else {
+                gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
+                const overlay = document.getElementById('battle-start-overlay');
+                gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
+                    gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
+                }});
+            }
         }
     };
     
@@ -218,7 +238,7 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        // ★ 修正箇所：offsetZ ではなく offZ を使用
+        // ★ 変数名修正済み
         mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
         mesh.renderOrder = 999;
         scene.add(mesh);
@@ -377,7 +397,6 @@ async function processEnemyAI() {
 
         enemy.lookAtNode(window.player.x, window.player.z);
         
-        // ★ 再計算：常に最新のユニット位置を考慮してルートを探す
         const routes = getWalkableNodes(window.units, enemy, mapData);
         let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
         
