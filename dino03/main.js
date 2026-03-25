@@ -1,14 +1,14 @@
 /* =================================================================
-   main.js - v8.20.51
+   main.js - v8.20.52
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 判定強化：onPointerClick を分離。ユニットのスプライト判定を最優先に。
-   2. セレクター：btn-next-unit のロジック実装。未行動の味方を順次フォーカス。
-   3. UI同期：animate ループ内で残り未行動人数のバッジを更新。
-   4. 既存機能：AI思考演出、カメラ補正、各種バグ修正をすべて継承。
+   1. イベント演出復元：checkVictory 内でボスの消滅状態を解除。
+      scale を戻し、setAction('HURT') で「やられた状態での対話」を可能に。
+   2. 既存機能の維持：ユニット優先タップ、味方セレクター、AI思考演出、
+      カメラ補正、テクスチャ更新フラグ等をすべて完備。
    ================================================================= */
 
-export const VERSION = "8.20.51";
+export const VERSION = "8.20.52";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -202,7 +202,6 @@ function setupEventListeners() {
     document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); clearHighlights(); gameStore.setState({ gameState: 'IDLE' }); };
     document.getElementById('btn-cancel-attack').onclick = () => { document.getElementById('target-ui').style.display = 'none'; clearHighlights(); document.getElementById('command-ui').style.display = 'block'; };
     
-    // ★追加：次の味方を選択するボタン
     const btnNext = document.getElementById('btn-next-unit');
     if (btnNext) btnNext.onclick = selectNextUnit;
 
@@ -235,12 +234,10 @@ function setupEventListeners() {
     });
 }
 
-// ★追加：味方を順番に切り替えるロジック
 function selectNextUnit() {
     const selectable = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
     if (selectable.length === 0) return;
     
-    // 現在表示されている名前をもとに、次の味方を特定（サイクリング）
     let nextUnit = selectable[0];
     const currentName = document.getElementById('st-name')?.innerText;
     const currentIndex = selectable.findIndex(u => u.id === currentName);
@@ -248,7 +245,6 @@ function selectNextUnit() {
         nextUnit = selectable[(currentIndex + 1) % selectable.length];
     }
 
-    // カメラを移動してステータス・メニューを表示
     const center = new THREE.Vector3();
     new THREE.Box3().setFromObject(nextUnit.sprite).getCenter(center);
     cameraCtrl.centerOn(center);
@@ -268,8 +264,6 @@ function onPointerClick(event) {
     const activeUnits = window.units.filter(u => u.hp > 0);
     const activeSprites = activeUnits.filter(u => u.sprite).map(u => u.sprite);
     
-    // ★修正：判定の優先順位を「ユニット優先」に分離
-    // まずユニットのスプライトを判定
     const unitIntersects = raycaster.intersectObjects(activeSprites);
     if (unitIntersects.length > 0) {
         const u = unitIntersects[0].object.userData.unit;
@@ -280,17 +274,16 @@ function onPointerClick(event) {
                  document.getElementById('command-ui').style.display = 'block'; 
              }
         }
-        return; // ユニットを触ったので、床の判定はスキップ
+        return;
     }
 
-    // ユニットを触っていなければ、床（または既存の移動先）を判定
     const tileIntersects = raycaster.intersectObjects(window.interactableTiles);
     if (tileIntersects.length > 0) {
         const obj = tileIntersects[0].object;
         const data = obj.userData;
         
         if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
-            uiCtrl.hideAll(); // 何もない床を触ったらUIを閉じる
+            uiCtrl.hideAll(); 
         } 
         else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
@@ -306,7 +299,6 @@ function onPointerClick(event) {
 }
 
 function execCommand(cmd) {
-    // 現在の選択対象を取得
     const currentName = document.getElementById('st-name')?.innerText;
     const unit = window.units.find(u => u.id === currentName) || window.player;
 
@@ -448,7 +440,24 @@ async function processEnemyAI() {
     }
 }
 
+/**
+ * ★修正：勝利判定後の処理
+ * ボス（ブラキオサウルス）を再出現させ、会話を始める。
+ */
 function checkVictory() {
+    const boss = window.units.find(u => u.id === 'ブラキオサウルス');
+    if (boss && boss.sprite) {
+        // 消滅していたスプライトのスケールを元に戻す
+        const h = (boss.spriteConfig && boss.spriteConfig.type === 'bra') ? 90 : 60;
+        boss.sprite.scale.set(boss.baseScaleX * boss.facing, h, 1);
+        
+        // 影も戻す
+        if (boss.shadow) boss.shadow.visible = true;
+        
+        // 「立ち上がった（やられた）」状態のポーズにする
+        if (boss.setAction) boss.setAction('HURT');
+    }
+
     gameStore.setState({ gameState: 'FINISHED' });
     startDialogue();
 }
@@ -473,7 +482,6 @@ function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta() * 1000;
     
-    // ★追加：味方ユニット選択UIの表示・人数更新
     const store = getStore();
     const selectorUi = document.getElementById('unit-selector-ui');
     const countEl = document.getElementById('remaining-count');
