@@ -1,15 +1,14 @@
 /* =================================================================
-   main.js - v8.20.45
+   main.js - v8.20.51
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. AI思考演出の強化：
-      敵のターン中、移動範囲の表示 -> 0.6秒待機 -> 移動先のハイライト -> 0.4秒待機 
-      というプロセスを追加し、「敵が考えている」感じを演出。
-   2. カメラフォーカス：行動する敵に自動でカメラが中心を合わせるように修正。
-   3. 既存修正の維持：needsUpdate、renderTalkLine引数、Box3ガードはすべて継承。
+   1. 判定強化：onPointerClick を分離。ユニットのスプライト判定を最優先に。
+   2. セレクター：btn-next-unit のロジック実装。未行動の味方を順次フォーカス。
+   3. UI同期：animate ループ内で残り未行動人数のバッジを更新。
+   4. 既存機能：AI思考演出、カメラ補正、各種バグ修正をすべて継承。
    ================================================================= */
 
-export const VERSION = "8.20.45";
+export const VERSION = "8.20.51";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -203,6 +202,10 @@ function setupEventListeners() {
     document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); clearHighlights(); gameStore.setState({ gameState: 'IDLE' }); };
     document.getElementById('btn-cancel-attack').onclick = () => { document.getElementById('target-ui').style.display = 'none'; clearHighlights(); document.getElementById('command-ui').style.display = 'block'; };
     
+    // ★追加：次の味方を選択するボタン
+    const btnNext = document.getElementById('btn-next-unit');
+    if (btnNext) btnNext.onclick = selectNextUnit;
+
     const btnYes = document.querySelector('.btn-yes');
     const btnNo = document.querySelector('.btn-no');
     if(btnYes) btnYes.onclick = () => answerConfirm(true);
@@ -232,6 +235,28 @@ function setupEventListeners() {
     });
 }
 
+// ★追加：味方を順番に切り替えるロジック
+function selectNextUnit() {
+    const selectable = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
+    if (selectable.length === 0) return;
+    
+    // 現在表示されている名前をもとに、次の味方を特定（サイクリング）
+    let nextUnit = selectable[0];
+    const currentName = document.getElementById('st-name')?.innerText;
+    const currentIndex = selectable.findIndex(u => u.id === currentName);
+    if (currentIndex !== -1 && selectable.length > 1) {
+        nextUnit = selectable[(currentIndex + 1) % selectable.length];
+    }
+
+    // カメラを移動してステータス・メニューを表示
+    const center = new THREE.Vector3();
+    new THREE.Box3().setFromObject(nextUnit.sprite).getCenter(center);
+    cameraCtrl.centerOn(center);
+    uiCtrl.showStatus(nextUnit);
+    uiCtrl.updateCommandMenu(nextUnit);
+    document.getElementById('command-ui').style.display = 'block';
+}
+
 function onPointerClick(event) {
     const store = getStore();
     if (store.gameState === 'ANIMATING' || store.gameState === 'ENEMY_TURN') return;
@@ -242,21 +267,30 @@ function onPointerClick(event) {
     
     const activeUnits = window.units.filter(u => u.hp > 0);
     const activeSprites = activeUnits.filter(u => u.sprite).map(u => u.sprite);
-    const intersects = raycaster.intersectObjects([...window.interactableTiles, ...activeSprites]);
     
-    if (intersects.length > 0) {
-        const obj = intersects[0].object;
-        const data = obj.userData.isUnit ? { x: obj.userData.unit.x, z: obj.userData.unit.z } : obj.userData;
+    // ★修正：判定の優先順位を「ユニット優先」に分離
+    // まずユニットのスプライトを判定
+    const unitIntersects = raycaster.intersectObjects(activeSprites);
+    if (unitIntersects.length > 0) {
+        const u = unitIntersects[0].object.userData.unit;
+        if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
+             uiCtrl.showStatus(u); 
+             if(u.isPlayer && !u.hasActed) {
+                 uiCtrl.updateCommandMenu(u); 
+                 document.getElementById('command-ui').style.display = 'block'; 
+             }
+        }
+        return; // ユニットを触ったので、床の判定はスキップ
+    }
+
+    // ユニットを触っていなければ、床（または既存の移動先）を判定
+    const tileIntersects = raycaster.intersectObjects(window.interactableTiles);
+    if (tileIntersects.length > 0) {
+        const obj = tileIntersects[0].object;
+        const data = obj.userData;
         
         if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
-            const u = getUnitAt(activeUnits, data.x, data.z);
-            if(u) { 
-                uiCtrl.showStatus(u); 
-                if(u.isPlayer && !u.hasActed) {
-                    uiCtrl.updateCommandMenu(u); 
-                    document.getElementById('command-ui').style.display = 'block'; 
-                }
-            } else { uiCtrl.hideAll(); }
+            uiCtrl.hideAll(); // 何もない床を触ったらUIを閉じる
         } 
         else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
@@ -272,8 +306,12 @@ function onPointerClick(event) {
 }
 
 function execCommand(cmd) {
+    // 現在の選択対象を取得
+    const currentName = document.getElementById('st-name')?.innerText;
+    const unit = window.units.find(u => u.id === currentName) || window.player;
+
     if(cmd === 'move') {
-        const tiles = getWalkableNodes(window.units, window.player, mapData);
+        const tiles = getWalkableNodes(window.units, unit, mapData);
         if(tiles.length > 0) {
             gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
             showHighlight(tiles, moveHighlightMat); 
@@ -281,24 +319,24 @@ function execCommand(cmd) {
             uiCtrl.setMsg("移動先を選んでください");
         }
     } else if(cmd === 'attack') {
-        const targets = getAttackableEnemies(window.units, window.player);
+        const targets = getAttackableEnemies(window.units, unit);
         if(targets.length === 0) return uiCtrl.setMsg("範囲内に敵がいません");
         gameStore.setState({ gameState: 'SELECTING_ATTACK_TARGET' });
         const list = document.getElementById('target-list'); list.innerHTML = '';
         targets.forEach(t => {
             const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
-            btn.onclick = () => selectTarget(t); list.appendChild(btn);
+            btn.onclick = () => selectTarget(t, unit); list.appendChild(btn);
         });
         showHighlight(targets, attackHighlightMat); 
         document.getElementById('command-ui').style.display = 'none'; 
         document.getElementById('target-ui').style.display = 'block';
     } else if(cmd === 'wait') {
-        completePlayerAction(window.player);
+        completePlayerAction(unit);
     }
 }
 
-function selectTarget(t) {
-    gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'ATTACK', pendingData: t });
+function selectTarget(t, attacker) {
+    gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'ATTACK', pendingData: { target: t, attacker: attacker } });
     document.getElementById('target-ui').style.display = 'none';
     clearHighlights();
     showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
@@ -320,14 +358,16 @@ function answerConfirm(isYes) {
     gameStore.setState({ gameState: 'ANIMATING' });
     
     if(store.confirmMode === 'MOVE') {
-        battleSys.executeMovement(window.player, store.pendingData, () => { 
-            window.player.hasMoved = true; 
+        const unit = window.units.find(u => u.id === document.getElementById('st-name')?.innerText) || window.player;
+        battleSys.executeMovement(unit, store.pendingData, () => { 
+            unit.hasMoved = true; 
             gameStore.setState({ gameState: 'IDLE' }); 
-            uiCtrl.updateCommandMenu(window.player);
+            uiCtrl.updateCommandMenu(unit);
             document.getElementById('command-ui').style.display = 'block'; 
         });
     } else if(store.confirmMode === 'ATTACK') {
-        battleSys.executeAttack(window.player, store.pendingData, window.units, camera, () => completePlayerAction(window.player), scene);
+        const { attacker, target } = store.pendingData;
+        battleSys.executeAttack(attacker, target, window.units, camera, () => completePlayerAction(attacker), scene);
     }
 }
 
@@ -364,27 +404,24 @@ async function processEnemyAI() {
             if (isBackAlive) { enemy.hasActed = true; continue; }
         }
 
-        // 1. カメラをこれから動く敵に合わせる
         const enemyCenter = new THREE.Vector3();
         if (enemy.sprite) {
             new THREE.Box3().setFromObject(enemy.sprite).getCenter(enemyCenter);
             cameraCtrl.centerOn(enemyCenter);
         }
 
-        // 2. 移動範囲（緑）を表示して「考えている」演出
         const routes = getWalkableNodes(window.units, enemy, mapData);
         if (routes.length > 0) {
             showHighlight(routes, moveHighlightMat);
-            await new Promise(res => setTimeout(res, 600)); // 少し待機（思考演出）
+            await new Promise(res => setTimeout(res, 600)); 
         }
 
-        // 3. 移動先を決定し、そこだけ強調表示
         let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
         
         if (best && best.path.length > 0) {
             clearHighlights();
-            showHighlight([best], targetHighlightMat); // 行き先をオレンジに
-            await new Promise(res => setTimeout(res, 400)); // 決定のタメ
+            showHighlight([best], targetHighlightMat); 
+            await new Promise(res => setTimeout(res, 400)); 
             clearHighlights();
 
             enemy.lookAtNode(window.player.x, window.player.z);
@@ -393,7 +430,6 @@ async function processEnemyAI() {
             clearHighlights();
         }
         
-        // 4. 攻撃
         const targets = getAttackableEnemies(window.units, enemy);
         if (targets.includes(window.player)) {
             await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
@@ -436,6 +472,21 @@ function clearHighlights() {
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta() * 1000;
+    
+    // ★追加：味方ユニット選択UIの表示・人数更新
+    const store = getStore();
+    const selectorUi = document.getElementById('unit-selector-ui');
+    const countEl = document.getElementById('remaining-count');
+    if (selectorUi && countEl) {
+        const unacted = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
+        if (store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
+            selectorUi.style.display = 'block';
+            countEl.innerText = unacted.length;
+        } else {
+            selectorUi.style.display = 'none';
+        }
+    }
+
     window.units.forEach(u => {
         if (u.updateAnimation) u.updateAnimation(delta);
         if (u.shadow && u.sprite) {
