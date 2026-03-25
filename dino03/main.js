@@ -1,14 +1,15 @@
 /* =================================================================
-   main.js - v8.20.55
+   main.js - v8.20.61
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 即時イベント：攻撃完了直後にボス撃破を判定し、即座にイベントへ移行。
-   2. 退場方向修正：ティラノの退場パスを z - i (マップ北側外) へ変更。
-   3. 終了演出ガード：isEndingProcessed フラグでクリア表示の重複を防止。
-   4. 完結メッセージ：「続きは制作中！」のテキストをクリア画面に統合。
+   1. ターゲットプレビュー：攻撃対象選択時に敵ステータスを即座に表示。
+   2. ボス実体化修正：checkVictory 内で消滅アニメを強制停止し、確実に再表示。
+   3. 即時イベント：攻撃完了直後にボス撃破を判定し、イベントへ移行。
+   4. 退場方向修正：ティラノの退場パスを z - i (マップ北側外) へ設定。
+   5. 既存維持：終了演出ガード、完結メッセージ、味方セレクターを完備。
    ================================================================= */
 
-export const VERSION = "8.20.55";
+export const VERSION = "8.20.61";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -21,7 +22,6 @@ import { StageData, VERSION as sceV } from './data/stage01.js';
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 const mapData = StageData.generateLayout();
 
-// エンディングの多重実行防止フラグ
 let isEndingProcessed = false;
 
 let highlightMeshes = [];
@@ -167,24 +167,19 @@ function startDialogue() {
     window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
         
-        // ★演出：ティラノの退場（最後から2番目のセリフの後）
         if(isPostBattle && idx === 7) {
             if (evUi) evUi.style.display = 'none';
             gameStore.setState({ gameState: 'ANIMATING' });
             
-            // 退場パス：北（z座標を減らす方向）へマップ外まで歩かせる
             const exitPath = [];
             for(let i=1; i<=4; i++) {
                 exitPath.push({ x: window.player.x, z: window.player.z - i, h: window.player.h });
             }
             
-            // ゆっくり去っていく演出
             await new Promise(res => battleSys.executeMovement(window.player, exitPath, res, 2.0));
             
-            // マップから消去
             window.player.dispose(scene);
             
-            // カメラをボス（ブラキオ）へ戻す
             const boss = window.units.find(u => u.id === 'ブラキオサウルス');
             if(boss && boss.sprite) {
                 const bossCenter = new THREE.Vector3();
@@ -192,7 +187,6 @@ function startDialogue() {
                 cameraCtrl.centerOn(bossCenter);
             }
 
-            // ボスの最後の一言を表示
             if (evUi) evUi.style.display = 'flex';
             gameStore.setState({ talkIndex: idx });
             playLine(idx);
@@ -204,16 +198,13 @@ function startDialogue() {
             gameStore.setState({ talkIndex: idx });
             playLine(idx);
         } else {
-            // 全ての会話が終了
             if (evUi) evUi.style.display = 'none';
             cameraCtrl.setZoom(1.5);
             
             if (isPostBattle) {
-                // 重複実行ガード
                 if (isEndingProcessed) return;
                 isEndingProcessed = true;
 
-                // ★最終メッセージ：制作中の告知
                 const clearOverlay = document.getElementById('episode-clear-overlay');
                 if(clearOverlay) {
                     const clearText = clearOverlay.querySelector('.clear-text');
@@ -224,7 +215,6 @@ function startDialogue() {
                     gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
                 }
             } else {
-                // 戦闘開始フェーズ
                 gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
                 if (window.player && window.player.sprite) {
                     const playerCenter = new THREE.Vector3();
@@ -250,7 +240,11 @@ function setupEventListeners() {
     document.getElementById('cmd-attack').onclick = () => execCommand('attack');
     document.getElementById('cmd-wait').onclick = () => execCommand('wait');
     document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); clearHighlights(); gameStore.setState({ gameState: 'IDLE' }); };
-    document.getElementById('btn-cancel-attack').onclick = () => { document.getElementById('target-ui').style.display = 'none'; clearHighlights(); document.getElementById('command-ui').style.display = 'block'; };
+    document.getElementById('btn-cancel-attack').onclick = () => { 
+        uiCtrl.hideAll(); // プレビューも隠す
+        clearHighlights(); 
+        document.getElementById('command-ui').style.display = 'block'; 
+    };
     
     const btnNext = document.getElementById('btn-next-unit');
     if (btnNext) btnNext.onclick = selectNextUnit;
@@ -367,7 +361,10 @@ function execCommand(cmd) {
         const list = document.getElementById('target-list'); list.innerHTML = '';
         targets.forEach(t => {
             const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
-            btn.onclick = () => selectTarget(t, unit); list.appendChild(btn);
+            // ★追加：マウスオーバーでターゲット情報をプレビュー表示
+            btn.onmouseenter = () => uiCtrl.showTargetPreview(t);
+            btn.onclick = () => selectTarget(t, unit); 
+            list.appendChild(btn);
         });
         showHighlight(targets, attackHighlightMat); 
         document.getElementById('command-ui').style.display = 'none'; 
@@ -380,6 +377,8 @@ function execCommand(cmd) {
 function selectTarget(t, attacker) {
     gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'ATTACK', pendingData: { target: t, attacker: attacker } });
     document.getElementById('target-ui').style.display = 'none';
+    // 確定画面へ行くのでプレビューは隠す
+    if(uiCtrl.dom.targetPreviewUi) uiCtrl.dom.targetPreviewUi.style.display = 'none';
     clearHighlights();
     showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
     document.getElementById('confirm-text').innerText = `${t.id} を攻撃しますか？`; 
@@ -410,7 +409,6 @@ function answerConfirm(isYes) {
     } else if(store.confirmMode === 'ATTACK') {
         const { attacker, target } = store.pendingData;
         battleSys.executeAttack(attacker, target, window.units, camera, () => {
-            // ★即時イベント開始の修正
             const boss = window.units.find(u => u.id === 'ブラキオサウルス');
             if (boss && boss.hp <= 0) {
                 checkVictory();
@@ -498,6 +496,10 @@ async function processEnemyAI() {
 function checkVictory() {
     const boss = window.units.find(u => u.id === 'ブラキオサウルス');
     if (boss && boss.sprite) {
+        // ★修正：撃破時の消滅アニメーションを強制停止して再実体化
+        gsap.killTweensOf(boss.sprite.scale);
+        boss.sprite.visible = true;
+        
         const h = (boss.spriteConfig && boss.spriteConfig.type === 'bra') ? 90 : 60;
         boss.sprite.scale.set(boss.baseScaleX * boss.facing, h, 1);
         if (boss.shadow) boss.shadow.visible = true;
