@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ちびっこティラノ：タクティクス (v8.20.50)</title>
+    <title>ちびっこティラノ：タクティクス (v8.20.58)</title>
     <link rel="stylesheet" href="style.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
@@ -12,7 +12,7 @@
 <body>
 
 <div id="boot-screen" style="position:fixed; inset:0; background:#111; color:#fff; z-index:20000; padding:20px; font-family:monospace; display:flex; flex-direction:column;">
-    <h2 style="color:#0f0; border-bottom:1px solid #333;">SYSTEM DIAGNOSTICS v8.20.50</h2>
+    <h2 style="color:#0f0; border-bottom:1px solid #333;">SYSTEM DIAGNOSTICS v8.20.58</h2>
     <div id="ver-list" style="flex:1; overflow-y:auto; margin:10px 0; font-size:14px; line-height:1.6;"></div>
     <div style="display:flex; gap:10px;">
         <button id="btn-clear-data" style="flex:1; padding:15px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold;">データオールクリア</button>
@@ -22,7 +22,7 @@
 
 <div id="error-log" style="position:fixed; top:0; left:0; width:100%; background:#f00; color:#fff; z-index:30000; padding:10px; display:none; white-space:pre-wrap;"></div>
 <div id="loading-screen" style="display:none;"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.20.50 (Unit Selection Update)</div>
+<div id="version-display">v8.20.58 (Ending Sequence Finalized)</div>
 
 <div id="canvas-container"></div>
 <div id="msg-ui" class="rpg-window"></div>
@@ -104,7 +104,9 @@
     <div id="stage-title" class="cool-text"></div>
 </div>
 <div id="battle-start-overlay" class="big-text-overlay"><div class="battle-text">BATTLE START！</div></div>
-<div id="episode-clear-overlay" class="big-text-overlay"><div class="clear-text">第1話 クリア</div></div>
+<div id="episode-clear-overlay" class="big-text-overlay">
+    <div class="clear-text">第1話 クリア</div>
+</div>
 
 <script type="module" src="main.js?v=20260325"></script>
 </body>
