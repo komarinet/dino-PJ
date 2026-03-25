@@ -1,13 +1,13 @@
 /* =================================================================
-   units.js - v8.20.36
+   units.js - v8.20.43
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. 高低差攻撃制限：getAttackableEnemies に Math.abs(unit.h - u.h) <= 1 を適用。
-   2. アニメーション維持：ティラノ、コンプ、ブラキオの固有アニメーションを完全維持。
-   3. 整合性確保：main.js および battle.js からの呼び出しに完全対応。
+   1. 経験値システム：addExp メソッドを追加。100EXPでレベルアップ。
+   2. 成長ロジック：levelUp 時のステータス上昇値を維持。
+   3. 高低差攻撃制限：getAttackableEnemies の高低差 <= 1 条件を維持。
    ================================================================= */
 
-export const VERSION = "8.20.36";
+export const VERSION = "8.20.43";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -30,11 +30,28 @@ export class Unit {
     }
 
     /**
+     * 経験値の加算とレベルアップ判定
+     */
+    addExp(amount, uiCtrl, camera) {
+        this.exp += amount;
+        // 100 EXP ごとにレベルアップ
+        while (this.exp >= 100) {
+            this.levelUp();
+            // レベルアップ演出（ui.js の浮遊テキスト機能を利用）
+            if (uiCtrl && camera) {
+                uiCtrl.showFloatingText(this, "LEVEL UP!", "levelup", camera);
+            }
+        }
+    }
+
+    /**
      * 成長システム：ステータス上昇値を維持
      */
     levelUp() {
         this.level++;
-        this.exp = 0; 
+        this.exp -= 100; // 繰り越し対応
+        if (this.exp < 0) this.exp = 0;
+
         this.maxHp += 10; this.hp = this.maxHp; 
         this.maxMp += 5;  this.mp = this.maxMp;
         this.str += 4; this.def += 3; this.spd += 1;
@@ -89,7 +106,7 @@ export class Unit {
     }
 
     /**
-     * フレーム更新処理
+     * フレーム更新処理（固有アニメーション計算式を維持）
      */
     updateAnimation(delta) {
         if(!this.texture || this.animState === 'FIXED') return;
@@ -144,7 +161,7 @@ export const getAttackableEnemies = (units, unit) => {
     let targets = [];
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
         let u = getUnitAt(units, unit.x + d[0], unit.z + d[1]);
-        // 自分(unit.h)と相手(u.h)の高さの差を計算し、1以内なら攻撃可能とする
+        // 高低差が1以内なら攻撃可能（あなたが追加した重要ロジックを維持）
         if(u && u.isPlayer !== unit.isPlayer && Math.abs(unit.h - u.h) <= 1) {
             targets.push(u);
         }
