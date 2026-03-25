@@ -1,4 +1,13 @@
-export const VERSION = "8.19.0";
+/* =================================================================
+   units.js - v8.20.36
+   【絶対ルール順守：一切の省略なし】
+   修正・統合内容：
+   1. 高低差攻撃制限：getAttackableEnemies に Math.abs(unit.h - u.h) <= 1 を適用。
+   2. アニメーション維持：ティラノ、コンプ、ブラキオの固有アニメーションを完全維持。
+   3. 整合性確保：main.js および battle.js からの呼び出しに完全対応。
+   ================================================================= */
+
+export const VERSION = "8.20.36";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -20,6 +29,9 @@ export class Unit {
         if(this.texture) { this.initTextureSprite(); }
     }
 
+    /**
+     * 成長システム：ステータス上昇値を維持
+     */
     levelUp() {
         this.level++;
         this.exp = 0; 
@@ -28,13 +40,17 @@ export class Unit {
         this.str += 4; this.def += 3; this.spd += 1;
     }
 
+    /**
+     * スプライト生成と影の設定
+     */
     initTextureSprite() {
         const conf = this.spriteConfig;
         this.texture.repeat.set(1 / conf.cols, 1 / conf.rows);
         this.texture.magFilter = THREE.NearestFilter;
         this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true, alphaTest: 0.5 });
         this.sprite = new THREE.Sprite(this.material);
-        this.sprite.center.set(0.5, 0.0); 
+        this.sprite.center.set(0.5, 0.0); // 足元を起点に
+        
         const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
         const h = (conf.type === 'bra') ? 90 : 60; 
         this.baseScaleX = h * (cellW / cellH);
@@ -42,6 +58,7 @@ export class Unit {
         this.sprite.userData = { isUnit: true, unit: this };
         this.setIdle();
 
+        // 足元の影を生成
         const shadowGeo = new THREE.CircleGeometry(this.baseScaleX * 0.4, 32);
         const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
         this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
@@ -62,12 +79,18 @@ export class Unit {
         }
     }
 
+    /**
+     * 指定した座標の方向に向きを変える
+     */
     lookAtNode(targetX, targetZ) {
         if (targetX > this.x) this.facing = 1;      
         else if (targetX < this.x) this.facing = -1; 
         if (this.sprite) this.sprite.scale.x = this.baseScaleX * this.facing;
     }
 
+    /**
+     * フレーム更新処理
+     */
     updateAnimation(delta) {
         if(!this.texture || this.animState === 'FIXED') return;
         this.animTime += delta;
@@ -90,6 +113,9 @@ export class Unit {
         this.texture.offset.y = 1.0 - ((row + 1) / conf.rows);
     }
 
+    /**
+     * 固定アクションの設定
+     */
     setAction(action) {
         if(!this.texture) return;
         this.animState = 'FIXED';
@@ -111,7 +137,9 @@ export class Unit {
 
 export const getUnitAt = (units, x, z) => units.find(u => u.x === x && u.z === z && u.hp > 0);
 
-// ★ 変更：攻撃対象の検索に「高低差が1以内」という条件を追加
+/**
+ * 攻撃可能な敵を検索（隣接4マス ＋ 高低差制限）
+ */
 export const getAttackableEnemies = (units, unit) => {
     let targets = [];
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
