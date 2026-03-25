@@ -1,14 +1,14 @@
 /* =================================================================
-   main.js - v8.20.53
+   main.js - v8.20.55
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. エンディング演出：ティラノが最後から2番目のセリフの後にマップ外へ歩き去る。
-   2. ボスの独白：ティラノ退場後にカメラをボスに戻し、最後の一言を表示。
-   3. クリア演出：会話終了時にステージクリアのオーバーレイをアニメーション表示。
-   4. 既存機能の維持：ユニット優先タップ、AI思考演出、ボス復活等をすべて完備。
+   1. 即時イベント：攻撃完了直後にボス撃破を判定し、即座にイベントへ移行。
+   2. 退場方向修正：ティラノの退場パスを z - i (マップ北側外) へ変更。
+   3. 終了演出ガード：isEndingProcessed フラグでクリア表示の重複を防止。
+   4. 完結メッセージ：「続きは制作中！」のテキストをクリア画面に統合。
    ================================================================= */
 
-export const VERSION = "8.20.53";
+export const VERSION = "8.20.55";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -20,6 +20,9 @@ import { StageData, VERSION as sceV } from './data/stage01.js';
 
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 const mapData = StageData.generateLayout();
+
+// エンディングの多重実行防止フラグ
+let isEndingProcessed = false;
 
 let highlightMeshes = [];
 const moveHighlightMat = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.6, depthTest: false });
@@ -164,25 +167,24 @@ function startDialogue() {
     window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
         
-        // ★修正：エンディング演出の分岐
+        // ★演出：ティラノの退場（最後から2番目のセリフの後）
         if(isPostBattle && idx === 7) {
-            // ティラノが「僕はお母さんを助けたいだけだ」と言い終えた後、退場する演出
             if (evUi) evUi.style.display = 'none';
             gameStore.setState({ gameState: 'ANIMATING' });
             
-            // マップ外（カメラ外）へ歩かせるパスを作成
+            // 退場パス：北（z座標を減らす方向）へマップ外まで歩かせる
             const exitPath = [];
-            for(let i=1; i<=3; i++) {
-                exitPath.push({ x: window.player.x, z: window.player.z + i, h: window.player.h });
+            for(let i=1; i<=4; i++) {
+                exitPath.push({ x: window.player.x, z: window.player.z - i, h: window.player.h });
             }
             
-            // ゆっくり去っていく（battle.jsの標準速度で移動）
-            await new Promise(res => battleSys.executeMovement(window.player, exitPath, res));
+            // ゆっくり去っていく演出
+            await new Promise(res => battleSys.executeMovement(window.player, exitPath, res, 2.0));
             
-            // マップから消す
+            // マップから消去
             window.player.dispose(scene);
             
-            // カメラをボスに戻す
+            // カメラをボス（ブラキオ）へ戻す
             const boss = window.units.find(u => u.id === 'ブラキオサウルス');
             if(boss && boss.sprite) {
                 const bossCenter = new THREE.Vector3();
@@ -207,13 +209,22 @@ function startDialogue() {
             cameraCtrl.setZoom(1.5);
             
             if (isPostBattle) {
-                // ★修正：ステージクリアのバーンとなる演出
+                // 重複実行ガード
+                if (isEndingProcessed) return;
+                isEndingProcessed = true;
+
+                // ★最終メッセージ：制作中の告知
                 const clearOverlay = document.getElementById('episode-clear-overlay');
                 if(clearOverlay) {
+                    const clearText = clearOverlay.querySelector('.clear-text');
+                    if (clearText) {
+                        clearText.innerHTML = "第1話 クリア！<br><span style='font-size:0.5em; color:#fff;'>続きは現在制作中です！<br>お楽しみに！</span>";
+                    }
                     clearOverlay.style.display = 'flex';
                     gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
                 }
             } else {
+                // 戦闘開始フェーズ
                 gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
                 if (window.player && window.player.sprite) {
                     const playerCenter = new THREE.Vector3();
@@ -398,16 +409,21 @@ function answerConfirm(isYes) {
         });
     } else if(store.confirmMode === 'ATTACK') {
         const { attacker, target } = store.pendingData;
-        battleSys.executeAttack(attacker, target, window.units, camera, () => completePlayerAction(attacker), scene);
+        battleSys.executeAttack(attacker, target, window.units, camera, () => {
+            // ★即時イベント開始の修正
+            const boss = window.units.find(u => u.id === 'ブラキオサウルス');
+            if (boss && boss.hp <= 0) {
+                checkVictory();
+            } else {
+                completePlayerAction(attacker);
+            }
+        }, scene);
     }
 }
 
 function completePlayerAction(unit) {
     unit.hasMoved = true; unit.hasAttacked = true; unit.hasActed = true; 
     const activePlayers = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
-    const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-    if(boss && boss.hp <= 0) return checkVictory();
-
     if (activePlayers.length > 0) {
         gameStore.setState({ gameState: 'IDLE' }); uiCtrl.hideAll();
     } else {
