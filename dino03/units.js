@@ -1,13 +1,14 @@
 /* =================================================================
-   units.js - v8.20.43
+   units.js - v8.20.48
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. 経験値システム：addExp メソッドを追加。100EXPでレベルアップ。
-   2. 成長ロジック：levelUp 時のステータス上昇値を維持。
-   3. 高低差攻撃制限：getAttackableEnemies の高低差 <= 1 条件を維持。
+   1. 表示優先度の修正：sprite.renderOrder = 999 を設定。
+      これにより、斜めアングルでもユニットがブロックに埋まらず、常に最前面に描画されます。
+   2. 既存システムの維持：addExp、levelUp、アニメーション計算、
+      および getAttackableEnemies の高低差制限を完備。
    ================================================================= */
 
-export const VERSION = "8.20.43";
+export const VERSION = "8.20.48";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -34,10 +35,8 @@ export class Unit {
      */
     addExp(amount, uiCtrl, camera) {
         this.exp += amount;
-        // 100 EXP ごとにレベルアップ
         while (this.exp >= 100) {
             this.levelUp();
-            // レベルアップ演出（ui.js の浮遊テキスト機能を利用）
             if (uiCtrl && camera) {
                 uiCtrl.showFloatingText(this, "LEVEL UP!", "levelup", camera);
             }
@@ -49,7 +48,7 @@ export class Unit {
      */
     levelUp() {
         this.level++;
-        this.exp -= 100; // 繰り越し対応
+        this.exp -= 100;
         if (this.exp < 0) this.exp = 0;
 
         this.maxHp += 10; this.hp = this.maxHp; 
@@ -58,7 +57,7 @@ export class Unit {
     }
 
     /**
-     * スプライト生成と影の設定
+     * スプライト生成と表示優先度の設定
      */
     initTextureSprite() {
         const conf = this.spriteConfig;
@@ -66,7 +65,10 @@ export class Unit {
         this.texture.magFilter = THREE.NearestFilter;
         this.material = new THREE.SpriteMaterial({ map: this.texture, transparent: true, alphaTest: 0.5 });
         this.sprite = new THREE.Sprite(this.material);
-        this.sprite.center.set(0.5, 0.0); // 足元を起点に
+        this.sprite.center.set(0.5, 0.0); 
+        
+        // ★修正：描画優先度を上げて地形への埋没を防止
+        this.sprite.renderOrder = 999;
         
         const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
         const h = (conf.type === 'bra') ? 90 : 60; 
@@ -75,11 +77,12 @@ export class Unit {
         this.sprite.userData = { isUnit: true, unit: this };
         this.setIdle();
 
-        // 足元の影を生成
         const shadowGeo = new THREE.CircleGeometry(this.baseScaleX * 0.4, 32);
         const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
         this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
         this.shadow.rotation.x = -Math.PI / 2;
+        // 影も地形より少し上に表示されるように設定
+        this.shadow.renderOrder = 998;
     }
 
     dispose(scene) {
@@ -96,18 +99,12 @@ export class Unit {
         }
     }
 
-    /**
-     * 指定した座標の方向に向きを変える
-     */
     lookAtNode(targetX, targetZ) {
         if (targetX > this.x) this.facing = 1;      
         else if (targetX < this.x) this.facing = -1; 
         if (this.sprite) this.sprite.scale.x = this.baseScaleX * this.facing;
     }
 
-    /**
-     * フレーム更新処理（固有アニメーション計算式を維持）
-     */
     updateAnimation(delta) {
         if(!this.texture || this.animState === 'FIXED') return;
         this.animTime += delta;
@@ -130,9 +127,6 @@ export class Unit {
         this.texture.offset.y = 1.0 - ((row + 1) / conf.rows);
     }
 
-    /**
-     * 固定アクションの設定
-     */
     setAction(action) {
         if(!this.texture) return;
         this.animState = 'FIXED';
@@ -154,14 +148,10 @@ export class Unit {
 
 export const getUnitAt = (units, x, z) => units.find(u => u.x === x && u.z === z && u.hp > 0);
 
-/**
- * 攻撃可能な敵を検索（隣接4マス ＋ 高低差制限）
- */
 export const getAttackableEnemies = (units, unit) => {
     let targets = [];
     for(let d of [[0,1],[1,0],[0,-1],[-1,0]]) {
         let u = getUnitAt(units, unit.x + d[0], unit.z + d[1]);
-        // 高低差が1以内なら攻撃可能（あなたが追加した重要ロジックを維持）
         if(u && u.isPlayer !== unit.isPlayer && Math.abs(unit.h - u.h) <= 1) {
             targets.push(u);
         }
