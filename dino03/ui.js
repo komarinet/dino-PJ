@@ -1,19 +1,19 @@
 /* =================================================================
-   ui.js - v8.20.35
+   ui.js - v8.20.57
    【絶対ルール順守：一切の省略なし】
-   修正内容：
-   1. 引数同期：main.js からの呼び出しに合わせ renderTalkLine の引数を調整。
-   2. 座標計算修正：浮遊テキストの計算基準を canvas サイズに統一。
-   3. 機能維持：顔グラフィック切り出し、ボタン制御、Rubyタグ対応を完備。
+   修正・統合内容：
+   1. レベルアップ演出強化：頭上（heightOffset）から発生し、上へ昇るアニメに変更。
+   2. ダメージ演出修正：ご要望通り、数値が上から下へ落ちるように変更。
+   3. 整合性維持：main.js および units.js からの新しい引数渡しに完全対応。
+   4. 機能維持：顔グラフィック、Rubyタグ、コマンド制御を完備。
    ================================================================= */
 
-export const VERSION = "8.20.35";
+export const VERSION = "8.20.57";
 
 export class UIControl {
     constructor(cameraControl) {
         this.cameraControl = cameraControl;
         
-        // HTML v8.17.1 の ID 構造に完全準拠
         this.dom = {
             msg: document.getElementById('msg-ui'),
             statusUi: document.getElementById('status-ui'),
@@ -45,9 +45,6 @@ export class UIControl {
         };
     }
 
-    /**
-     * メッセージの表示・非表示
-     */
     setMsg(txt, color = "#ffffff") {
         if (!this.dom.msg) return;
         if (!txt) {
@@ -59,9 +56,6 @@ export class UIControl {
         }
     }
 
-    /**
-     * すべてのウィンドウを非表示にする
-     */
     hideAll() {
         const windows = [
             this.dom.statusUi, this.dom.detailUi, this.dom.commandUi, 
@@ -72,9 +66,6 @@ export class UIControl {
         });
     }
 
-    /**
-     * コマンドボタンの状態（グレーアウト）を更新
-     */
     updateCommandMenu(unit) {
         if (!this.dom.cmdMove) return;
         if (unit.hasMoved) {
@@ -88,9 +79,6 @@ export class UIControl {
         }
     }
 
-    /**
-     * ユニットステータスの表示（Rubyタグ対応版）
-     */
     showStatus(unit) {
         if (!this.dom.statusUi) return;
         this.setMsg("");
@@ -117,9 +105,6 @@ export class UIControl {
         if (this.dom.dtMag) this.dom.dtMag.innerText = unit.mag;
     }
 
-    /**
-     * 会話シーンの描画（顔グラフィック・カメラ補完）
-     */
     renderTalkLine(data, units, player) {
         if (!this.dom.evNamePlate || !this.dom.evText) return;
         this.dom.evNamePlate.innerText = data.name;
@@ -128,7 +113,6 @@ export class UIControl {
 
         const speaker = units.find(u => u.id === data.name);
         
-        // 顔グラフィック表示
         if (speaker && speaker.spriteConfig) {
             const conf = speaker.spriteConfig;
             if (conf.type === 'bra') {
@@ -143,12 +127,10 @@ export class UIControl {
         }
 
         if (speaker && speaker.hp > 0 && speaker.sprite) {
-            // Box3 による中心補正
             const targetCenter = new THREE.Vector3();
             new THREE.Box3().setFromObject(speaker.sprite).getCenter(targetCenter);
             this.cameraControl.centerOn(targetCenter, 0.8);
 
-            // 向きの調整
             if (player && speaker !== player) {
                 speaker.lookAtNode(player.x, player.z);
                 player.lookAtNode(speaker.x, speaker.z);
@@ -156,33 +138,35 @@ export class UIControl {
         }
     }
 
-    /**
-     * ダメージ表示（battle.js 用）
-     */
     showDamageText(unit, text, scene, camera) {
-        this.showFloatingText(unit, text, 'damage', camera);
+        // ダメージは通常の高さ（胸あたり）から。
+        this.showFloatingText(unit, text, 'damage', camera, 30);
     }
 
     /**
-     * 浮遊テキスト表示（座標計算を canvas 基準に修正）
+     * 浮遊テキスト表示（演出の撃ち分け対応）
+     * @param {number} heightOffset - 発生させる高さの調整値
      */
-    showFloatingText(unit, text, type, camera) {
+    showFloatingText(unit, text, type, camera, heightOffset = 50) {
         if (!unit || !unit.sprite || !camera) return;
         const vector = unit.sprite.position.clone();
-        vector.y += 50; 
+        
+        // ワールド座標の段階で高さをオフセット
+        vector.y += heightOffset; 
         vector.project(camera);
         
         const canvas = document.querySelector('canvas');
         if (!canvas) return;
         
-        // window.innerWidth ではなく、canvas の実サイズを基準にする
         const x = (vector.x * 0.5 + 0.5) * canvas.clientWidth;
         const y = (vector.y * -0.5 + 0.5) * canvas.clientHeight;
         
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
-        el.style.color = (type === 'heal') ? '#00ffff' : (type === 'levelup' ? '#ffff00' : '#ffffff');
+        
+        // 種類に応じた色設定
+        el.style.color = (type === 'levelup') ? '#ffff00' : (type === 'heal' ? '#00ffff' : '#ffffff');
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
         el.style.position = 'absolute';
@@ -190,12 +174,25 @@ export class UIControl {
         el.style.zIndex = '5000';
         document.body.appendChild(el);
         
-        gsap.to(el, { 
-            y: y - 100, 
-            opacity: 0, 
-            duration: 1.5, 
-            ease: "power2.out", 
-            onComplete: () => el.remove() 
-        });
+        // ★演出の撃ち分け
+        if (type === 'levelup') {
+            // レベルアップ：頭上にピタッと出て、さらに「上」へ昇る
+            gsap.to(el, { 
+                y: "-=60", 
+                opacity: 0, 
+                duration: 2.0, 
+                ease: "power1.out", 
+                onComplete: () => el.remove() 
+            });
+        } else {
+            // ダメージ等：発生場所から「下」へ落ちる
+            gsap.to(el, { 
+                y: "+=40", 
+                opacity: 0, 
+                duration: 1.2, 
+                ease: "bounce.out", // 少し弾む演出
+                onComplete: () => el.remove() 
+            });
+        }
     }
 }
