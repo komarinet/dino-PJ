@@ -1,14 +1,14 @@
 /* =================================================================
-   units.js - v8.20.48
+   units.js - v8.20.55
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. 表示優先度の修正：sprite.renderOrder = 999 を設定。
-      これにより、斜めアングルでもユニットがブロックに埋まらず、常に最前面に描画されます。
-   2. 既存システムの維持：addExp、levelUp、アニメーション計算、
-      および getAttackableEnemies の高低差制限を完備。
+   1. レベルアップ演出：上昇時に ATTACK モーション（決めポーズ）を1.5秒維持。
+   2. 影の描画優先度：renderOrder = 10 に設定し、他ユニットへのめり込みを防止。
+   3. バランス調整：レベルアップ時の Str/Def 上昇値を上方修正し、ボスへの打点を強化。
+   4. 既存維持：表示優先度 999、addExp 繰り越し、高低差制限を完備。
    ================================================================= */
 
-export const VERSION = "8.20.48";
+export const VERSION = "8.20.55";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -31,20 +31,32 @@ export class Unit {
     }
 
     /**
-     * 経験値の加算とレベルアップ判定
+     * 経験値の加算とレベルアップ演出
      */
     addExp(amount, uiCtrl, camera) {
         this.exp += amount;
+        let leveledUp = false;
         while (this.exp >= 100) {
             this.levelUp();
+            leveledUp = true;
             if (uiCtrl && camera) {
-                uiCtrl.showFloatingText(this, "LEVEL UP!", "levelup", camera);
+                // テキストを頭上（スプライトの高さ分上）に表示するためのオフセット計算
+                const heightOffset = (this.spriteConfig.type === 'bra') ? 100 : 70;
+                uiCtrl.showFloatingText(this, "LEVEL UP!", "levelup", camera, heightOffset);
             }
+        }
+
+        // レベルアップした瞬間に決めポーズ（ATTACK）をとり、1.5秒後に解除
+        if (leveledUp) {
+            this.setAction('ATTACK');
+            setTimeout(() => {
+                if (this.hp > 0) this.setIdle();
+            }, 1500);
         }
     }
 
     /**
-     * 成長システム：ステータス上昇値を維持
+     * 成長システム：ステータス上昇値を調整（Lv3でボスに勝ちやすく）
      */
     levelUp() {
         this.level++;
@@ -53,11 +65,12 @@ export class Unit {
 
         this.maxHp += 10; this.hp = this.maxHp; 
         this.maxMp += 5;  this.mp = this.maxMp;
-        this.str += 4; this.def += 3; this.spd += 1;
+        // 攻撃力と防御力の上昇値を少し底上げ
+        this.str += 5; this.def += 4; this.spd += 1;
     }
 
     /**
-     * スプライト生成と表示優先度の設定
+     * スプライト生成と描画優先度の詳細設定
      */
     initTextureSprite() {
         const conf = this.spriteConfig;
@@ -67,7 +80,7 @@ export class Unit {
         this.sprite = new THREE.Sprite(this.material);
         this.sprite.center.set(0.5, 0.0); 
         
-        // ★修正：描画優先度を上げて地形への埋没を防止
+        // 描画優先度：最前面（地形や水面より必ず上に描く）
         this.sprite.renderOrder = 999;
         
         const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
@@ -77,12 +90,16 @@ export class Unit {
         this.sprite.userData = { isUnit: true, unit: this };
         this.setIdle();
 
+        // 影の生成
         const shadowGeo = new THREE.CircleGeometry(this.baseScaleX * 0.4, 32);
         const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
         this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
         this.shadow.rotation.x = -Math.PI / 2;
-        // 影も地形より少し上に表示されるように設定
-        this.shadow.renderOrder = 998;
+        
+        // ★重要：影の優先度を低く（10）設定
+        // 地面(0)よりは上だが、他の全恐竜の立ち絵(999)より下になるため、
+        // 他のキャラの足元に影がめり込んでも、足の上に影が描画されることがなくなります。
+        this.shadow.renderOrder = 10;
     }
 
     dispose(scene) {
