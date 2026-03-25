@@ -1,15 +1,14 @@
 /* =================================================================
-   battle.js - v8.20.42
-   【絶対ルール順守：一切の省略なし】
-   修正・統合内容：
-   1. 経験値システムの統合：
-      敵を倒した際、attacker.isPlayer が真であれば経験値を加算する処理を追加。
-      コンプソグナトゥスなら50EXP（4体で200EXP＝Lv3）が入ります。
-   2. 既存ロジックの完全維持：
-      段差ジャンプ移動、向きの制御、ダメージ演出などは一切変更していません。
+   battle.js - v8.20.49
+   【絶対ルール遵守：一切の省略なし】
+   統合内容：
+   1. 高低差ダメージ補正：攻撃側の h が高いとダメージ1.2倍、低いと0.8倍。
+   2. 反撃システム：生存時、射程内にいれば反撃を実行。
+   3. 経験値システム統合：敵撃破時に attacker.addExp を実行。
+   4. 演出：ジャンプ移動、ヒット時の揺れ、死亡演出を完備。
    ================================================================= */
 
-export const VERSION = "8.20.42";
+export const VERSION = "8.20.49";
 
 import { TILE_SIZE, H_STEP, MAP_W, MAP_D } from './map.js';
 
@@ -95,20 +94,29 @@ export class BattleSystem {
     }
 
     /**
-     * 攻撃の実行（経験値獲得ロジック追加版）
+     * 攻撃の実行（反撃・高低差補正対応）
+     * @param {boolean} isCounter - 反撃としての呼び出しかどうか
      */
-    executeAttack(attacker, target, allUnits, camera, callback, scene) {
+    executeAttack(attacker, target, allUnits, camera, callback, scene, isCounter = false) {
         attacker.lookAtNode(target.x, target.z);
         target.lookAtNode(attacker.x, attacker.z);
 
         if (attacker.setAction) attacker.setAction('ATTACK');
 
-        const damage = Math.max(1, attacker.str - Math.floor(target.def / 2));
+        // --- ダメージ計算（高低差補正の適用） ---
+        const hDiff = attacker.h - target.h;
+        let hBonus = 1.0;
+        if (hDiff > 0) hBonus = 1.2;      // 高いところから攻撃（有利）
+        else if (hDiff < 0) hBonus = 0.8; // 低いところから攻撃（不利）
+
+        const damageBase = attacker.str - Math.floor(target.def / 2);
+        const damage = Math.max(1, Math.floor(damageBase * hBonus));
         
         setTimeout(() => {
             target.hp -= damage;
             if (target.hp < 0) target.hp = 0;
 
+            // ヒット演出（揺れ）
             if (target.sprite) {
                 gsap.to(target.sprite.position, {
                     x: target.sprite.position.x + (Math.random() - 0.5) * 10,
@@ -118,13 +126,13 @@ export class BattleSystem {
                 });
             }
 
+            // ダメージ表示
             if (this.uiCtrl && typeof this.uiCtrl.showDamageText === 'function') {
                 this.uiCtrl.showDamageText(target, damage, scene, camera);
             }
 
             if (target.hp <= 0) {
-                // ★追加箇所：経験値の獲得
-                // コンプソグナトゥスなら50、その他（ボス等）なら100
+                // 経験値獲得
                 if (attacker.isPlayer && attacker.addExp) {
                     const expGain = target.id.includes('コンプ') ? 50 : 100;
                     attacker.addExp(expGain, this.uiCtrl, camera);
@@ -134,19 +142,40 @@ export class BattleSystem {
                     if (target.setAction) target.setAction('DOWN');
                     gsap.to(target.sprite.scale, { x: 0, y: 0, z: 0, duration: 0.5, delay: 0.5 });
                     if (target.shadow) target.shadow.visible = false;
+                    
+                    // 終了
+                    setTimeout(() => {
+                        if (attacker.setIdle) attacker.setIdle();
+                        if (callback) callback();
+                    }, 600);
                 }, 300);
+
             } else {
+                // 生存時：被弾アクション
                 if (target.setAction) target.setAction('HURT');
+                
                 setTimeout(() => {
                     if (target.hp > 0 && target.setIdle) target.setIdle();
+                    
+                    // --- 反撃ロジック ---
+                    // 反撃中でない、かつ相手が隣接射程内、かつ高低差1以内の場合に反撃
+                    const dist = Math.abs(attacker.x - target.x) + Math.abs(attacker.z - target.z);
+                    const canReach = (dist === 1 && Math.abs(attacker.h - target.h) <= 1);
+
+                    if (!isCounter && canReach) {
+                        this.uiCtrl.setMsg("反撃！", "#ffaa00");
+                        setTimeout(() => {
+                            this.executeAttack(target, attacker, allUnits, camera, callback, scene, true);
+                        }, 500);
+                    } else {
+                        // 反撃が発生しない場合はここで終了
+                        setTimeout(() => {
+                            if (attacker.setIdle) attacker.setIdle();
+                            if (callback) callback();
+                        }, 200);
+                    }
                 }, 500);
             }
-
-            setTimeout(() => {
-                if (attacker.setIdle) attacker.setIdle();
-                if (callback) callback();
-            }, 600);
-
         }, 500);
     }
 }
