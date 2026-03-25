@@ -1,13 +1,15 @@
 /* =================================================================
-   main.js - v8.20.34
+   main.js - v8.20.45
    【絶対ルール順守】一切の省略なし。
-   修正内容：
-   1. 画像表示の修正：テクスチャクローン直後に needsUpdate フラグを追加。
-   2. 会話システムの修正：renderTalkLine への引数渡しを ui.js の仕様に統合。
-   3. クラッシュ防止：Box3 計算時のガード処理を追加。
+   修正・統合内容：
+   1. AI思考演出の強化：
+      敵のターン中、移動範囲の表示 -> 0.6秒待機 -> 移動先のハイライト -> 0.4秒待機 
+      というプロセスを追加し、「敵が考えている」感じを演出。
+   2. カメラフォーカス：行動する敵に自動でカメラが中心を合わせるように修正。
+   3. 既存修正の維持：needsUpdate、renderTalkLine引数、Box3ガードはすべて継承。
    ================================================================= */
 
-export const VERSION = "8.20.34";
+export const VERSION = "8.20.45";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -106,7 +108,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         else if (u.id === 'ティラノ') conf = { tex: rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
         else conf = { tex: compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
         
-        // ★修正：クローンしたテクスチャの表示フラグを更新（表示されない問題を解決）
         if (conf && conf.tex) {
             conf.tex.needsUpdate = true;
         }
@@ -127,7 +128,6 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     setupEventListeners();
     animate();
 
-    // Box3によるプレイヤー中心の初期カメラ（ガード付き）
     if (window.player && window.player.sprite) {
         const playerCenter = new THREE.Vector3();
         new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
@@ -159,7 +159,6 @@ function startDialogue() {
     
     const playLine = (idx) => {
         const lineData = talkData[idx];
-        // ★修正：ui.js の仕様に合わせて window.player を追加（台詞が表示されない問題を解決）
         uiCtrl.renderTalkLine(lineData, window.units, window.player);
     };
 
@@ -365,19 +364,42 @@ async function processEnemyAI() {
             if (isBackAlive) { enemy.hasActed = true; continue; }
         }
 
-        enemy.lookAtNode(window.player.x, window.player.z);
+        // 1. カメラをこれから動く敵に合わせる
+        const enemyCenter = new THREE.Vector3();
+        if (enemy.sprite) {
+            new THREE.Box3().setFromObject(enemy.sprite).getCenter(enemyCenter);
+            cameraCtrl.centerOn(enemyCenter);
+        }
+
+        // 2. 移動範囲（緑）を表示して「考えている」演出
         const routes = getWalkableNodes(window.units, enemy, mapData);
+        if (routes.length > 0) {
+            showHighlight(routes, moveHighlightMat);
+            await new Promise(res => setTimeout(res, 600)); // 少し待機（思考演出）
+        }
+
+        // 3. 移動先を決定し、そこだけ強調表示
         let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
         
         if (best && best.path.length > 0) {
+            clearHighlights();
+            showHighlight([best], targetHighlightMat); // 行き先をオレンジに
+            await new Promise(res => setTimeout(res, 400)); // 決定のタメ
+            clearHighlights();
+
+            enemy.lookAtNode(window.player.x, window.player.z);
             await new Promise(res => battleSys.executeMovement(enemy, best.path, res));
+        } else {
+            clearHighlights();
         }
         
+        // 4. 攻撃
         const targets = getAttackableEnemies(window.units, enemy);
         if (targets.includes(window.player)) {
             await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
             if (window.player.hp <= 0) { uiCtrl.setMsg("GAME OVER", "#ff0000"); return; }
         }
+        
         enemy.hasActed = true;
         await new Promise(res => setTimeout(res, 400)); 
     }
@@ -400,7 +422,6 @@ function showHighlight(nodeList, mat) {
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
-        // 変数名修正済み: offZ
         mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
         scene.add(mesh);
         highlightMeshes.push(mesh);
