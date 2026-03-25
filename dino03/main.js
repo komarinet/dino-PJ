@@ -1,15 +1,15 @@
 /* =================================================================
-   main.js - v8.20.61
+   main.js - v8.20.64
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. ターゲットプレビュー：攻撃対象選択時に敵ステータスを即座に表示。
-   2. ボス実体化修正：checkVictory 内で消滅アニメを強制停止し、確実に再表示。
-   3. 即時イベント：攻撃完了直後にボス撃破を判定し、イベントへ移行。
-   4. 退場方向修正：ティラノの退場パスを z - i (マップ北側外) へ設定。
-   5. 既存維持：終了演出ガード、完結メッセージ、味方セレクターを完備。
+   1. ステージ遷移：Stage00（序章）から Stage01（第1話）への自動遷移。
+   2. 敗北イベント：序章にて母ティラノ敗北を機に、ギガノトによる強制撃破演出を実行。
+   3. ターゲットプレビュー：攻撃対象選択時の敵ステータス表示（既存維持）。
+   4. ボス実体化修正：イベント突入時の確実な再表示（既存維持・拡張）。
+   5. 既存機能維持：味方セレクター、AI思考、ティラノ退場（1話）を完備。
    ================================================================= */
 
-export const VERSION = "8.20.61";
+export const VERSION = "8.20.64";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -17,13 +17,15 @@ import { CameraControl, VERSION as camV } from './camera.js';
 import { UIControl, VERSION as uiV } from './ui.js';
 import { BattleSystem, VERSION as batV } from './battle.js';
 import { buildMapMeshes, getWalkableNodes, TILE_SIZE, H_STEP, MAP_W, MAP_D, VERSION as mapV } from './map.js';
-import { StageData, VERSION as sceV } from './data/stage01.js';
+import { StageData as Stage00, VERSION as sce00V } from './data/stage00.js';
+import { StageData as Stage01, VERSION as sce01V } from './data/stage01.js';
 
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
-const mapData = StageData.generateLayout();
+let currentStage = 0; // 0: 序章, 1: 第1話
+let stageData = Stage00;
+let mapData = stageData.generateLayout();
 
 let isEndingProcessed = false;
-
 let highlightMeshes = [];
 const moveHighlightMat = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.6, depthTest: false });
 const attackHighlightMat = new THREE.MeshBasicMaterial({ color: 0xff5555, transparent: true, opacity: 0.6, depthTest: false });
@@ -35,7 +37,7 @@ function checkSystems() {
     const currentVersions = {
         "main.js": VERSION, "store.js": storeV, "units.js": unitV, 
         "camera.js": camV, "ui.js": uiV, "battle.js": batV, 
-        "map.js": mapV, "data/stage01.js": sceV
+        "stage00.js": sce00V, "stage01.js": sce01V
     };
     if(list) {
         list.innerHTML = "";
@@ -80,14 +82,22 @@ async function runGame() {
                 loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png'),
                 loadTex('img/tree01.png'), loadTex('img/rock01.png')
             ]);
-            init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex);
+            window.gameTextures = { sheetImg, braTex, rexTex, compTex, treeTex, rockTex };
+            init(0); // 序章から開始
             document.getElementById('loading-screen').style.display = 'none';
         };
     } catch (e) { console.error(e); }
 }
 
-function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
+function init(stageIndex) {
+    currentStage = stageIndex;
+    stageData = (currentStage === 0) ? Stage00 : Stage01;
+    mapData = stageData.generateLayout();
+    isEndingProcessed = false;
+
     const container = document.getElementById('canvas-container');
+    container.innerHTML = ""; 
+    
     scene = new THREE.Scene();
     const w = container.clientWidth, h = container.clientHeight;
     camera = new THREE.OrthographicCamera(-w, w, h, -h, 1, 4000); camera.zoom = 1.5; camera.updateProjectionMatrix();
@@ -95,7 +105,8 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     container.appendChild(renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
     
-    buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, StageData.obstacles);
+    const tex = window.gameTextures;
+    buildMapMeshes(scene, tex.sheetImg, tex.treeTex, tex.rockTex, mapData, stageData.obstacles);
 
     cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
     uiCtrl = new UIControl(cameraCtrl);
@@ -104,15 +115,13 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
     uiCtrl.hideAll();
 
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
-    window.units = StageData.units.map(u => {
+    window.units = stageData.units.map(u => {
         let conf = null;
-        if(u.id === 'ブラキオサウルス') conf = { tex: braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
-        else if (u.id === 'ティラノ') conf = { tex: rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
-        else conf = { tex: compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
+        if(u.id === 'ブラキオサウルス') conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
+        else if (u.id === 'ティラノ' || u.id === '母ティラノ' || u.id === 'ギガノトサウルス') conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
+        else conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
         
-        if (conf && conf.tex) {
-            conf.tex.needsUpdate = true;
-        }
+        if (conf && conf.tex) conf.tex.needsUpdate = true;
 
         const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
         unit.h = mapData[unit.z][unit.x].h; 
@@ -123,7 +132,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
         }
         if (unit.shadow) scene.add(unit.shadow);
 
-        if(unit.isPlayer) window.player = unit; 
+        if(unit.isPlayer && u.id !== '母ティラノ') window.player = unit; 
         return unit;
     });
 
@@ -138,12 +147,12 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
 
     const o = document.getElementById('stage-overlay');
     if (o) {
-        document.getElementById('chapter-num').innerHTML = StageData.info.chapter;
-        document.getElementById('stage-title').innerHTML = StageData.info.name;
+        document.getElementById('chapter-num').innerHTML = stageData.info.chapter;
+        document.getElementById('stage-title').innerHTML = stageData.info.name;
         gsap.to(o, { opacity: 1, duration: 1.5, onComplete: () => {
             gsap.to(o, { opacity: 0, delay: 2.0, onComplete: () => {
-                const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-                cameraCtrl.playOpening(boss, window.player, () => { startDialogue(); });
+                const target = window.units.find(u => !u.isPlayer) || window.player;
+                cameraCtrl.playOpening(target, window.player, () => { startDialogue(); });
             }});
         }});
     }
@@ -152,7 +161,7 @@ function init(sheetImg, braTex, rexTex, compTex, treeTex, rockTex) {
 function startDialogue() {
     const store = getStore();
     const isPostBattle = store.gameState === 'FINISHED';
-    const talkData = isPostBattle ? StageData.postBattleTalk : StageData.preBattleTalk;
+    const talkData = isPostBattle ? stageData.postBattleTalk : stageData.preBattleTalk;
 
     gameStore.setState({ gameState: 'TALKING', talkIndex: 0 });
     uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
@@ -167,26 +176,50 @@ function startDialogue() {
     window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
         
-        if(isPostBattle && idx === 7) {
+        // --- Stage 00 (序章) 特別演出：母連れ去り & ティラノ敗北 ---
+        if (currentStage === 0 && isPostBattle && idx === 4) { // 「首筋を捉える」付近でギガノト移動
+             if (evUi) evUi.style.display = 'none';
+             gameStore.setState({ gameState: 'ANIMATING' });
+             
+             const giga = window.units.find(u => u.id === 'ギガノトサウルス');
+             const mother = window.units.find(u => u.id === '母ティラノ');
+             
+             // ギガノトが母を連れてマップ端へ
+             const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: 0, h: 4}];
+             battleSys.executeMovement(mother, exitPath, null, 3.0);
+             await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 2.0));
+             
+             // ティラノが追いかけて立ちふさがる
+             const chasePath = [{x: 4, z: 1, h: 4}];
+             await new Promise(res => battleSys.executeMovement(window.player, chasePath, res, 1.0));
+             
+             // 絶望の一撃（9999ダメージ）
+             giga.lookAtNode(window.player.x, window.player.z);
+             giga.setAction('ATTACK');
+             uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
+             window.player.setAction('DOWN');
+
+             if (evUi) evUi.style.display = 'flex';
+             gameStore.setState({ talkIndex: idx });
+             playLine(idx);
+             gameStore.setState({ gameState: 'TALKING' });
+             return;
+        }
+
+        // --- Stage 01 (第1話) ティラノ退場演出 ---
+        if(currentStage === 1 && isPostBattle && idx === 7) {
             if (evUi) evUi.style.display = 'none';
             gameStore.setState({ gameState: 'ANIMATING' });
-            
             const exitPath = [];
-            for(let i=1; i<=4; i++) {
-                exitPath.push({ x: window.player.x, z: window.player.z - i, h: window.player.h });
-            }
-            
+            for(let i=1; i<=4; i++) exitPath.push({ x: window.player.x, z: window.player.z - i, h: window.player.h });
             await new Promise(res => battleSys.executeMovement(window.player, exitPath, res, 2.0));
-            
             window.player.dispose(scene);
-            
             const boss = window.units.find(u => u.id === 'ブラキオサウルス');
             if(boss && boss.sprite) {
-                const bossCenter = new THREE.Vector3();
-                new THREE.Box3().setFromObject(boss.sprite).getCenter(bossCenter);
-                cameraCtrl.centerOn(bossCenter);
+                const center = new THREE.Vector3();
+                new THREE.Box3().setFromObject(boss.sprite).getCenter(center);
+                cameraCtrl.centerOn(center);
             }
-
             if (evUi) evUi.style.display = 'flex';
             gameStore.setState({ talkIndex: idx });
             playLine(idx);
@@ -208,11 +241,20 @@ function startDialogue() {
                 const clearOverlay = document.getElementById('episode-clear-overlay');
                 if(clearOverlay) {
                     const clearText = clearOverlay.querySelector('.clear-text');
-                    if (clearText) {
+                    if (currentStage === 0) {
+                        // 序章終了 -> 数年後へ
+                        clearText.innerHTML = "……数年の月日が流れた。";
+                        gsap.to(clearOverlay, { opacity: 1, duration: 2.0, onStart:()=> clearOverlay.style.display='flex', onComplete: () => {
+                            setTimeout(() => {
+                                gsap.to(clearOverlay, { opacity: 0, duration: 1.0, onComplete: () => init(1) });
+                            }, 3000);
+                        }});
+                    } else {
+                        // 第1話終了
                         clearText.innerHTML = "第1話 クリア！<br><span style='font-size:0.5em; color:#fff;'>続きは現在制作中です！<br>お楽しみに！</span>";
+                        clearOverlay.style.display = 'flex';
+                        gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
                     }
-                    clearOverlay.style.display = 'flex';
-                    gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
                 }
             } else {
                 gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
@@ -241,7 +283,7 @@ function setupEventListeners() {
     document.getElementById('cmd-wait').onclick = () => execCommand('wait');
     document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); clearHighlights(); gameStore.setState({ gameState: 'IDLE' }); };
     document.getElementById('btn-cancel-attack').onclick = () => { 
-        uiCtrl.hideAll(); // プレビューも隠す
+        uiCtrl.hideAll(); 
         clearHighlights(); 
         document.getElementById('command-ui').style.display = 'block'; 
     };
@@ -281,14 +323,10 @@ function setupEventListeners() {
 function selectNextUnit() {
     const selectable = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
     if (selectable.length === 0) return;
-    
     let nextUnit = selectable[0];
     const currentName = document.getElementById('st-name')?.innerText;
     const currentIndex = selectable.findIndex(u => u.id === currentName);
-    if (currentIndex !== -1 && selectable.length > 1) {
-        nextUnit = selectable[(currentIndex + 1) % selectable.length];
-    }
-
+    if (currentIndex !== -1 && selectable.length > 1) nextUnit = selectable[(currentIndex + 1) % selectable.length];
     const center = new THREE.Vector3();
     new THREE.Box3().setFromObject(nextUnit.sprite).getCenter(center);
     cameraCtrl.centerOn(center);
@@ -301,13 +339,10 @@ function onPointerClick(event) {
     const store = getStore();
     if (store.gameState === 'ANIMATING' || store.gameState === 'ENEMY_TURN') return;
     if (store.gameState === 'TALKING') { if(window.onGlobalTap) window.onGlobalTap(); return; }
-    
     const mouse = new THREE.Vector2((event.clientX/window.innerWidth)*2-1, -(event.clientY/window.innerHeight)*2+1);
     const raycaster = new THREE.Raycaster(); raycaster.setFromCamera(mouse, camera);
-    
     const activeUnits = window.units.filter(u => u.hp > 0);
     const activeSprites = activeUnits.filter(u => u.sprite).map(u => u.sprite);
-    
     const unitIntersects = raycaster.intersectObjects(activeSprites);
     if (unitIntersects.length > 0) {
         const u = unitIntersects[0].object.userData.unit;
@@ -320,15 +355,11 @@ function onPointerClick(event) {
         }
         return;
     }
-
     const tileIntersects = raycaster.intersectObjects(window.interactableTiles);
     if (tileIntersects.length > 0) {
         const obj = tileIntersects[0].object;
         const data = obj.userData;
-        
-        if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
-            uiCtrl.hideAll(); 
-        } 
+        if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') { uiCtrl.hideAll(); } 
         else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
             if(route) {
@@ -345,7 +376,6 @@ function onPointerClick(event) {
 function execCommand(cmd) {
     const currentName = document.getElementById('st-name')?.innerText;
     const unit = window.units.find(u => u.id === currentName) || window.player;
-
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, unit, mapData);
         if(tiles.length > 0) {
@@ -361,8 +391,7 @@ function execCommand(cmd) {
         const list = document.getElementById('target-list'); list.innerHTML = '';
         targets.forEach(t => {
             const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
-            // ★追加：マウスオーバーでターゲット情報をプレビュー表示
-            btn.onmouseenter = () => uiCtrl.showTargetPreview(t);
+            btn.onmouseenter = () => uiCtrl.showTargetPreview(t); // プレビュー維持
             btn.onclick = () => selectTarget(t, unit); 
             list.appendChild(btn);
         });
@@ -377,7 +406,6 @@ function execCommand(cmd) {
 function selectTarget(t, attacker) {
     gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'ATTACK', pendingData: { target: t, attacker: attacker } });
     document.getElementById('target-ui').style.display = 'none';
-    // 確定画面へ行くのでプレビューは隠す
     if(uiCtrl.dom.targetPreviewUi) uiCtrl.dom.targetPreviewUi.style.display = 'none';
     clearHighlights();
     showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
@@ -394,10 +422,8 @@ function answerConfirm(isYes) {
         if(store.confirmMode === 'ATTACK') return execCommand('attack'); 
         uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
     }
-    
     clearHighlights(); 
     gameStore.setState({ gameState: 'ANIMATING' });
-    
     if(store.confirmMode === 'MOVE') {
         const unit = window.units.find(u => u.id === document.getElementById('st-name')?.innerText) || window.player;
         battleSys.executeMovement(unit, store.pendingData, () => { 
@@ -409,12 +435,13 @@ function answerConfirm(isYes) {
     } else if(store.confirmMode === 'ATTACK') {
         const { attacker, target } = store.pendingData;
         battleSys.executeAttack(attacker, target, window.units, camera, () => {
-            const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-            if (boss && boss.hp <= 0) {
-                checkVictory();
-            } else {
-                completePlayerAction(attacker);
+            if (currentStage === 0) {
+                const mother = window.units.find(u => u.id === '母ティラノ');
+                if (mother && mother.hp <= 0) return checkVictory(); // 母敗北でイベント
             }
+            const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス');
+            if (boss && boss.hp <= 0) checkVictory();
+            else completePlayerAction(attacker);
         }, scene);
     }
 }
@@ -434,78 +461,56 @@ function completePlayerAction(unit) {
 async function processEnemyAI() {
     window.units.filter(u => !u.isPlayer).forEach(u => u.hasActed = false);
     const enemies = window.units.filter(u => !u.isPlayer && u.hp > 0);
-    
-    const comps = window.units.filter(u => !u.isPlayer && u.id.includes('コンプ'));
-    const isFrontAlive = (comps[0] && comps[0].hp > 0) || (comps[1] && comps[1].hp > 0);
-    const isBackAlive  = (comps[2] && comps[2].hp > 0) || (comps[3] && comps[3].hp > 0);
-
     for (const enemy of enemies) {
         if (enemy.hp <= 0) continue;
-
-        if (enemy === comps[2] || enemy === comps[3]) {
-            if (isFrontAlive) { enemy.hasActed = true; continue; }
-        }
-        if (enemy.id === 'ブラキオサウルス') {
-            if (isBackAlive) { enemy.hasActed = true; continue; }
-        }
-
         const enemyCenter = new THREE.Vector3();
         if (enemy.sprite) {
             new THREE.Box3().setFromObject(enemy.sprite).getCenter(enemyCenter);
             cameraCtrl.centerOn(enemyCenter);
         }
-
         const routes = getWalkableNodes(window.units, enemy, mapData);
         if (routes.length > 0) {
             showHighlight(routes, moveHighlightMat);
             await new Promise(res => setTimeout(res, 600)); 
         }
-
         let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
-        
         if (best && best.path.length > 0) {
-            clearHighlights();
-            showHighlight([best], targetHighlightMat); 
-            await new Promise(res => setTimeout(res, 400)); 
-            clearHighlights();
-
+            clearHighlights(); showHighlight([best], targetHighlightMat); 
+            await new Promise(res => setTimeout(res, 400)); clearHighlights();
             enemy.lookAtNode(window.player.x, window.player.z);
             await new Promise(res => battleSys.executeMovement(enemy, best.path, res));
-        } else {
-            clearHighlights();
-        }
-        
+        } else { clearHighlights(); }
         const targets = getAttackableEnemies(window.units, enemy);
-        if (targets.includes(window.player)) {
-            await new Promise(res => battleSys.executeAttack(enemy, window.player, window.units, camera, res, scene));
-            if (window.player.hp <= 0) { uiCtrl.setMsg("GAME OVER", "#ff0000"); return; }
+        const target = targets.find(u => u.isPlayer) || targets[0];
+        if (target) {
+            await new Promise(res => battleSys.executeAttack(enemy, target, window.units, camera, res, scene));
+            if (currentStage === 0) {
+                const mother = window.units.find(u => u.id === '母ティラノ');
+                if (mother && mother.hp <= 0) return checkVictory();
+            }
+            if (window.player.hp <= 0 && currentStage !== 0) { uiCtrl.setMsg("GAME OVER", "#ff0000"); return; }
         }
-        
         enemy.hasActed = true;
         await new Promise(res => setTimeout(res, 400)); 
     }
-    
-    if (window.player.hp > 0) {
+    if (window.player.hp > 0 || currentStage === 0) {
         window.units.filter(u => u.isPlayer).forEach(u => { u.hasMoved = false; u.hasAttacked = false; u.hasActed = false; });
         gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' }); 
-        uiCtrl.hideAll(); 
-        uiCtrl.setMsg("あなたの番です！", "#00ff00");
+        uiCtrl.hideAll(); uiCtrl.setMsg("あなたの番です！", "#00ff00");
     }
 }
 
 function checkVictory() {
-    const boss = window.units.find(u => u.id === 'ブラキオサウルス');
+    const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス' || u.id === '母ティラノ');
     if (boss && boss.sprite) {
-        // ★修正：撃破時の消滅アニメーションを強制停止して再実体化
+        // ★修正：撃破演出の強制停止と実体化を維持
         gsap.killTweensOf(boss.sprite.scale);
         boss.sprite.visible = true;
-        
         const h = (boss.spriteConfig && boss.spriteConfig.type === 'bra') ? 90 : 60;
         boss.sprite.scale.set(boss.baseScaleX * boss.facing, h, 1);
         if (boss.shadow) boss.shadow.visible = true;
         if (boss.setAction) boss.setAction('HURT');
     }
-
     gameStore.setState({ gameState: 'FINISHED' });
     startDialogue();
 }
@@ -529,20 +534,15 @@ function clearHighlights() {
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta() * 1000;
-    
     const store = getStore();
     const selectorUi = document.getElementById('unit-selector-ui');
     const countEl = document.getElementById('remaining-count');
     if (selectorUi && countEl) {
         const unacted = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
         if (store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
-            selectorUi.style.display = 'block';
-            countEl.innerText = unacted.length;
-        } else {
-            selectorUi.style.display = 'none';
-        }
+            selectorUi.style.display = 'block'; countEl.innerText = unacted.length;
+        } else { selectorUi.style.display = 'none'; }
     }
-
     window.units.forEach(u => {
         if (u.updateAnimation) u.updateAnimation(delta);
         if (u.shadow && u.sprite) {
