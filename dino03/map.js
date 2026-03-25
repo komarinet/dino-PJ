@@ -1,12 +1,14 @@
 /* =================================================================
-   map.js - v8.20.22
+   map.js - v8.20.33
    修正内容：
-   1. 重なり判定の厳格化：getWalkableNodes 内で、ユニットの位置を
-      Math.round で整数化して比較。浮動小数点によるズレを防ぎ、
-      ユニット同士が重なるのを確実に阻止します。
+   1. 埋没防止：blocksHigh を Math.max(1, cell.h) から cell.h に変更。
+      これにより、高さ0の地点でユニットがブロックに埋まるのを防ぎます。
+   2. クリック判定：高さ0の地点に透明な Plane を設置。
+      ブロックがない場所でも、レイキャスターが正しくタイルを検知できるようにします。
+   3. 重なり判定維持：getWalkableNodes 内の Math.round 判定を継続。
    ================================================================= */
 
-export const VERSION = "8.20.22";
+export const VERSION = "8.20.33";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 export const MAP_W = 10;
@@ -32,9 +34,12 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
         for (let x = 0; x < MAP_W; x++) {
             const cell = mapData[z][x];
             const col = cell.type;
-            const blocksHigh = Math.max(1, cell.h); 
+            
+            // ★修正：高さ0を許容するように変更（埋没防止）
+            const blocksHigh = cell.h; 
             if (col === 4) window.obstaclesMap.add(`${x},${z}`);
 
+            // ブロックの描画（高さがある場合のみ）
             for (let b = 0; b < blocksHigh; b++) {
                 const isTopBlock = (b === blocksHigh - 1);
                 const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
@@ -70,6 +75,17 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                     window.interactableTiles.push(mesh);
                 }
                 scene.add(mesh);
+            }
+
+            // ★追加：高さ0の場合のクリック判定用透明パネル
+            if (blocksHigh <= 0) {
+                const floorGeo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
+                const floorMesh = new THREE.Mesh(floorGeo, new THREE.MeshBasicMaterial({ visible: false }));
+                floorMesh.rotation.x = -Math.PI / 2;
+                floorMesh.position.set(x * TILE_SIZE - offsetX, 0, z * TILE_SIZE - offsetZ);
+                floorMesh.userData = { x, z, h: 0 };
+                window.interactableTiles.push(floorMesh);
+                scene.add(floorMesh);
             }
         }
     }
@@ -112,7 +128,6 @@ export function getWalkableNodes(units, unit, mapData) {
             const targetH = mapData[nz][nx].h;
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
             
-            // ★ 修正箇所：より厳密にユニットの存在をチェック（重なり防止）
             const isOccupied = units.some(u => u !== unit && u.hp > 0 && Math.round(u.x) === nx && Math.round(u.z) === nz);
             if (isOccupied) continue;
 
