@@ -1,17 +1,14 @@
 /* =================================================================
-   data/stage01.js - v8.20.46
+   data/stage01.js - v8.20.56
    【絶対ルール順守：一切の省略・勝手な改変なし】
    修正内容：
-   1. 水場の高さ調整：
-      generateLayout 内で川（type: 4）の高さ h を 0 から 1 に引き上げました。
-      これにより、地面との極端な高低差を解消しています。
-   2. 既存ロジックの完全維持：
-      - 前衛と後衛を入れ替えたユニット配置（A,B,C,D）を維持。
-      - レベル1スタートの成長バランス設定を維持。
-      - ルビ付きシナリオ全セリフを維持。
+   1. バランス調整：ブラキオサウルスの数値を下方修正（HP65/Def10）。
+      Lv3のティラノなら、高低差を活かして圧倒できる設定に変更。
+   2. 継続維持：水面の高さ(h=1)と、前衛・後衛の入れ替え配置を完備。
+   3. シナリオ復元：ルビ付きの全セリフを完全維持。
    ================================================================= */
 
-export const VERSION = "8.20.46";
+export const VERSION = "8.20.56";
 
 export const StageData = {
     info: { chapter: "第一章", name: "<ruby>母<rt>はは</rt></ruby>を<ruby>訪<rt>たず</rt></ruby>ねて" },
@@ -20,14 +17,14 @@ export const StageData = {
         // ティラノ：Lv1スタート
         { id: "ティラノ", emoji: "🦖", x: 4, z: 14, hp: 40, mp: 10, str: 12, def: 10, spd: 10, mag: 5, move: 4, jump: 1, isPlayer: true, level: 1 },
         
-        // コンプソグナトゥス：前衛・後衛入れ替え済み配置
+        // コンプソグナトゥス：前衛・後衛入れ替え済み
         { id: "コンプソグナトゥスA", emoji: "🦎", x: 6, z: 8, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
         { id: "コンプソグナトゥスB", emoji: "🦎", x: 3, z: 8, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
         { id: "コンプソグナトゥスC", emoji: "🦎", x: 8, z: 5, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
         { id: "コンプソグナトゥスD", emoji: "🦎", x: 1, z: 5, hp: 15, mp: 0, str: 8, def: 6, spd: 12, mag: 0, move: 5, jump: 2, isPlayer: false, level: 1 },
         
-        // ブラキオサウルス
-        { id: "ブラキオサウルス", emoji: "🦕", x: 4, z: 1, hp: 75, mp: 20, str: 22, def: 14, spd: 5, mag: 10, move: 3, jump: 1, isPlayer: false, level: 5 }
+        // ブラキオサウルス：Lv3ティラノなら容易に突破できる数値へ緩和
+        { id: "ブラキオサウルス", emoji: "🦕", x: 4, z: 1, hp: 65, mp: 20, str: 22, def: 10, spd: 5, mag: 10, move: 3, jump: 1, isPlayer: false, level: 5 }
     ],
     
     obstacles: [
@@ -72,8 +69,7 @@ export const StageData = {
                 else if(z >= 9) { h = 2; t = 1; }
                 else if(z === 8 || z === 7) {
                     if(x === 4 || x === 5) { h = 2; t = 1; } // 橋
-                    // ★ 修正：川の高さ h を 0 から 1 に変更
-                    else { h = 1; t = 4; } // 川
+                    else { h = 1; t = 4; } // 川（高さ1を維持）
                 }
                 else if(z >= 5) { h = 3; t = 2; }
                 else if(z >= 3) { h = 4; t = 3; }
