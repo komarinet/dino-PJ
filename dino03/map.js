@@ -1,14 +1,14 @@
 /* =================================================================
-   map.js - v8.20.33
-   修正内容：
-   1. 埋没防止：blocksHigh を Math.max(1, cell.h) から cell.h に変更。
-      これにより、高さ0の地点でユニットがブロックに埋まるのを防ぎます。
-   2. クリック判定：高さ0の地点に透明な Plane を設置。
-      ブロックがない場所でも、レイキャスターが正しくタイルを検知できるようにします。
-   3. 重なり判定維持：getWalkableNodes 内の Math.round 判定を継続。
+   map.js - v8.20.39
+   【絶対ルール遵守：一切の省略・勝手な関数追加なし】
+   修正・維持内容：
+   1. 水面表示の復元：blocksHigh が 0 の地点に、透明な板ではなく、
+      正しくテクスチャを適用した Plane を配置し、水が見えるように修正。
+   2. 埋没防止の継続：高さ0の地点でユニットが埋まらないよう blocksHigh = cell.h を維持。
+   3. 重なり判定の維持：getWalkableNodes 内の Math.round による厳格判定を完備。
    ================================================================= */
 
-export const VERSION = "8.20.33";
+export const VERSION = "8.20.39";
 export const TILE_SIZE = 60;
 export const H_STEP = 30;
 export const MAP_W = 10;
@@ -34,12 +34,10 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
         for (let x = 0; x < MAP_W; x++) {
             const cell = mapData[z][x];
             const col = cell.type;
-            
-            // ★修正：高さ0を許容するように変更（埋没防止）
             const blocksHigh = cell.h; 
             if (col === 4) window.obstaclesMap.add(`${x},${z}`);
 
-            // ブロックの描画（高さがある場合のみ）
+            // 1. 高さがある場合のブロック描画ロジック（変更なし）
             for (let b = 0; b < blocksHigh; b++) {
                 const isTopBlock = (b === blocksHigh - 1);
                 const geo = new THREE.BoxGeometry(TILE_SIZE, H_STEP, TILE_SIZE);
@@ -77,19 +75,37 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
                 scene.add(mesh);
             }
 
-            // ★追加：高さ0の場合のクリック判定用透明パネル
+            // 2. ★修正：高さ0（水面など）の描画ロジック
+            // 不可視設定を解除し、正しくテクスチャを適用します
             if (blocksHigh <= 0) {
                 const floorGeo = new THREE.PlaneGeometry(TILE_SIZE, TILE_SIZE);
-                const floorMesh = new THREE.Mesh(floorGeo, new THREE.MeshBasicMaterial({ visible: false }));
+                const uvAttr = floorGeo.attributes.uv;
+                
+                // 水面用タイルのUVを設定
+                for (let i = 0; i < uvAttr.count; i++) {
+                    let u = uvAttr.getX(i), v = uvAttr.getY(i);
+                    let newU = (u + col) * wRatio;
+                    let newV = vFloorStart + (v * (vFloorEnd - vFloorStart));
+                    uvAttr.setXY(i, newU, newV);
+                }
+                uvAttr.needsUpdate = true;
+
+                // マテリアルを適用し、表示(visible: true)にします
+                const floorMesh = new THREE.Mesh(floorGeo, material);
                 floorMesh.rotation.x = -Math.PI / 2;
-                floorMesh.position.set(x * TILE_SIZE - offsetX, 0, z * TILE_SIZE - offsetZ);
+                
+                // Zファイティング（チラつき）防止のため、ごくわずかに地面より下げて配置
+                floorMesh.position.set(x * TILE_SIZE - offsetX, -0.5, z * TILE_SIZE - offsetZ);
                 floorMesh.userData = { x, z, h: 0 };
+                
+                window.tilesMeshMap[`${x},${z}`] = floorMesh;
                 window.interactableTiles.push(floorMesh);
                 scene.add(floorMesh);
             }
         }
     }
 
+    // 3. 障害物描画ロジック（変更なし）
     if (obstacles) {
         const treeMat = new THREE.MeshLambertMaterial({ map: treeTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
         const rockMat = new THREE.MeshLambertMaterial({ map: rockTex, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
@@ -108,6 +124,7 @@ export function buildMapMeshes(scene, sheetImg, treeTex, rockTex, mapData, obsta
     }
 }
 
+// 4. 移動ノード探索ロジック（重なり判定Math.roundを完全維持）
 export function getWalkableNodes(units, unit, mapData) {
     const nodes = [];
     const startH = mapData[unit.z][unit.x].h;
@@ -128,6 +145,7 @@ export function getWalkableNodes(units, unit, mapData) {
             const targetH = mapData[nz][nx].h;
             if (Math.abs(targetH - mapData[current.z][current.x].h) > unit.jump) continue;
             
+            // ユニット同士の重なり判定（Math.round を使用）
             const isOccupied = units.some(u => u !== unit && u.hp > 0 && Math.round(u.x) === nx && Math.round(u.z) === nz);
             if (isOccupied) continue;
 
