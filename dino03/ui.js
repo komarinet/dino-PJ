@@ -1,15 +1,15 @@
 /* =================================================================
-   ui.js - v8.20.77
+   ui.js - v8.20.81
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. 表示名対応：ステータスやターゲット窓で unit.displayName を優先表示。
-   2. 話者照合：会話中の名前から内部IDを特定し、正しい顔グラを表示するロジックを強化。
-   3. ギガノト対応：4x4シートの14番フレーム（台詞用）の切り出しを維持。
-   4. ママティラノ対応：3x5シートの12番フレームの切り出しを維持。
+   1. 画面揺れ演出：screenShake メソッドを追加。地鳴り等の視覚効果を実装。
+   2. 時間経過表示：showTimeSkip メソッドを追加。「数年後・・・」等の文字表示に対応。
+   3. 表示名対応：ステータスやターゲット窓で unit.displayName を優先表示（維持）。
+   4. 顔グラ対応：ギガノト(14番)、ママティラノ(12番)等の切り出しロジックを完全保持。
    5. 演出完備：バウンドダメージ、上昇レベルアップ、Rubyタグ、窓管理を継承。
    ================================================================= */
 
-export const VERSION = "8.20.77";
+export const VERSION = "8.20.81";
 
 export class UIControl {
     constructor(cameraControl) {
@@ -71,11 +71,49 @@ export class UIControl {
         const windows = [
             this.dom.statusUi, this.dom.detailUi, this.dom.commandUi, 
             this.dom.confirmUi, this.dom.targetUi, this.dom.eventUi,
-            this.dom.targetPreviewUi
+            this.dom.targetPreviewUi,
+            document.getElementById('episode-clear-overlay') // 時間経過等のオーバーレイも含む
         ];
         windows.forEach(el => {
             if (el) el.style.display = 'none';
         });
+    }
+
+    /**
+     * 地鳴り等の画面揺れ演出
+     */
+    screenShake(intensity = 10, duration = 0.5) {
+        const container = document.getElementById('canvas-container');
+        if (!container) return;
+        gsap.to(container, {
+            x: `random(-${intensity}, ${intensity})`,
+            y: `random(-${intensity}, ${intensity})`,
+            repeat: 5,
+            duration: duration / 5,
+            yoyo: true,
+            onComplete: () => gsap.set(container, { x: 0, y: 0 })
+        });
+    }
+
+    /**
+     * 「数年後・・・」等の時間経過メッセージを中央に表示
+     */
+    showTimeSkip(text, onComplete) {
+        const overlay = document.getElementById('episode-clear-overlay');
+        if (!overlay) return;
+        const clearText = overlay.querySelector('.clear-text');
+        if (clearText) clearText.innerHTML = text;
+        
+        overlay.style.display = 'flex';
+        overlay.style.opacity = 0;
+        gsap.to(overlay, { opacity: 1, duration: 2.0, onComplete: () => {
+            setTimeout(() => {
+                gsap.to(overlay, { opacity: 0, duration: 1.0, onComplete: () => {
+                    overlay.style.display = 'none';
+                    if (onComplete) onComplete();
+                }});
+            }, 2500);
+        }});
     }
 
     updateCommandMenu(unit) {
@@ -96,7 +134,6 @@ export class UIControl {
         this.setMsg("");
         this.dom.statusUi.style.display = 'block';
         
-        // ★修正：表示名(displayName)があればそれを、なければIDを表示
         if (this.dom.stName) this.dom.stName.innerText = unit.displayName || unit.id;
         if (this.dom.stLv) this.dom.stLv.innerText = unit.level;
         
@@ -118,14 +155,10 @@ export class UIControl {
         if (this.dom.dtMag) this.dom.dtMag.innerText = unit.mag;
     }
 
-    /**
-     * 攻撃対象のステータスプレビューを表示
-     */
     showTargetPreview(unit) {
         if (!this.dom.targetPreviewUi) return;
         this.dom.targetPreviewUi.style.display = 'block';
         
-        // ★修正：表示名(displayName)を優先
         if (this.dom.tpName) this.dom.tpName.innerText = unit.displayName || unit.id;
         if (this.dom.tpLv) this.dom.tpLv.innerText = unit.level;
         if (this.dom.tpHp) this.dom.tpHp.innerText = `${unit.hp}/${unit.maxHp}`;
@@ -141,21 +174,17 @@ export class UIControl {
         this.dom.evText.innerHTML = data.text;
         if (this.dom.evTextArea) this.dom.evTextArea.scrollTop = 0;
 
-        // ★修正：表示名(displayName)またはIDで話者を特定
         const speaker = units.find(u => u.displayName === data.name || u.id === data.name);
         
         if (speaker && speaker.spriteConfig) {
             const conf = speaker.spriteConfig;
             if (conf.type === 'giga') {
-                // ギガノトサウルス：14番（列1, 行3）
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/giga.png'); background-size: 400% 400%; background-position: 33.33% 100%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'mom') {
-                // ママティラノ：12番（列2, 行3）
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/momtyrano.png'); background-size: 300% 500%; background-position: 100% 75%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'bra') {
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'rex') {
-                // チビティラノ(内部ID: ティラノ)はここを通る
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'comp') {
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/comp.png'); background-size: 300% 200%; background-position: 100% 100%; image-rendering: pixelated;\"></div>`;
@@ -183,20 +212,15 @@ export class UIControl {
     showFloatingText(unit, text, type, camera, heightOffset = 50) {
         if (!unit || !unit.sprite || !camera) return;
         const vector = unit.sprite.position.clone();
-        
         vector.y += heightOffset; 
         vector.project(camera);
-        
         const canvas = document.querySelector('canvas');
         if (!canvas) return;
-        
         const x = (vector.x * 0.5 + 0.5) * canvas.clientWidth;
         const y = (vector.y * -0.5 + 0.5) * canvas.clientHeight;
-        
         const el = document.createElement('div');
         el.className = 'floating-text';
         el.innerText = text;
-        
         el.style.color = (type === 'levelup') ? '#ffff00' : (type === 'heal' ? '#00ffff' : '#ffffff');
         el.style.left = `${x}px`;
         el.style.top = `${y}px`;
@@ -204,23 +228,10 @@ export class UIControl {
         el.style.pointerEvents = 'none';
         el.style.zIndex = '5000';
         document.body.appendChild(el);
-        
         if (type === 'levelup') {
-            gsap.to(el, { 
-                y: "-=60", 
-                opacity: 0, 
-                duration: 2.0, 
-                ease: "power1.out", 
-                onComplete: () => el.remove() 
-            });
+            gsap.to(el, { y: "-=60", opacity: 0, duration: 2.0, ease: "power1.out", onComplete: () => el.remove() });
         } else {
-            gsap.to(el, { 
-                y: "+=40", 
-                opacity: 0, 
-                duration: 1.2, 
-                ease: "bounce.out", 
-                onComplete: () => el.remove() 
-            });
+            gsap.to(el, { y: "+=40", opacity: 0, duration: 1.2, ease: "bounce.out", onComplete: () => el.remove() });
         }
     }
 }
