@@ -1,14 +1,15 @@
 /* =================================================================
-   units.js - v8.20.71
+   units.js - v8.20.73
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. 母ティラノのアニメーション反転：11番から1番への逆行ループに変更。
-   2. 既存維持：3x5グリッド素材（1〜15番）の座標変換ロジックを完備。
-   3. 描画設定：影の renderOrder=10、本体 renderOrder=999 を維持。
-   4. アクション定義：13番やられ、14番倒れ、15番攻撃の設定を完全継承。
+   1. ギガノト対応：4x4素材（1〜14番）のインデックス計算を実装。
+   2. アニメーション：ギガノトの1-10番歩行、11番攻撃、12番やられ、13番倒れを定義。
+   3. 母ティラノ維持：11番から1番への「逆行ループ」設定を完全保持。
+   4. 描画設定：ギガノトを最大サイズ（高さ100）に設定。影の優先度10、本体999を維持。
+   5. 既存維持：レベルアップ時のATTACKポーズ、Str/Def強化バランスを完備。
    ================================================================= */
 
-export const VERSION = "8.20.71";
+export const VERSION = "8.20.73";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -40,7 +41,12 @@ export class Unit {
             this.levelUp();
             leveledUp = true;
             if (uiCtrl && camera) {
-                const heightOffset = (this.spriteConfig.type === 'bra') ? 100 : (this.spriteConfig.type === 'mom' ? 90 : 70);
+                // キャラクターの大きさに合わせた表示位置の調整
+                let heightOffset = 70;
+                if (this.spriteConfig.type === 'giga') heightOffset = 110;
+                else if (this.spriteConfig.type === 'bra') heightOffset = 100;
+                else if (this.spriteConfig.type === 'mom') heightOffset = 90;
+
                 uiCtrl.showFloatingText(this, "LEVEL UP!", "levelup", camera, heightOffset);
             }
         }
@@ -54,7 +60,7 @@ export class Unit {
     }
 
     /**
-     * 成長システム：ステータス上昇値
+     * 成長システム
      */
     levelUp() {
         this.level++;
@@ -79,8 +85,11 @@ export class Unit {
         this.sprite.renderOrder = 999;
         
         const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
+        
+        // サイズ設定：ギガノト100, ブラキオ90, 母85, その他60
         let h = 60;
-        if (conf.type === 'bra') h = 90;
+        if (conf.type === 'giga') h = 100;
+        else if (conf.type === 'bra') h = 90;
         else if (conf.type === 'mom') h = 85; 
 
         this.baseScaleX = h * (cellW / cellH);
@@ -114,8 +123,15 @@ export class Unit {
             const frame = (Math.floor(this.animTime / 500) % 2); 
             this.setRawFrame(0, frame);
         } 
+        else if(this.spriteConfig.type === 'giga') {
+            // ギガノトサウルス：1番〜10番のループ（4列x4行）
+            const idx = (Math.floor(this.animTime / 150) % 10) + 1;
+            const col = (idx - 1) % 4;
+            const row = Math.floor((idx - 1) / 4);
+            this.setRawFrame(col, row);
+        }
         else if(this.spriteConfig.type === 'mom') {
-            // ★修正：母ティラノ 11番から1番への逆行ループ（3列x5行）
+            // 母ティラノ：11番から1番への逆行ループ（3列x5行）
             const idx = 11 - (Math.floor(this.animTime / 150) % 11);
             const col = (idx - 1) % 3;
             const row = Math.floor((idx - 1) / 3);
@@ -142,20 +158,27 @@ export class Unit {
         if(!this.texture) return;
         this.animState = 'FIXED';
         
-        if(this.spriteConfig.type === 'bra') {
+        const type = this.spriteConfig.type;
+        if(type === 'bra') {
             this.setRawFrame(0, action === 'ATTACK' ? 2 : 3);
         } 
-        else if(this.spriteConfig.type === 'mom') {
+        else if(type === 'giga') {
+            // ギガノト：11番攻撃、12番やられ、13番倒れ（4列）
+            if(action === 'ATTACK') this.setRawFrame(2, 2);      // 11番
+            else if(action === 'HURT') this.setRawFrame(3, 2);   // 12番
+            else if(action === 'DOWN') this.setRawFrame(0, 3);   // 13番
+        }
+        else if(type === 'mom') {
             if(action === 'ATTACK') this.setRawFrame(2, 4);      // 15番
             else if(action === 'HURT') this.setRawFrame(0, 4);   // 13番
             else if(action === 'DOWN') this.setRawFrame(1, 4);   // 14番
         }
-        else if(this.spriteConfig.type === 'rex') {
+        else if(type === 'rex') {
             if(action === 'ATTACK') this.setRawFrame(1, 3); 
             else if(action === 'HURT') this.setRawFrame(0, 3);  
             else if(action === 'DOWN') this.setRawFrame(2, 3);  
         } 
-        else if(this.spriteConfig.type === 'comp') {
+        else if(type === 'comp') {
             if(action === 'ATTACK') this.setRawFrame(2, 0); 
             else if(action === 'HURT') this.setRawFrame(0, 1);  
             else if(action === 'DOWN') this.setRawFrame(1, 1);  
@@ -164,8 +187,7 @@ export class Unit {
 
     setIdle() { 
         this.animState = 'IDLE'; 
-        if(this.spriteConfig.type === 'mom') this.setRawFrame(0, 0); 
-        else this.setRawFrame(0, 0); 
+        this.setRawFrame(0, 0); // 共通：1番フレーム
     }
 }
 
