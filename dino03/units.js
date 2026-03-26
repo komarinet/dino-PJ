@@ -1,19 +1,21 @@
 /* =================================================================
-   units.js - v8.20.73
+   units.js - v8.20.78
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. ギガノト対応：4x4素材（1〜14番）のインデックス計算を実装。
-   2. アニメーション：ギガノトの1-10番歩行、11番攻撃、12番やられ、13番倒れを定義。
-   3. 母ティラノ維持：11番から1番への「逆行ループ」設定を完全保持。
-   4. 描画設定：ギガノトを最大サイズ（高さ100）に設定。影の優先度10、本体999を維持。
-   5. 既存維持：レベルアップ時のATTACKポーズ、Str/Def強化バランスを完備。
+   1. 表示名対応：displayName プロパティを追加。未指定時は id を使用。
+   2. ギガノト維持：4x4素材（1〜14番）のインデックス計算・アクション定義を完備。
+   3. ママティラノ維持：11番から1番への「逆行ループ」設定を完全保持。
+   4. 描画設定：影の優先度10、本体999、ギガノト最大サイズ（100）を維持。
+   5. 既存維持：レベルアップ演出、Str/Def強化バランスを継承。
    ================================================================= */
 
-export const VERSION = "8.20.73";
+export const VERSION = "8.20.78";
 
 export class Unit {
-    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
-        this.id = id; this.emoji = emoji; this.x = x; this.z = z; this.h = 0;
+    constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1, displayName = null) {
+        this.id = id; 
+        this.displayName = displayName || id; // 表示名を保持。なければIDを使用
+        this.emoji = emoji; this.x = x; this.z = z; this.h = 0;
         this.level = level; this.exp = 0;
         this.maxHp = hp; this.hp = hp;
         this.maxMp = mp; this.mp = mp;
@@ -41,7 +43,6 @@ export class Unit {
             this.levelUp();
             leveledUp = true;
             if (uiCtrl && camera) {
-                // キャラクターの大きさに合わせた表示位置の調整
                 let heightOffset = 70;
                 if (this.spriteConfig.type === 'giga') heightOffset = 110;
                 else if (this.spriteConfig.type === 'bra') heightOffset = 100;
@@ -86,7 +87,6 @@ export class Unit {
         
         const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
         
-        // サイズ設定：ギガノト100, ブラキオ90, 母85, その他60
         let h = 60;
         if (conf.type === 'giga') h = 100;
         else if (conf.type === 'bra') h = 90;
@@ -124,14 +124,12 @@ export class Unit {
             this.setRawFrame(0, frame);
         } 
         else if(this.spriteConfig.type === 'giga') {
-            // ギガノトサウルス：1番〜10番のループ（4列x4行）
             const idx = (Math.floor(this.animTime / 150) % 10) + 1;
             const col = (idx - 1) % 4;
             const row = Math.floor((idx - 1) / 4);
             this.setRawFrame(col, row);
         }
         else if(this.spriteConfig.type === 'mom') {
-            // 母ティラノ：11番から1番への逆行ループ（3列x5行）
             const idx = 11 - (Math.floor(this.animTime / 150) % 11);
             const col = (idx - 1) % 3;
             const row = Math.floor((idx - 1) / 3);
@@ -163,15 +161,14 @@ export class Unit {
             this.setRawFrame(0, action === 'ATTACK' ? 2 : 3);
         } 
         else if(type === 'giga') {
-            // ギガノト：11番攻撃、12番やられ、13番倒れ（4列）
-            if(action === 'ATTACK') this.setRawFrame(2, 2);      // 11番
-            else if(action === 'HURT') this.setRawFrame(3, 2);   // 12番
-            else if(action === 'DOWN') this.setRawFrame(0, 3);   // 13番
+            if(action === 'ATTACK') this.setRawFrame(2, 2);      
+            else if(action === 'HURT') this.setRawFrame(3, 2);   
+            else if(action === 'DOWN') this.setRawFrame(0, 3);   
         }
         else if(type === 'mom') {
-            if(action === 'ATTACK') this.setRawFrame(2, 4);      // 15番
-            else if(action === 'HURT') this.setRawFrame(0, 4);   // 13番
-            else if(action === 'DOWN') this.setRawFrame(1, 4);   // 14番
+            if(action === 'ATTACK') this.setRawFrame(2, 4);      
+            else if(action === 'HURT') this.setRawFrame(0, 4);   
+            else if(action === 'DOWN') this.setRawFrame(1, 4);   
         }
         else if(type === 'rex') {
             if(action === 'ATTACK') this.setRawFrame(1, 3); 
@@ -187,7 +184,7 @@ export class Unit {
 
     setIdle() { 
         this.animState = 'IDLE'; 
-        this.setRawFrame(0, 0); // 共通：1番フレーム
+        this.setRawFrame(0, 0); 
     }
 }
 
