@@ -1,15 +1,15 @@
 /* =================================================================
-   main.js - v8.20.83
+   main.js - v8.20.84
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 序章演出強化：地鳴りの画面揺れ(shake)、チビの体当たり(body_slam)を実装。
-   2. 合体移動：ギガノトがママを咥えて連れ去る「親子付け」ロジックを統合。
-   3. 時間経過：システムテキストを廃止し、中央に「数年後・・・」を表示して遷移。
-   4. 名称変更：ユニットIDを「ママティラノ」に、表示名を「チビティラノ」に対応。
-   5. 既存機能維持：雨のパーティクル、水中の沈み込み、ターゲットプレビューを完備。
+   1. UI復旧：消えていた「ユニット選択ボタン(unit-selector-ui)」の表示制御を再実装。
+   2. 序章演出維持：画面揺れ、体当たり、ギガノトのママ連れ去りロジックを完備。
+   3. 合体移動：grabbedBy フラグによるスプライトの親子付け追従を継続。
+   4. 浅瀬対応：Stage 01 の水（type:4）での沈み込みと影消去を維持。
+   5. 名称対応：ママティラノ、チビティラノ(displayName)の設定を保持。
    ================================================================= */
 
-export const VERSION = "8.20.83";
+export const VERSION = "8.20.84";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -21,7 +21,7 @@ import { StageData as Stage00, VERSION as sce00V } from './data/stage00.js';
 import { StageData as Stage01, VERSION as sce01V } from './data/stage01.js';
 
 let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
-let currentStage = 0; // 0: 序章, 1: 第1話
+let currentStage = 0; 
 let stageData = Stage00;
 let mapData = stageData.generateLayout();
 
@@ -197,7 +197,6 @@ function startDialogue() {
     const playLine = (idx) => { 
         const lineData = talkData[idx]; 
         uiCtrl.renderTalkLine(lineData, window.units, window.player); 
-        // 会話内アクションの実行
         if (lineData.action === "shake") uiCtrl.screenShake(12, 1.0);
     };
 
@@ -205,17 +204,14 @@ function startDialogue() {
         const idx = getStore().talkIndex + 1;
         const lineData = talkData[getStore().talkIndex];
 
-        // --- Stage 00 特別演出：噛みつき・体当たり・連れ去り ---
         if (currentStage === 0 && isPostBattle) {
             const giga = window.units.find(u => u.id === 'ギガノトサウルス');
             const mama = window.units.find(u => u.id === 'ママティラノ');
             
-            // 演出：ギガノトがママを捉える (咥える)
             if (idx === 3) {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
                 mama.setAction('DOWN');
-                // ギガノトの口元へママを移動（親子付け開始）
                 gsap.to(mama.sprite.position, { 
                     x: giga.sprite.position.x + (giga.facing * 30), 
                     y: giga.sprite.position.y + 10,
@@ -227,18 +223,15 @@ function startDialogue() {
                 if (evUi) evUi.style.display = 'flex';
             }
 
-            // 演出：チビの体当たり
             if (lineData.action === "body_slam_start") {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
                 const startPos = window.player.sprite.position.clone();
-                // 突撃
                 await gsap.to(window.player.sprite.position, { 
                     x: giga.sprite.position.x - (giga.facing * 20), 
                     z: giga.sprite.position.z, duration: 0.2, ease: "power2.in" 
                 });
-                uiCtrl.screenShake(5, 0.2); // 衝突の衝撃
-                // 弾き飛ばされる
+                uiCtrl.screenShake(5, 0.2);
                 await gsap.to(window.player.sprite.position, { 
                     x: startPos.x, z: startPos.z, duration: 0.6, ease: "back.out(2)" 
                 });
@@ -247,20 +240,17 @@ function startDialogue() {
                 gameStore.setState({ gameState: 'TALKING' }); return;
             }
 
-            // 演出：ギガノトが尻尾で吹き飛ばす〜連れ去り
             if (idx === 6) {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
                 giga.setAction('ATTACK');
                 uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
                 window.player.setAction('DOWN');
-                // 遠くへ吹き飛ばす
                 gsap.to(window.player.sprite.position, { x: "-=100", z: "+=100", duration: 0.5, ease: "power2.out" });
                 await new Promise(res => setTimeout(res, 1000));
                 if (evUi) evUi.style.display = 'flex';
             }
 
-            // 演出：ママを咥えたまま去る (drag_away)
             if (idx === 8) {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
@@ -465,7 +455,7 @@ function showHighlight(nodeList, mat) {
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat); mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offsetZ);
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
         scene.add(mesh); highlightMeshes.push(mesh);
     });
 }
@@ -480,10 +470,19 @@ function animate() {
         for (let i = 1; i < positions.length; i += 3) { positions[i] -= 12; if (positions[i] < -100) positions[i] = 1000; }
         rainSystem.geometry.attributes.position.needsUpdate = true;
     }
+
+    // ★復旧：ユニット選択UIの表示制御
+    const selectorUi = document.getElementById('unit-selector-ui');
+    const countEl = document.getElementById('remaining-count');
+    if (selectorUi && countEl) {
+        const unacted = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
+        if (store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
+            selectorUi.style.display = 'block'; countEl.innerText = unacted.length;
+        } else { selectorUi.style.display = 'none'; }
+    }
+
     window.units.forEach(u => {
         if (u.updateAnimation) u.updateAnimation(delta);
-        
-        // ★合体演出：咥えられているユニットを移動させる
         if (u.grabbedBy && u.grabbedBy.sprite) {
             u.sprite.position.x = u.grabbedBy.sprite.position.x + (u.grabbedBy.facing * 30);
             u.sprite.position.y = u.grabbedBy.sprite.position.y + 10;
