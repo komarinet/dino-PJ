@@ -1,15 +1,15 @@
 /* =================================================================
-   main.js - v8.20.64
+   main.js - v8.20.65
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. ステージ遷移：Stage00（序章）から Stage01（第1話）への自動遷移。
-   2. 敗北イベント：序章にて母ティラノ敗北を機に、ギガノトによる強制撃破演出を実行。
-   3. ターゲットプレビュー：攻撃対象選択時の敵ステータス表示（既存維持）。
-   4. ボス実体化修正：イベント突入時の確実な再表示（既存維持・拡張）。
-   5. 既存機能維持：味方セレクター、AI思考、ティラノ退場（1話）を完備。
+   1. 新素材対応：img/momtyrano.png をロードし、母ティラノ専用の 3x5 構成を設定。
+   2. ステージ遷移：Stage00（序章）から Stage01（第1話）への自動遷移を完備。
+   3. 敗北イベント：序章での母敗北を機に、ギガノトによる強制撃破演出を実行。
+   4. ボス実体化修正：イベント突入時の確実な再表示（既存維持）。
+   5. 既存機能維持：ターゲットプレビュー、味方セレクター、AI思考、1話退場演出。
    ================================================================= */
 
-export const VERSION = "8.20.64";
+export const VERSION = "8.20.65";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -78,12 +78,16 @@ async function runGame() {
         const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
         sheetImg.onload = async () => {
-            const [braTex, rexTex, compTex, treeTex, rockTex] = await Promise.all([
-                loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), loadTex('img/comp.png'),
-                loadTex('img/tree01.png'), loadTex('img/rock01.png')
+            const [braTex, rexTex, momTex, compTex, treeTex, rockTex] = await Promise.all([
+                loadTex('img/bra.png'), 
+                loadTex('img/tactyrano01.png'), 
+                loadTex('img/momtyrano.png'), // 母ティラノ専用素材
+                loadTex('img/comp.png'),
+                loadTex('img/tree01.png'), 
+                loadTex('img/rock01.png')
             ]);
-            window.gameTextures = { sheetImg, braTex, rexTex, compTex, treeTex, rockTex };
-            init(0); // 序章から開始
+            window.gameTextures = { sheetImg, braTex, rexTex, momTex, compTex, treeTex, rockTex };
+            init(0); 
             document.getElementById('loading-screen').style.display = 'none';
         };
     } catch (e) { console.error(e); }
@@ -117,9 +121,19 @@ function init(stageIndex) {
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
     window.units = stageData.units.map(u => {
         let conf = null;
-        if(u.id === 'ブラキオサウルス') conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
-        else if (u.id === 'ティラノ' || u.id === '母ティラノ' || u.id === 'ギガノトサウルス') conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
-        else conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
+        if(u.id === 'ブラキオサウルス') {
+            conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
+        } 
+        else if (u.id === '母ティラノ') {
+            // 母ティラノ専用：3列x5行構成
+            conf = { tex: tex.momTex?.clone(), cols: 3, rows: 5, type: 'mom', w: 2709, h: 2890 };
+        }
+        else if (u.id === 'ティラノ' || u.id === 'チビティラノ' || u.id === 'ギガノトサウルス') {
+            conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
+        }
+        else {
+            conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
+        }
         
         if (conf && conf.tex) conf.tex.needsUpdate = true;
 
@@ -177,23 +191,20 @@ function startDialogue() {
         const idx = getStore().talkIndex + 1;
         
         // --- Stage 00 (序章) 特別演出：母連れ去り & ティラノ敗北 ---
-        if (currentStage === 0 && isPostBattle && idx === 4) { // 「首筋を捉える」付近でギガノト移動
+        if (currentStage === 0 && isPostBattle && idx === 4) { 
              if (evUi) evUi.style.display = 'none';
              gameStore.setState({ gameState: 'ANIMATING' });
              
              const giga = window.units.find(u => u.id === 'ギガノトサウルス');
              const mother = window.units.find(u => u.id === '母ティラノ');
              
-             // ギガノトが母を連れてマップ端へ
              const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: 0, h: 4}];
              battleSys.executeMovement(mother, exitPath, null, 3.0);
              await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 2.0));
              
-             // ティラノが追いかけて立ちふさがる
              const chasePath = [{x: 4, z: 1, h: 4}];
              await new Promise(res => battleSys.executeMovement(window.player, chasePath, res, 1.0));
              
-             // 絶望の一撃（9999ダメージ）
              giga.lookAtNode(window.player.x, window.player.z);
              giga.setAction('ATTACK');
              uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
@@ -242,7 +253,6 @@ function startDialogue() {
                 if(clearOverlay) {
                     const clearText = clearOverlay.querySelector('.clear-text');
                     if (currentStage === 0) {
-                        // 序章終了 -> 数年後へ
                         clearText.innerHTML = "……数年の月日が流れた。";
                         gsap.to(clearOverlay, { opacity: 1, duration: 2.0, onStart:()=> clearOverlay.style.display='flex', onComplete: () => {
                             setTimeout(() => {
@@ -250,7 +260,6 @@ function startDialogue() {
                             }, 3000);
                         }});
                     } else {
-                        // 第1話終了
                         clearText.innerHTML = "第1話 クリア！<br><span style='font-size:0.5em; color:#fff;'>続きは現在制作中です！<br>お楽しみに！</span>";
                         clearOverlay.style.display = 'flex';
                         gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
@@ -391,7 +400,7 @@ function execCommand(cmd) {
         const list = document.getElementById('target-list'); list.innerHTML = '';
         targets.forEach(t => {
             const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
-            btn.onmouseenter = () => uiCtrl.showTargetPreview(t); // プレビュー維持
+            btn.onmouseenter = () => uiCtrl.showTargetPreview(t); 
             btn.onclick = () => selectTarget(t, unit); 
             list.appendChild(btn);
         });
@@ -437,7 +446,7 @@ function answerConfirm(isYes) {
         battleSys.executeAttack(attacker, target, window.units, camera, () => {
             if (currentStage === 0) {
                 const mother = window.units.find(u => u.id === '母ティラノ');
-                if (mother && mother.hp <= 0) return checkVictory(); // 母敗北でイベント
+                if (mother && mother.hp <= 0) return checkVictory(); 
             }
             const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス');
             if (boss && boss.hp <= 0) checkVictory();
@@ -503,7 +512,6 @@ async function processEnemyAI() {
 function checkVictory() {
     const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス' || u.id === '母ティラノ');
     if (boss && boss.sprite) {
-        // ★修正：撃破演出の強制停止と実体化を維持
         gsap.killTweensOf(boss.sprite.scale);
         boss.sprite.visible = true;
         const h = (boss.spriteConfig && boss.spriteConfig.type === 'bra') ? 90 : 60;
