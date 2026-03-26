@@ -1,15 +1,15 @@
 /* =================================================================
-   main.js - v8.20.65
+   main.js - v8.20.70
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 新素材対応：img/momtyrano.png をロードし、母ティラノ専用の 3x5 構成を設定。
-   2. ステージ遷移：Stage00（序章）から Stage01（第1話）への自動遷移を完備。
-   3. 敗北イベント：序章での母敗北を機に、ギガノトによる強制撃破演出を実行。
-   4. ボス実体化修正：イベント突入時の確実な再表示（既存維持）。
-   5. 既存機能維持：ターゲットプレビュー、味方セレクター、AI思考、1話退場演出。
+   1. 雨の演出：Stage 00 の間だけプランA（パーティクル）による雨を降動。
+   2. メモリ管理：ステージ遷移時に雨システムを適切に破棄（dispose）。
+   3. 新素材対応：img/momtyrano.png (3x5) の設定を完全維持。
+   4. ステージ遷移：序章の敗北イベント（9999ダメージ）から第1話への流れを完備。
+   5. 既存機能維持：ターゲットプレビュー、ボス実体化、味方セレクターを完備。
    ================================================================= */
 
-export const VERSION = "8.20.65";
+export const VERSION = "8.20.70";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -24,6 +24,9 @@ let scene, camera, renderer, clock, cameraCtrl, uiCtrl, battleSys;
 let currentStage = 0; // 0: 序章, 1: 第1話
 let stageData = Stage00;
 let mapData = stageData.generateLayout();
+
+// 雨システム用
+let rainSystem = null;
 
 let isEndingProcessed = false;
 let highlightMeshes = [];
@@ -81,7 +84,7 @@ async function runGame() {
             const [braTex, rexTex, momTex, compTex, treeTex, rockTex] = await Promise.all([
                 loadTex('img/bra.png'), 
                 loadTex('img/tactyrano01.png'), 
-                loadTex('img/momtyrano.png'), // 母ティラノ専用素材
+                loadTex('img/momtyrano.png'), 
                 loadTex('img/comp.png'),
                 loadTex('img/tree01.png'), 
                 loadTex('img/rock01.png')
@@ -91,6 +94,35 @@ async function runGame() {
             document.getElementById('loading-screen').style.display = 'none';
         };
     } catch (e) { console.error(e); }
+}
+
+/**
+ * 雨システムの生成（プランA）
+ */
+function createRain(targetScene) {
+    const particleCount = 3000;
+    const geo = new THREE.BufferGeometry();
+    const pos = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount * 3; i += 3) {
+        pos[i] = (Math.random() - 0.5) * 1500;     // X: マップより広く
+        pos[i+1] = Math.random() * 1000;          // Y: 空の高さ
+        pos[i+2] = (Math.random() - 0.5) * 1500;   // Z: マップより広く
+    }
+
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    
+    // 雨のマテリアル：小さな白い点
+    const mat = new THREE.PointsMaterial({
+        color: 0xaaaaaa,
+        size: 1.5,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false
+    });
+
+    rainSystem = new THREE.Points(geo, mat);
+    targetScene.add(rainSystem);
 }
 
 function init(stageIndex) {
@@ -118,22 +150,28 @@ function init(stageIndex) {
 
     uiCtrl.hideAll();
 
+    // 既存の雨システムがあれば処分
+    if (rainSystem) {
+        if (rainSystem.geometry) rainSystem.geometry.dispose();
+        if (rainSystem.material) rainSystem.material.dispose();
+        rainSystem = null;
+    }
+
+    // 序章のみ雨を降らせる
+    if (currentStage === 0) {
+        createRain(scene);
+        renderer.setClearColor(0x0a0a0f); // 序章は暗い空
+    } else {
+        renderer.setClearColor(0x1a1a1a);
+    }
+
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
     window.units = stageData.units.map(u => {
         let conf = null;
-        if(u.id === 'ブラキオサウルス') {
-            conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
-        } 
-        else if (u.id === '母ティラノ') {
-            // 母ティラノ専用：3列x5行構成
-            conf = { tex: tex.momTex?.clone(), cols: 3, rows: 5, type: 'mom', w: 2709, h: 2890 };
-        }
-        else if (u.id === 'ティラノ' || u.id === 'チビティラノ' || u.id === 'ギガノトサウルス') {
-            conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
-        }
-        else {
-            conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
-        }
+        if(u.id === 'ブラキオサウルス') conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
+        else if (u.id === '母ティラノ') conf = { tex: tex.momTex?.clone(), cols: 3, rows: 5, type: 'mom', w: 2709, h: 2890 };
+        else if (u.id === 'ティラノ' || u.id === 'チビティラノ' || u.id === 'ギガノトサウルス') conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
+        else conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
         
         if (conf && conf.tex) conf.tex.needsUpdate = true;
 
@@ -190,34 +228,27 @@ function startDialogue() {
     window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
         
-        // --- Stage 00 (序章) 特別演出：母連れ去り & ティラノ敗北 ---
+        // --- Stage 00 (序章) 特別演出 ---
         if (currentStage === 0 && isPostBattle && idx === 4) { 
              if (evUi) evUi.style.display = 'none';
              gameStore.setState({ gameState: 'ANIMATING' });
-             
              const giga = window.units.find(u => u.id === 'ギガノトサウルス');
              const mother = window.units.find(u => u.id === '母ティラノ');
-             
              const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: 0, h: 4}];
              battleSys.executeMovement(mother, exitPath, null, 3.0);
              await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 2.0));
-             
              const chasePath = [{x: 4, z: 1, h: 4}];
              await new Promise(res => battleSys.executeMovement(window.player, chasePath, res, 1.0));
-             
              giga.lookAtNode(window.player.x, window.player.z);
              giga.setAction('ATTACK');
              uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
              window.player.setAction('DOWN');
-
              if (evUi) evUi.style.display = 'flex';
-             gameStore.setState({ talkIndex: idx });
-             playLine(idx);
-             gameStore.setState({ gameState: 'TALKING' });
-             return;
+             gameStore.setState({ talkIndex: idx }); playLine(idx);
+             gameStore.setState({ gameState: 'TALKING' }); return;
         }
 
-        // --- Stage 01 (第1話) ティラノ退場演出 ---
+        // --- Stage 01 (第1話) 退場演出 ---
         if(currentStage === 1 && isPostBattle && idx === 7) {
             if (evUi) evUi.style.display = 'none';
             gameStore.setState({ gameState: 'ANIMATING' });
@@ -232,32 +263,25 @@ function startDialogue() {
                 cameraCtrl.centerOn(center);
             }
             if (evUi) evUi.style.display = 'flex';
-            gameStore.setState({ talkIndex: idx });
-            playLine(idx);
-            gameStore.setState({ gameState: 'TALKING' });
-            return;
+            gameStore.setState({ talkIndex: idx }); playLine(idx);
+            gameStore.setState({ gameState: 'TALKING' }); return;
         }
 
         if(idx < talkData.length) {
-            gameStore.setState({ talkIndex: idx });
-            playLine(idx);
+            gameStore.setState({ talkIndex: idx }); playLine(idx);
         } else {
             if (evUi) evUi.style.display = 'none';
             cameraCtrl.setZoom(1.5);
-            
             if (isPostBattle) {
                 if (isEndingProcessed) return;
                 isEndingProcessed = true;
-
                 const clearOverlay = document.getElementById('episode-clear-overlay');
                 if(clearOverlay) {
                     const clearText = clearOverlay.querySelector('.clear-text');
                     if (currentStage === 0) {
                         clearText.innerHTML = "……数年の月日が流れた。";
                         gsap.to(clearOverlay, { opacity: 1, duration: 2.0, onStart:()=> clearOverlay.style.display='flex', onComplete: () => {
-                            setTimeout(() => {
-                                gsap.to(clearOverlay, { opacity: 0, duration: 1.0, onComplete: () => init(1) });
-                            }, 3000);
+                            setTimeout(() => { gsap.to(clearOverlay, { opacity: 0, duration: 1.0, onComplete: () => init(1) }); }, 3000);
                         }});
                     } else {
                         clearText.innerHTML = "第1話 クリア！<br><span style='font-size:0.5em; color:#fff;'>続きは現在制作中です！<br>お楽しみに！</span>";
@@ -281,7 +305,6 @@ function startDialogue() {
             }
         }
     };
-    
     playLine(0);
 }
 
@@ -291,24 +314,16 @@ function setupEventListeners() {
     document.getElementById('cmd-attack').onclick = () => execCommand('attack');
     document.getElementById('cmd-wait').onclick = () => execCommand('wait');
     document.getElementById('cmd-cancel').onclick = () => { uiCtrl.hideAll(); clearHighlights(); gameStore.setState({ gameState: 'IDLE' }); };
-    document.getElementById('btn-cancel-attack').onclick = () => { 
-        uiCtrl.hideAll(); 
-        clearHighlights(); 
-        document.getElementById('command-ui').style.display = 'block'; 
-    };
-    
+    document.getElementById('btn-cancel-attack').onclick = () => { uiCtrl.hideAll(); clearHighlights(); document.getElementById('command-ui').style.display = 'block'; };
     const btnNext = document.getElementById('btn-next-unit');
     if (btnNext) btnNext.onclick = selectNextUnit;
-
     const btnYes = document.querySelector('.btn-yes');
     const btnNo = document.querySelector('.btn-no');
     if(btnYes) btnYes.onclick = () => answerConfirm(true);
     if(btnNo) btnNo.onclick = () => answerConfirm(false);
-    
     const camUI = document.getElementById('camera-ui');
     const header = document.getElementById('ui-header');
     if(header) header.onclick = () => camUI.classList.toggle('collapsed');
-    
     camUI.querySelectorAll('.ui-btn').forEach(btn => {
         btn.onclick = () => {
             const t = btn.dataset.cam;
@@ -357,10 +372,7 @@ function onPointerClick(event) {
         const u = unitIntersects[0].object.userData.unit;
         if(store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') {
              uiCtrl.showStatus(u); 
-             if(u.isPlayer && !u.hasActed) {
-                 uiCtrl.updateCommandMenu(u); 
-                 document.getElementById('command-ui').style.display = 'block'; 
-             }
+             if(u.isPlayer && !u.hasActed) { uiCtrl.updateCommandMenu(u); document.getElementById('command-ui').style.display = 'block'; }
         }
         return;
     }
@@ -372,8 +384,7 @@ function onPointerClick(event) {
         else if (store.gameState === 'SELECTING_MOVE') {
             const route = store.walkableTiles.find(n => n.x === data.x && n.z === data.z);
             if(route) {
-                clearHighlights(); 
-                showHighlight([route], targetHighlightMat); 
+                clearHighlights(); showHighlight([route], targetHighlightMat); 
                 gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'MOVE', pendingData: route.path });
                 document.getElementById('confirm-text').innerText = "ここへ移動しますか？";
                 document.getElementById('confirm-ui').style.display = 'block';
@@ -389,8 +400,7 @@ function execCommand(cmd) {
         const tiles = getWalkableNodes(window.units, unit, mapData);
         if(tiles.length > 0) {
             gameStore.setState({ gameState: 'SELECTING_MOVE', walkableTiles: tiles });
-            showHighlight(tiles, moveHighlightMat); 
-            document.getElementById('command-ui').style.display = 'none';
+            showHighlight(tiles, moveHighlightMat); document.getElementById('command-ui').style.display = 'none';
             uiCtrl.setMsg("移動先を選んでください");
         }
     } else if(cmd === 'attack') {
@@ -400,46 +410,37 @@ function execCommand(cmd) {
         const list = document.getElementById('target-list'); list.innerHTML = '';
         targets.forEach(t => {
             const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
-            btn.onmouseenter = () => uiCtrl.showTargetPreview(t); 
-            btn.onclick = () => selectTarget(t, unit); 
-            list.appendChild(btn);
+            btn.onmouseenter = () => uiCtrl.showTargetPreview(t);
+            btn.onclick = () => selectTarget(t, unit); list.appendChild(btn);
         });
         showHighlight(targets, attackHighlightMat); 
-        document.getElementById('command-ui').style.display = 'none'; 
-        document.getElementById('target-ui').style.display = 'block';
-    } else if(cmd === 'wait') {
-        completePlayerAction(unit);
-    }
+        document.getElementById('command-ui').style.display = 'none'; document.getElementById('target-ui').style.display = 'block';
+    } else if(cmd === 'wait') { completePlayerAction(unit); }
 }
 
 function selectTarget(t, attacker) {
     gameStore.setState({ gameState: 'CONFIRMING', confirmMode: 'ATTACK', pendingData: { target: t, attacker: attacker } });
     document.getElementById('target-ui').style.display = 'none';
     if(uiCtrl.dom.targetPreviewUi) uiCtrl.dom.targetPreviewUi.style.display = 'none';
-    clearHighlights();
-    showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
+    clearHighlights(); showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
     document.getElementById('confirm-text').innerText = `${t.id} を攻撃しますか？`; 
     document.getElementById('confirm-ui').style.display = 'block';
 }
 
 function answerConfirm(isYes) {
-    const store = getStore(); 
-    document.getElementById('confirm-ui').style.display = 'none';
+    const store = getStore(); document.getElementById('confirm-ui').style.display = 'none';
     if(!isYes) {
         clearHighlights();
         if(store.confirmMode === 'MOVE') return execCommand('move'); 
         if(store.confirmMode === 'ATTACK') return execCommand('attack'); 
         uiCtrl.hideAll(); gameStore.setState({ gameState: 'IDLE' }); return;
     }
-    clearHighlights(); 
-    gameStore.setState({ gameState: 'ANIMATING' });
+    clearHighlights(); gameStore.setState({ gameState: 'ANIMATING' });
     if(store.confirmMode === 'MOVE') {
         const unit = window.units.find(u => u.id === document.getElementById('st-name')?.innerText) || window.player;
         battleSys.executeMovement(unit, store.pendingData, () => { 
-            unit.hasMoved = true; 
-            gameStore.setState({ gameState: 'IDLE' }); 
-            uiCtrl.updateCommandMenu(unit);
-            document.getElementById('command-ui').style.display = 'block'; 
+            unit.hasMoved = true; gameStore.setState({ gameState: 'IDLE' }); 
+            uiCtrl.updateCommandMenu(unit); document.getElementById('command-ui').style.display = 'block'; 
         });
     } else if(store.confirmMode === 'ATTACK') {
         const { attacker, target } = store.pendingData;
@@ -473,15 +474,9 @@ async function processEnemyAI() {
     for (const enemy of enemies) {
         if (enemy.hp <= 0) continue;
         const enemyCenter = new THREE.Vector3();
-        if (enemy.sprite) {
-            new THREE.Box3().setFromObject(enemy.sprite).getCenter(enemyCenter);
-            cameraCtrl.centerOn(enemyCenter);
-        }
+        if (enemy.sprite) { new THREE.Box3().setFromObject(enemy.sprite).getCenter(enemyCenter); cameraCtrl.centerOn(enemyCenter); }
         const routes = getWalkableNodes(window.units, enemy, mapData);
-        if (routes.length > 0) {
-            showHighlight(routes, moveHighlightMat);
-            await new Promise(res => setTimeout(res, 600)); 
-        }
+        if (routes.length > 0) { showHighlight(routes, moveHighlightMat); await new Promise(res => setTimeout(res, 600)); }
         let best = routes.sort((a,b) => (Math.abs(a.x-window.player.x)+Math.abs(a.z-window.player.z)) - (Math.abs(b.x-window.player.x)+Math.abs(b.z-window.player.z)))[0];
         if (best && best.path.length > 0) {
             clearHighlights(); showHighlight([best], targetHighlightMat); 
@@ -499,8 +494,7 @@ async function processEnemyAI() {
             }
             if (window.player.hp <= 0 && currentStage !== 0) { uiCtrl.setMsg("GAME OVER", "#ff0000"); return; }
         }
-        enemy.hasActed = true;
-        await new Promise(res => setTimeout(res, 400)); 
+        enemy.hasActed = true; await new Promise(res => setTimeout(res, 400)); 
     }
     if (window.player.hp > 0 || currentStage === 0) {
         window.units.filter(u => u.isPlayer).forEach(u => { u.hasMoved = false; u.hasAttacked = false; u.hasActed = false; });
@@ -512,8 +506,7 @@ async function processEnemyAI() {
 function checkVictory() {
     const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス' || u.id === '母ティラノ');
     if (boss && boss.sprite) {
-        gsap.killTweensOf(boss.sprite.scale);
-        boss.sprite.visible = true;
+        gsap.killTweensOf(boss.sprite.scale); boss.sprite.visible = true;
         const h = (boss.spriteConfig && boss.spriteConfig.type === 'bra') ? 90 : 60;
         boss.sprite.scale.set(boss.baseScaleX * boss.facing, h, 1);
         if (boss.shadow) boss.shadow.visible = true;
@@ -529,20 +522,27 @@ function showHighlight(nodeList, mat) {
         const mesh = new THREE.Mesh(highlightGeo, mat);
         mesh.rotation.x = -Math.PI / 2;
         mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
-        scene.add(mesh);
-        highlightMeshes.push(mesh);
+        scene.add(mesh); highlightMeshes.push(mesh);
     });
 }
 
-function clearHighlights() {
-    highlightMeshes.forEach(mesh => scene.remove(mesh));
-    highlightMeshes = [];
-}
+function clearHighlights() { highlightMeshes.forEach(mesh => scene.remove(mesh)); highlightMeshes = []; }
 
 function animate() {
     requestAnimationFrame(animate);
     const delta = clock.getDelta() * 1000;
     const store = getStore();
+    
+    // 雨のアニメーション（序章のみ）
+    if (currentStage === 0 && rainSystem) {
+        const positions = rainSystem.geometry.attributes.position.array;
+        for (let i = 1; i < positions.length; i += 3) {
+            positions[i] -= 12; // 落下速度
+            if (positions[i] < -100) positions[i] = 1000; // ループ
+        }
+        rainSystem.geometry.attributes.position.needsUpdate = true;
+    }
+
     const selectorUi = document.getElementById('unit-selector-ui');
     const countEl = document.getElementById('remaining-count');
     if (selectorUi && countEl) {
