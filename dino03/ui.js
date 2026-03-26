@@ -1,15 +1,15 @@
 /* =================================================================
-   ui.js - v8.20.74
+   ui.js - v8.20.77
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. ギガノト顔グラ対応：4x4シートの14番フレーム（台詞用）を切り出し表示。
-   2. 母ティラノ顔グラ維持：3x5シートの12番フレーム切り出しを完全保持。
-   3. ターゲットプレビュー：敵のHP/Def表示機能（既存維持）。
-   4. 演出完備：バウンドダメージ、上昇レベルアップ、Rubyタグ。
-   5. 管理強化：hideAll にターゲットプレビュー窓を完備。
+   1. 表示名対応：ステータスやターゲット窓で unit.displayName を優先表示。
+   2. 話者照合：会話中の名前から内部IDを特定し、正しい顔グラを表示するロジックを強化。
+   3. ギガノト対応：4x4シートの14番フレーム（台詞用）の切り出しを維持。
+   4. ママティラノ対応：3x5シートの12番フレームの切り出しを維持。
+   5. 演出完備：バウンドダメージ、上昇レベルアップ、Rubyタグ、窓管理を継承。
    ================================================================= */
 
-export const VERSION = "8.20.74";
+export const VERSION = "8.20.77";
 
 export class UIControl {
     constructor(cameraControl) {
@@ -96,7 +96,8 @@ export class UIControl {
         this.setMsg("");
         this.dom.statusUi.style.display = 'block';
         
-        if (this.dom.stName) this.dom.stName.innerText = unit.id;
+        // ★修正：表示名(displayName)があればそれを、なければIDを表示
+        if (this.dom.stName) this.dom.stName.innerText = unit.displayName || unit.id;
         if (this.dom.stLv) this.dom.stLv.innerText = unit.level;
         
         if (this.dom.stHpLabel) this.dom.stHpLabel.innerHTML = `<ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id=\"st-hp\"></span>`;
@@ -124,7 +125,8 @@ export class UIControl {
         if (!this.dom.targetPreviewUi) return;
         this.dom.targetPreviewUi.style.display = 'block';
         
-        if (this.dom.tpName) this.dom.tpName.innerText = unit.id;
+        // ★修正：表示名(displayName)を優先
+        if (this.dom.tpName) this.dom.tpName.innerText = unit.displayName || unit.id;
         if (this.dom.tpLv) this.dom.tpLv.innerText = unit.level;
         if (this.dom.tpHp) this.dom.tpHp.innerText = `${unit.hp}/${unit.maxHp}`;
         if (this.dom.tpHpBar) {
@@ -139,20 +141,21 @@ export class UIControl {
         this.dom.evText.innerHTML = data.text;
         if (this.dom.evTextArea) this.dom.evTextArea.scrollTop = 0;
 
-        const speaker = units.find(u => u.id === data.name);
+        // ★修正：表示名(displayName)またはIDで話者を特定
+        const speaker = units.find(u => u.displayName === data.name || u.id === data.name);
         
         if (speaker && speaker.spriteConfig) {
             const conf = speaker.spriteConfig;
-            // 話者のタイプに応じた顔グラ切り出し
             if (conf.type === 'giga') {
-                // ギガノトサウルス：4x4シートの14番（2列目, 4行目 / インデックス 1, 3）
+                // ギガノトサウルス：14番（列1, 行3）
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/giga.png'); background-size: 400% 400%; background-position: 33.33% 100%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'mom') {
-                // 母ティラノ：3x5シートの12番（3列目, 4行目 / インデックス 2, 3）
+                // ママティラノ：12番（列2, 行3）
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/momtyrano.png'); background-size: 300% 500%; background-position: 100% 75%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'bra') {
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'rex') {
+                // チビティラノ(内部ID: ティラノ)はここを通る
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'comp') {
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/comp.png'); background-size: 300% 200%; background-position: 100% 100%; image-rendering: pixelated;\"></div>`;
