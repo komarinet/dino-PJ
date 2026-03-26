@@ -1,15 +1,15 @@
 /* =================================================================
-   main.js - v8.20.76
+   main.js - v8.20.83
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 浅瀬演出：Stage 01 限定で、水（type:4）に入るとユニットが H_STEP 分沈む。
-   2. 影の制御：Stage 01 の水中にいる間のみ、足元の影（shadow）を非表示化。
-   3. 既存素材維持：ギガノト (4x4)、母ティラノ (3x5) の素材構成を完全保持。
-   4. 演出維持：序章の雨、敗北イベント（ギガノト襲撃）、ターゲットプレビューを完備。
-   5. ボス実体化：checkVictory 内での消滅アニメ停止と再実体化を継承。
+   1. 序章演出強化：地鳴りの画面揺れ(shake)、チビの体当たり(body_slam)を実装。
+   2. 合体移動：ギガノトがママを咥えて連れ去る「親子付け」ロジックを統合。
+   3. 時間経過：システムテキストを廃止し、中央に「数年後・・・」を表示して遷移。
+   4. 名称変更：ユニットIDを「ママティラノ」に、表示名を「チビティラノ」に対応。
+   5. 既存機能維持：雨のパーティクル、水中の沈み込み、ターゲットプレビューを完備。
    ================================================================= */
 
-export const VERSION = "8.20.76";
+export const VERSION = "8.20.83";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -25,9 +25,7 @@ let currentStage = 0; // 0: 序章, 1: 第1話
 let stageData = Stage00;
 let mapData = stageData.generateLayout();
 
-// 雨システム用
 let rainSystem = null;
-
 let isEndingProcessed = false;
 let highlightMeshes = [];
 const moveHighlightMat = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true, opacity: 0.6, depthTest: false });
@@ -97,9 +95,6 @@ async function runGame() {
     } catch (e) { console.error(e); }
 }
 
-/**
- * 雨システムの生成（プランA）
- */
 function createRain(targetScene) {
     const particleCount = 3000;
     const geo = new THREE.BufferGeometry();
@@ -148,25 +143,24 @@ function init(stageIndex) {
     window.units = stageData.units.map(u => {
         let conf = null;
         if(u.id === 'ブラキオサウルス') conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
-        else if (u.id === '母ティラノ') conf = { tex: tex.momTex?.clone(), cols: 3, rows: 5, type: 'mom', w: 2709, h: 2890 };
+        else if (u.id === 'ママティラノ') conf = { tex: tex.momTex?.clone(), cols: 3, rows: 5, type: 'mom', w: 2709, h: 2890 };
         else if (u.id === 'ギガノトサウルス') conf = { tex: tex.gigaTex?.clone(), cols: 4, rows: 4, type: 'giga', w: 3000, h: 1662 };
-        else if (u.id === 'ティラノ' || u.id === 'チビティラノ') conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
+        else if (u.id === 'ティラノ') conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
         else conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
         
         if (conf && conf.tex) conf.tex.needsUpdate = true;
-        const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level);
+        const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level, u.displayName);
         unit.h = mapData[unit.z][unit.x].h; 
         
         if (unit.sprite) {
             scene.add(unit.sprite);
-            // ステージ1かつ水(type:4)なら初期配置を H_STEP 分沈める
             const isWater = mapData[unit.z][unit.x].type === 4;
             const yOffset = (currentStage === 1 && isWater) ? -H_STEP : 0;
             unit.sprite.position.set((unit.x * TILE_SIZE) - offX, (unit.h * H_STEP) + yOffset, (unit.z * TILE_SIZE) - offZ);
             if (unit.shadow && currentStage === 1 && isWater) unit.shadow.visible = false;
         }
         if (unit.shadow) scene.add(unit.shadow);
-        if(unit.isPlayer && u.id !== '母ティラノ') window.player = unit; 
+        if(unit.isPlayer && u.id !== 'ママティラノ') window.player = unit; 
         return unit;
     });
 
@@ -199,66 +193,101 @@ function startDialogue() {
     gameStore.setState({ gameState: 'TALKING', talkIndex: 0 });
     uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
     const evUi = document.getElementById('event-ui'); if (evUi) evUi.style.display = 'flex';
-    const playLine = (idx) => { const lineData = talkData[idx]; uiCtrl.renderTalkLine(lineData, window.units, window.player); };
+    
+    const playLine = (idx) => { 
+        const lineData = talkData[idx]; 
+        uiCtrl.renderTalkLine(lineData, window.units, window.player); 
+        // 会話内アクションの実行
+        if (lineData.action === "shake") uiCtrl.screenShake(12, 1.0);
+    };
 
     window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
-        if (currentStage === 0 && isPostBattle && idx === 4) { 
-             if (evUi) evUi.style.display = 'none'; gameStore.setState({ gameState: 'ANIMATING' });
-             const giga = window.units.find(u => u.id === 'ギガノトサウルス');
-             const mother = window.units.find(u => u.id === '母ティラノ');
-             const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: 0, h: 4}];
-             battleSys.executeMovement(mother, exitPath, null, 3.0);
-             await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 2.0));
-             const chasePath = [{x: 4, z: 1, h: 4}];
-             await new Promise(res => battleSys.executeMovement(window.player, chasePath, res, 1.0));
-             giga.lookAtNode(window.player.x, window.player.z); giga.setAction('ATTACK');
-             uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
-             window.player.setAction('DOWN');
-             if (evUi) evUi.style.display = 'flex'; gameStore.setState({ talkIndex: idx }); playLine(idx);
-             gameStore.setState({ gameState: 'TALKING' }); return;
-        }
-        if(currentStage === 1 && isPostBattle && idx === 7) {
-            if (evUi) evUi.style.display = 'none'; gameStore.setState({ gameState: 'ANIMATING' });
-            const exitPath = []; for(let i=1; i<=4; i++) exitPath.push({ x: window.player.x, z: window.player.z - i, h: window.player.h });
-            await new Promise(res => battleSys.executeMovement(window.player, exitPath, res, 2.0));
-            window.player.dispose(scene);
-            const boss = window.units.find(u => u.id === 'ブラキオサウルス');
-            if(boss && boss.sprite) {
-                const center = new THREE.Vector3(); new THREE.Box3().setFromObject(boss.sprite).getCenter(center); cameraCtrl.centerOn(center);
+        const lineData = talkData[getStore().talkIndex];
+
+        // --- Stage 00 特別演出：噛みつき・体当たり・連れ去り ---
+        if (currentStage === 0 && isPostBattle) {
+            const giga = window.units.find(u => u.id === 'ギガノトサウルス');
+            const mama = window.units.find(u => u.id === 'ママティラノ');
+            
+            // 演出：ギガノトがママを捉える (咥える)
+            if (idx === 3) {
+                if (evUi) evUi.style.display = 'none';
+                gameStore.setState({ gameState: 'ANIMATING' });
+                mama.setAction('DOWN');
+                // ギガノトの口元へママを移動（親子付け開始）
+                gsap.to(mama.sprite.position, { 
+                    x: giga.sprite.position.x + (giga.facing * 30), 
+                    y: giga.sprite.position.y + 10,
+                    z: giga.sprite.position.z,
+                    duration: 0.5,
+                    onComplete: () => { mama.grabbedBy = giga; } 
+                });
+                await new Promise(res => setTimeout(res, 800));
+                if (evUi) evUi.style.display = 'flex';
             }
-            if (evUi) evUi.style.display = 'flex'; gameStore.setState({ talkIndex: idx }); playLine(idx);
-            gameStore.setState({ gameState: 'TALKING' }); return;
+
+            // 演出：チビの体当たり
+            if (lineData.action === "body_slam_start") {
+                if (evUi) evUi.style.display = 'none';
+                gameStore.setState({ gameState: 'ANIMATING' });
+                const startPos = window.player.sprite.position.clone();
+                // 突撃
+                await gsap.to(window.player.sprite.position, { 
+                    x: giga.sprite.position.x - (giga.facing * 20), 
+                    z: giga.sprite.position.z, duration: 0.2, ease: "power2.in" 
+                });
+                uiCtrl.screenShake(5, 0.2); // 衝突の衝撃
+                // 弾き飛ばされる
+                await gsap.to(window.player.sprite.position, { 
+                    x: startPos.x, z: startPos.z, duration: 0.6, ease: "back.out(2)" 
+                });
+                if (evUi) evUi.style.display = 'flex';
+                gameStore.setState({ talkIndex: idx }); playLine(idx);
+                gameStore.setState({ gameState: 'TALKING' }); return;
+            }
+
+            // 演出：ギガノトが尻尾で吹き飛ばす〜連れ去り
+            if (idx === 6) {
+                if (evUi) evUi.style.display = 'none';
+                gameStore.setState({ gameState: 'ANIMATING' });
+                giga.setAction('ATTACK');
+                uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
+                window.player.setAction('DOWN');
+                // 遠くへ吹き飛ばす
+                gsap.to(window.player.sprite.position, { x: "-=100", z: "+=100", duration: 0.5, ease: "power2.out" });
+                await new Promise(res => setTimeout(res, 1000));
+                if (evUi) evUi.style.display = 'flex';
+            }
+
+            // 演出：ママを咥えたまま去る (drag_away)
+            if (idx === 8) {
+                if (evUi) evUi.style.display = 'none';
+                gameStore.setState({ gameState: 'ANIMATING' });
+                const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: -2, h: 4}];
+                await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 3.0));
+                giga.sprite.visible = false; mama.sprite.visible = false;
+                if (evUi) evUi.style.display = 'flex';
+            }
         }
-        if(idx < talkData.length) { gameStore.setState({ talkIndex: idx }); playLine(idx); } 
-        else {
+
+        if(idx < talkData.length) {
+            gameStore.setState({ talkIndex: idx }); playLine(idx);
+        } else {
             if (evUi) evUi.style.display = 'none'; cameraCtrl.setZoom(1.5);
             if (isPostBattle) {
                 if (isEndingProcessed) return; isEndingProcessed = true;
-                const clearOverlay = document.getElementById('episode-clear-overlay');
-                if(clearOverlay) {
-                    const clearText = clearOverlay.querySelector('.clear-text');
-                    if (currentStage === 0) {
-                        clearText.innerHTML = "……数年の月日が流れた。";
-                        gsap.to(clearOverlay, { opacity: 1, duration: 2.0, onStart:()=> clearOverlay.style.display='flex', onComplete: () => {
-                            setTimeout(() => { gsap.to(clearOverlay, { opacity: 0, duration: 1.0, onComplete: () => init(1) }); }, 3000);
-                        }});
-                    } else {
-                        clearText.innerHTML = "第1話 クリア！<br><span style='font-size:0.5em; color:#fff;'>続きは現在制作中です！<br>お楽しみに！</span>";
-                        clearOverlay.style.display = 'flex'; gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2, ease: "back.out(1.7)" });
+                if (currentStage === 0) {
+                    uiCtrl.showTimeSkip("数年後・・・", () => init(1));
+                } else {
+                    const clearOverlay = document.getElementById('episode-clear-overlay');
+                    if(clearOverlay) {
+                        clearOverlay.querySelector('.clear-text').innerHTML = "第1話 クリア！<br><span style='font-size:0.5em;'>続きは現在制作中です！</span>";
+                        clearOverlay.style.display = 'flex'; gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2 });
                     }
                 }
             } else {
                 gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
-                if (window.player && window.player.sprite) {
-                    const playerCenter = new THREE.Vector3(); new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter); cameraCtrl.centerOn(playerCenter);
-                }
-                const overlay = document.getElementById('battle-start-overlay');
-                if (overlay) {
-                    gsap.fromTo(overlay, { opacity:0, scale:0.5 }, { opacity:1, scale:1, duration:0.5, onComplete: () => {
-                        gsap.to(overlay, { opacity:0, delay:1.0, onComplete: () => { uiCtrl.setMsg("あなたの番です！", "#00ff00"); } });
-                    }});
-                }
             }
         }
     };
@@ -295,7 +324,7 @@ function selectNextUnit() {
     const selectable = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed); if (selectable.length === 0) return;
     let nextUnit = selectable[0];
     const currentName = document.getElementById('st-name')?.innerText;
-    const currentIndex = selectable.findIndex(u => u.id === currentName);
+    const currentIndex = selectable.findIndex(u => u.displayName === currentName || u.id === currentName);
     if (currentIndex !== -1 && selectable.length > 1) nextUnit = selectable[(currentIndex + 1) % selectable.length];
     const center = new THREE.Vector3(); new THREE.Box3().setFromObject(nextUnit.sprite).getCenter(center);
     cameraCtrl.centerOn(center); uiCtrl.showStatus(nextUnit); uiCtrl.updateCommandMenu(nextUnit);
@@ -335,7 +364,7 @@ function onPointerClick(event) {
 
 function execCommand(cmd) {
     const currentName = document.getElementById('st-name')?.innerText;
-    const unit = window.units.find(u => u.id === currentName) || window.player;
+    const unit = window.units.find(u => u.displayName === currentName || u.id === currentName) || window.player;
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, unit, mapData);
         if(tiles.length > 0) {
@@ -348,7 +377,7 @@ function execCommand(cmd) {
         gameStore.setState({ gameState: 'SELECTING_ATTACK_TARGET' });
         const list = document.getElementById('target-list'); list.innerHTML = '';
         targets.forEach(t => {
-            const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.id;
+            const btn = document.createElement('button'); btn.className = 'cmd-btn'; btn.innerText = t.displayName || t.id;
             btn.onmouseenter = () => uiCtrl.showTargetPreview(t);
             btn.onclick = () => selectTarget(t, unit); list.appendChild(btn);
         });
@@ -361,7 +390,7 @@ function selectTarget(t, attacker) {
     document.getElementById('target-ui').style.display = 'none';
     if(uiCtrl.dom.targetPreviewUi) uiCtrl.dom.targetPreviewUi.style.display = 'none';
     clearHighlights(); showHighlight([{x: t.x, z: t.z, h: t.h}], targetHighlightMat);
-    document.getElementById('confirm-text').innerText = `${t.id} を攻撃しますか？`; document.getElementById('confirm-ui').style.display = 'block';
+    document.getElementById('confirm-text').innerText = `${t.displayName || t.id} を攻撃しますか？`; document.getElementById('confirm-ui').style.display = 'block';
 }
 
 function answerConfirm(isYes) {
@@ -374,14 +403,14 @@ function answerConfirm(isYes) {
     }
     clearHighlights(); gameStore.setState({ gameState: 'ANIMATING' });
     if(store.confirmMode === 'MOVE') {
-        const unit = window.units.find(u => u.id === document.getElementById('st-name')?.innerText) || window.player;
+        const unit = window.units.find(u => u.displayName === document.getElementById('st-name')?.innerText || u.id === document.getElementById('st-name')?.innerText) || window.player;
         battleSys.executeMovement(unit, store.pendingData, () => { 
             unit.hasMoved = true; gameStore.setState({ gameState: 'IDLE' }); uiCtrl.updateCommandMenu(unit); document.getElementById('command-ui').style.display = 'block'; 
         });
     } else if(store.confirmMode === 'ATTACK') {
         const { attacker, target } = store.pendingData;
         battleSys.executeAttack(attacker, target, window.units, camera, () => {
-            if (currentStage === 0) { const mother = window.units.find(u => u.id === '母ティラノ'); if (mother && mother.hp <= 0) return checkVictory(); }
+            if (currentStage === 0) { const mama = window.units.find(u => u.id === 'ママティラノ'); if (mama && mama.hp <= 0) return checkVictory(); }
             const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス');
             if (boss && boss.hp <= 0) checkVictory(); else completePlayerAction(attacker);
         }, scene);
@@ -411,7 +440,7 @@ async function processEnemyAI() {
         const targets = getAttackableEnemies(window.units, enemy); const target = targets.find(u => u.isPlayer) || targets[0];
         if (target) {
             await new Promise(res => battleSys.executeAttack(enemy, target, window.units, camera, res, scene));
-            if (currentStage === 0) { const mother = window.units.find(u => u.id === '母ティラノ'); if (mother && mother.hp <= 0) return checkVictory(); }
+            if (currentStage === 0) { const mama = window.units.find(u => u.id === 'ママティラノ'); if (mama && mama.hp <= 0) return checkVictory(); }
             if (window.player.hp <= 0 && currentStage !== 0) { uiCtrl.setMsg("GAME OVER", "#ff0000"); return; }
         }
         enemy.hasActed = true; await new Promise(res => setTimeout(res, 400)); 
@@ -423,7 +452,7 @@ async function processEnemyAI() {
 }
 
 function checkVictory() {
-    const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス' || u.id === '母ティラノ');
+    const boss = window.units.find(u => u.id === 'ブラキオサウルス' || u.id === 'ギガノトサウルス' || u.id === 'ママティラノ');
     if (boss && boss.sprite) {
         gsap.killTweensOf(boss.sprite.scale); boss.sprite.visible = true;
         const h = (boss.spriteConfig && boss.spriteConfig.type === 'bra') ? 90 : 60;
@@ -436,7 +465,7 @@ function showHighlight(nodeList, mat) {
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
     nodeList.forEach(node => {
         const mesh = new THREE.Mesh(highlightGeo, mat); mesh.rotation.x = -Math.PI / 2;
-        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offZ);
+        mesh.position.set((node.x * TILE_SIZE) - offX, (node.h * H_STEP) + 10, (node.z * TILE_SIZE) - offsetZ);
         scene.add(mesh); highlightMeshes.push(mesh);
     });
 }
@@ -451,36 +480,24 @@ function animate() {
         for (let i = 1; i < positions.length; i += 3) { positions[i] -= 12; if (positions[i] < -100) positions[i] = 1000; }
         rainSystem.geometry.attributes.position.needsUpdate = true;
     }
-    const selectorUi = document.getElementById('unit-selector-ui');
-    const countEl = document.getElementById('remaining-count');
-    if (selectorUi && countEl) {
-        const unacted = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed);
-        if (store.gameState === 'IDLE' && store.phase === 'PLAYER_PHASE') { selectorUi.style.display = 'block'; countEl.innerText = unacted.length; } 
-        else { selectorUi.style.display = 'none'; }
-    }
     window.units.forEach(u => {
         if (u.updateAnimation) u.updateAnimation(delta);
-        if (u.shadow && u.sprite) {
-            // ステージ1限定の水中処理（沈み込み・影消去）
+        
+        // ★合体演出：咥えられているユニットを移動させる
+        if (u.grabbedBy && u.grabbedBy.sprite) {
+            u.sprite.position.x = u.grabbedBy.sprite.position.x + (u.grabbedBy.facing * 30);
+            u.sprite.position.y = u.grabbedBy.sprite.position.y + 10;
+            u.sprite.position.z = u.grabbedBy.sprite.position.z;
+            if (u.shadow) u.shadow.visible = false;
+        } else if (u.shadow && u.sprite) {
             const tx = Math.round(u.x), tz = Math.round(u.z);
             const cell = (mapData && mapData[tz]) ? mapData[tz][tx] : null;
             let yOffset = 0;
             let showShadow = (u.hp > 0);
-            
-            if (currentStage === 1 && cell && cell.type === 4) {
-                yOffset = -H_STEP; // 指定通り「1マス分(H_STEP)」沈める
-                showShadow = false; // 水中は影を消す
-            }
-
-            // 移動中以外は沈み込みを適用
-            if (store.gameState !== 'ANIMATING') {
-                u.sprite.position.y = (u.h * H_STEP) + yOffset;
-            }
-
+            if (currentStage === 1 && cell && cell.type === 4) { yOffset = -H_STEP; showShadow = false; }
+            if (store.gameState !== 'ANIMATING') u.sprite.position.y = (u.h * H_STEP) + yOffset;
             u.shadow.visible = showShadow;
-            u.shadow.position.x = u.sprite.position.x;
-            u.shadow.position.z = u.sprite.position.z;
-            u.shadow.position.y = (u.h * H_STEP) + yOffset + 1; 
+            u.shadow.position.set(u.sprite.position.x, (u.h * H_STEP) + yOffset + 1, u.sprite.position.z);
         }
     });
     if (cameraCtrl && cameraCtrl.controls) cameraCtrl.controls.update();
