@@ -1,14 +1,14 @@
 /* =================================================================
-   ui.js - v8.20.61
+   ui.js - v8.20.67
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. ターゲットプレビュー対応：showTargetPreview を追加し、敵のHP/Defを表示可能に。
-   2. DOM取得更新：target-preview-ui 関連のID取得をコンストラクタに統合。
-   3. 管理強化：hideAll にターゲットプレビュー窓を追加。
-   4. 既存維持：バウンドダメージ、上昇レベルアップ演出、顔グラ、Rubyタグを完備。
+   1. 母ティラノ顔グラ対応：3x5シートの12番フレーム（セリフ用）を切り出し表示。
+   2. ターゲットプレビュー：敵のHP/Def表示（既存維持）。
+   3. 演出完備：バウンドダメージ、上昇レベルアップ、Rubyタグ。
+   4. 管理強化：hideAll にターゲットプレビュー窓を完備。
    ================================================================= */
 
-export const VERSION = "8.20.61";
+export const VERSION = "8.20.67";
 
 export class UIControl {
     constructor(cameraControl) {
@@ -42,7 +42,7 @@ export class UIControl {
             evNamePlate: document.getElementById('ev-name-plate'),
             evText: document.getElementById('ev-text'),
             evTextArea: document.getElementById('ev-text-area'),
-            // ★追加：ターゲットプレビュー用
+            // ターゲットプレビュー用
             targetPreviewUi: document.getElementById('target-preview-ui'),
             tpName: document.getElementById('tp-name'),
             tpLv: document.getElementById('tp-lv'),
@@ -64,13 +64,13 @@ export class UIControl {
     }
 
     /**
-     * すべてのウィンドウを非表示にする（ターゲットプレビューも含む）
+     * すべてのウィンドウを非表示にする
      */
     hideAll() {
         const windows = [
             this.dom.statusUi, this.dom.detailUi, this.dom.commandUi, 
             this.dom.confirmUi, this.dom.targetUi, this.dom.eventUi,
-            this.dom.targetPreviewUi // ★追加
+            this.dom.targetPreviewUi
         ];
         windows.forEach(el => {
             if (el) el.style.display = 'none';
@@ -142,7 +142,11 @@ export class UIControl {
         
         if (speaker && speaker.spriteConfig) {
             const conf = speaker.spriteConfig;
-            if (conf.type === 'bra') {
+            // 話者のタイプに応じた顔グラ切り出し
+            if (conf.type === 'mom') {
+                // 母ティラノ：3x5シートの12番（2列目, 3行目）を抽出
+                this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/momtyrano.png'); background-size: 300% 500%; background-position: 100% 75%; image-rendering: pixelated;\"></div>`;
+            } else if (conf.type === 'bra') {
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'rex') {
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/tactyrano01.png'); background-size: 400% 400%; background-position: 100% 100%; image-rendering: pixelated;\"></div>`;
