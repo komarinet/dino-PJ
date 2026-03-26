@@ -1,15 +1,15 @@
 /* =================================================================
-   main.js - v8.20.70
+   main.js - v8.20.72
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 雨の演出：Stage 00 の間だけプランA（パーティクル）による雨を降動。
-   2. メモリ管理：ステージ遷移時に雨システムを適切に破棄（dispose）。
-   3. 新素材対応：img/momtyrano.png (3x5) の設定を完全維持。
+   1. ギガノト実装：img/giga.png (4x4) をロードし、専用のユニット構成を設定。
+   2. 雨の演出：Stage 00 の間だけプランA（パーティクル）による雨を維持。
+   3. 新素材維持：母ティラノ (3x5) の素材設定および顔グラ対応を保持。
    4. ステージ遷移：序章の敗北イベント（9999ダメージ）から第1話への流れを完備。
    5. 既存機能維持：ターゲットプレビュー、ボス実体化、味方セレクターを完備。
    ================================================================= */
 
-export const VERSION = "8.20.70";
+export const VERSION = "8.20.72";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -81,15 +81,16 @@ async function runGame() {
         const loadTex = (url) => new Promise(res => texLoader.load(url, res, undefined, () => res(null)));
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
         sheetImg.onload = async () => {
-            const [braTex, rexTex, momTex, compTex, treeTex, rockTex] = await Promise.all([
+            const [braTex, rexTex, momTex, gigaTex, compTex, treeTex, rockTex] = await Promise.all([
                 loadTex('img/bra.png'), 
                 loadTex('img/tactyrano01.png'), 
                 loadTex('img/momtyrano.png'), 
+                loadTex('img/giga.png'), // ギガノトサウルス素材
                 loadTex('img/comp.png'),
                 loadTex('img/tree01.png'), 
                 loadTex('img/rock01.png')
             ]);
-            window.gameTextures = { sheetImg, braTex, rexTex, momTex, compTex, treeTex, rockTex };
+            window.gameTextures = { sheetImg, braTex, rexTex, momTex, gigaTex, compTex, treeTex, rockTex };
             init(0); 
             document.getElementById('loading-screen').style.display = 'none';
         };
@@ -105,22 +106,15 @@ function createRain(targetScene) {
     const pos = new Float32Array(particleCount * 3);
 
     for (let i = 0; i < particleCount * 3; i += 3) {
-        pos[i] = (Math.random() - 0.5) * 1500;     // X: マップより広く
-        pos[i+1] = Math.random() * 1000;          // Y: 空の高さ
-        pos[i+2] = (Math.random() - 0.5) * 1500;   // Z: マップより広く
+        pos[i] = (Math.random() - 0.5) * 1500;     // X
+        pos[i+1] = Math.random() * 1000;          // Y
+        pos[i+2] = (Math.random() - 0.5) * 1500;   // Z
     }
 
     geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-    
-    // 雨のマテリアル：小さな白い点
     const mat = new THREE.PointsMaterial({
-        color: 0xaaaaaa,
-        size: 1.5,
-        transparent: true,
-        opacity: 0.5,
-        depthWrite: false
+        color: 0xaaaaaa, size: 1.5, transparent: true, opacity: 0.5, depthWrite: false
     });
-
     rainSystem = new THREE.Points(geo, mat);
     targetScene.add(rainSystem);
 }
@@ -150,17 +144,15 @@ function init(stageIndex) {
 
     uiCtrl.hideAll();
 
-    // 既存の雨システムがあれば処分
     if (rainSystem) {
         if (rainSystem.geometry) rainSystem.geometry.dispose();
         if (rainSystem.material) rainSystem.material.dispose();
         rainSystem = null;
     }
 
-    // 序章のみ雨を降らせる
     if (currentStage === 0) {
         createRain(scene);
-        renderer.setClearColor(0x0a0a0f); // 序章は暗い空
+        renderer.setClearColor(0x0a0a0f);
     } else {
         renderer.setClearColor(0x1a1a1a);
     }
@@ -168,10 +160,22 @@ function init(stageIndex) {
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
     window.units = stageData.units.map(u => {
         let conf = null;
-        if(u.id === 'ブラキオサウルス') conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
-        else if (u.id === '母ティラノ') conf = { tex: tex.momTex?.clone(), cols: 3, rows: 5, type: 'mom', w: 2709, h: 2890 };
-        else if (u.id === 'ティラノ' || u.id === 'チビティラノ' || u.id === 'ギガノトサウルス') conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
-        else conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
+        if(u.id === 'ブラキオサウルス') {
+            conf = { tex: tex.braTex?.clone(), cols: 1, rows: 5, type: 'bra', w: 352, h: 1250 };
+        } 
+        else if (u.id === '母ティラノ') {
+            conf = { tex: tex.momTex?.clone(), cols: 3, rows: 5, type: 'mom', w: 2709, h: 2890 };
+        }
+        else if (u.id === 'ギガノトサウルス') {
+            // ギガノト専用：4列x4行構成
+            conf = { tex: tex.gigaTex?.clone(), cols: 4, rows: 4, type: 'giga', w: 3000, h: 1662 };
+        }
+        else if (u.id === 'ティラノ' || u.id === 'チビティラノ') {
+            conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
+        }
+        else {
+            conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
+        }
         
         if (conf && conf.tex) conf.tex.needsUpdate = true;
 
@@ -334,9 +338,9 @@ function setupEventListeners() {
             if(t === 'pan-left') cameraCtrl.pan(-1, 0);
             if(t === 'pan-right') cameraCtrl.pan(1, 0);
             if(t === 'center' && window.player && window.player.sprite) {
-                const playerCenter = new THREE.Vector3();
-                new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
-                cameraCtrl.centerOn(playerCenter);
+                const center = new THREE.Vector3();
+                new THREE.Box3().setFromObject(window.player.sprite).getCenter(center);
+                cameraCtrl.centerOn(center);
             }
             if(t === 'zoom-in') cameraCtrl.setZoom(camera.zoom + 0.3);
             if(t === 'zoom-out') cameraCtrl.setZoom(camera.zoom - 0.3);
@@ -533,12 +537,11 @@ function animate() {
     const delta = clock.getDelta() * 1000;
     const store = getStore();
     
-    // 雨のアニメーション（序章のみ）
     if (currentStage === 0 && rainSystem) {
         const positions = rainSystem.geometry.attributes.position.array;
         for (let i = 1; i < positions.length; i += 3) {
-            positions[i] -= 12; // 落下速度
-            if (positions[i] < -100) positions[i] = 1000; // ループ
+            positions[i] -= 12; 
+            if (positions[i] < -100) positions[i] = 1000; 
         }
         rainSystem.geometry.attributes.position.needsUpdate = true;
     }
