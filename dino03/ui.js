@@ -1,14 +1,15 @@
 /* =================================================================
-   ui.js - v8.20.67
+   ui.js - v8.20.74
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. 母ティラノ顔グラ対応：3x5シートの12番フレーム（セリフ用）を切り出し表示。
-   2. ターゲットプレビュー：敵のHP/Def表示（既存維持）。
-   3. 演出完備：バウンドダメージ、上昇レベルアップ、Rubyタグ。
-   4. 管理強化：hideAll にターゲットプレビュー窓を完備。
+   1. ギガノト顔グラ対応：4x4シートの14番フレーム（台詞用）を切り出し表示。
+   2. 母ティラノ顔グラ維持：3x5シートの12番フレーム切り出しを完全保持。
+   3. ターゲットプレビュー：敵のHP/Def表示機能（既存維持）。
+   4. 演出完備：バウンドダメージ、上昇レベルアップ、Rubyタグ。
+   5. 管理強化：hideAll にターゲットプレビュー窓を完備。
    ================================================================= */
 
-export const VERSION = "8.20.67";
+export const VERSION = "8.20.74";
 
 export class UIControl {
     constructor(cameraControl) {
@@ -143,8 +144,11 @@ export class UIControl {
         if (speaker && speaker.spriteConfig) {
             const conf = speaker.spriteConfig;
             // 話者のタイプに応じた顔グラ切り出し
-            if (conf.type === 'mom') {
-                // 母ティラノ：3x5シートの12番（2列目, 3行目）を抽出
+            if (conf.type === 'giga') {
+                // ギガノトサウルス：4x4シートの14番（2列目, 4行目 / インデックス 1, 3）
+                this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/giga.png'); background-size: 400% 400%; background-position: 33.33% 100%; image-rendering: pixelated;\"></div>`;
+            } else if (conf.type === 'mom') {
+                // 母ティラノ：3x5シートの12番（3列目, 4行目 / インデックス 2, 3）
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/momtyrano.png'); background-size: 300% 500%; background-position: 100% 75%; image-rendering: pixelated;\"></div>`;
             } else if (conf.type === 'bra') {
                 this.dom.evPortrait.innerHTML = `<div style=\"width: 85px; height: 60px; background-image: url('img/bra.png'); background-size: 100% 500%; background-position: 0 100%; image-rendering: pixelated;\"></div>`;
