@@ -1,14 +1,14 @@
 /* =================================================================
-   units.js - v8.20.55
+   units.js - v8.20.66
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. レベルアップ演出：上昇時に ATTACK モーション（決めポーズ）を1.5秒維持。
-   2. 影の描画優先度：renderOrder = 10 に設定し、他ユニットへのめり込みを防止。
-   3. バランス調整：レベルアップ時の Str/Def 上昇値を上方修正し、ボスへの打点を強化。
-   4. 既存維持：表示優先度 999、addExp 繰り越し、高低差制限を完備。
+   1. 母ティラノ対応：3x5グリッド素材（1〜15番）のインデックス計算を実装。
+   2. アニメーション：1-11番の歩行、13番やられ、14番倒れ、15番攻撃を定義。
+   3. 描画設定：影の renderOrder=10、本体 renderOrder=999 を維持。
+   4. 既存維持：レベルアップ時のATTACKポーズ、Str/Def強化バランスを完備。
    ================================================================= */
 
-export const VERSION = "8.20.55";
+export const VERSION = "8.20.66";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -40,13 +40,11 @@ export class Unit {
             this.levelUp();
             leveledUp = true;
             if (uiCtrl && camera) {
-                // テキストを頭上（スプライトの高さ分上）に表示するためのオフセット計算
-                const heightOffset = (this.spriteConfig.type === 'bra') ? 100 : 70;
+                const heightOffset = (this.spriteConfig.type === 'bra') ? 100 : (this.spriteConfig.type === 'mom' ? 90 : 70);
                 uiCtrl.showFloatingText(this, "LEVEL UP!", "levelup", camera, heightOffset);
             }
         }
 
-        // レベルアップした瞬間に決めポーズ（ATTACK）をとり、1.5秒後に解除
         if (leveledUp) {
             this.setAction('ATTACK');
             setTimeout(() => {
@@ -56,21 +54,19 @@ export class Unit {
     }
 
     /**
-     * 成長システム：ステータス上昇値を調整（Lv3でボスに勝ちやすく）
+     * 成長システム：ステータス上昇値
      */
     levelUp() {
         this.level++;
         this.exp -= 100;
         if (this.exp < 0) this.exp = 0;
-
         this.maxHp += 10; this.hp = this.maxHp; 
         this.maxMp += 5;  this.mp = this.maxMp;
-        // 攻撃力と防御力の上昇値を少し底上げ
         this.str += 5; this.def += 4; this.spd += 1;
     }
 
     /**
-     * スプライト生成と描画優先度の詳細設定
+     * スプライト生成と描画優先度の設定
      */
     initTextureSprite() {
         const conf = this.spriteConfig;
@@ -80,40 +76,29 @@ export class Unit {
         this.sprite = new THREE.Sprite(this.material);
         this.sprite.center.set(0.5, 0.0); 
         
-        // 描画優先度：最前面（地形や水面より必ず上に描く）
         this.sprite.renderOrder = 999;
         
         const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
-        const h = (conf.type === 'bra') ? 90 : 60; 
+        // 高設定：ブラキオ90, 母85, プレイヤー・他60
+        let h = 60;
+        if (conf.type === 'bra') h = 90;
+        else if (conf.type === 'mom') h = 85; 
+
         this.baseScaleX = h * (cellW / cellH);
         this.sprite.scale.set(this.baseScaleX * this.facing, h, 1);
         this.sprite.userData = { isUnit: true, unit: this };
         this.setIdle();
 
-        // 影の生成
         const shadowGeo = new THREE.CircleGeometry(this.baseScaleX * 0.4, 32);
         const shadowMat = new THREE.MeshBasicMaterial({ color: 0x000000, transparent: true, opacity: 0.4, depthWrite: false });
         this.shadow = new THREE.Mesh(shadowGeo, shadowMat);
         this.shadow.rotation.x = -Math.PI / 2;
-        
-        // ★重要：影の優先度を低く（10）設定
-        // 地面(0)よりは上だが、他の全恐竜の立ち絵(999)より下になるため、
-        // 他のキャラの足元に影がめり込んでも、足の上に影が描画されることがなくなります。
         this.shadow.renderOrder = 10;
     }
 
     dispose(scene) {
-        if(this.sprite) {
-            scene.remove(this.sprite);
-            if(this.material) this.material.dispose();
-            this.sprite = null;
-        }
-        if(this.shadow) {
-            scene.remove(this.shadow);
-            this.shadow.geometry.dispose();
-            this.shadow.material.dispose();
-            this.shadow = null;
-        }
+        if(this.sprite) { scene.remove(this.sprite); if(this.material) this.material.dispose(); this.sprite = null; }
+        if(this.shadow) { scene.remove(this.shadow); this.shadow.geometry.dispose(); this.shadow.material.dispose(); this.shadow = null; }
     }
 
     lookAtNode(targetX, targetZ) {
@@ -125,13 +110,23 @@ export class Unit {
     updateAnimation(delta) {
         if(!this.texture || this.animState === 'FIXED') return;
         this.animTime += delta;
+        
         if(this.spriteConfig.type === 'bra') {
             const frame = (Math.floor(this.animTime / 500) % 2); 
             this.setRawFrame(0, frame);
-        } else if(this.spriteConfig.type === 'rex') {
+        } 
+        else if(this.spriteConfig.type === 'mom') {
+            // 母ティラノ：1〜11番のループ（3列x5行）
+            const idx = (Math.floor(this.animTime / 150) % 11) + 1;
+            const col = (idx - 1) % 3;
+            const row = Math.floor((idx - 1) / 3);
+            this.setRawFrame(col, row);
+        }
+        else if(this.spriteConfig.type === 'rex') {
             const f = 11 - (Math.floor(this.animTime / this.animSpeed) % 12); 
             this.setRawFrame(f % 4, Math.floor(f / 4));
-        } else if(this.spriteConfig.type === 'comp') {
+        } 
+        else if(this.spriteConfig.type === 'comp') {
             const col = (Math.floor(this.animTime / 200) % 2);
             this.setRawFrame(col, 0);
         }
@@ -147,20 +142,33 @@ export class Unit {
     setAction(action) {
         if(!this.texture) return;
         this.animState = 'FIXED';
+        
         if(this.spriteConfig.type === 'bra') {
             this.setRawFrame(0, action === 'ATTACK' ? 2 : 3);
-        } else if(this.spriteConfig.type === 'rex') {
+        } 
+        else if(this.spriteConfig.type === 'mom') {
+            // 母ティラノ：13番やられ、14番倒れ、15番攻撃
+            if(action === 'ATTACK') this.setRawFrame(2, 4);      // 15番
+            else if(action === 'HURT') this.setRawFrame(0, 4);   // 13番
+            else if(action === 'DOWN') this.setRawFrame(1, 4);   // 14番
+        }
+        else if(this.spriteConfig.type === 'rex') {
             if(action === 'ATTACK') this.setRawFrame(1, 3); 
             else if(action === 'HURT') this.setRawFrame(0, 3);  
             else if(action === 'DOWN') this.setRawFrame(2, 3);  
-        } else if(this.spriteConfig.type === 'comp') {
+        } 
+        else if(this.spriteConfig.type === 'comp') {
             if(action === 'ATTACK') this.setRawFrame(2, 0); 
             else if(action === 'HURT') this.setRawFrame(0, 1);  
             else if(action === 'DOWN') this.setRawFrame(1, 1);  
         }
     }
 
-    setIdle() { this.animState = 'IDLE'; this.setRawFrame(0, 0); }
+    setIdle() { 
+        this.animState = 'IDLE'; 
+        if(this.spriteConfig.type === 'mom') this.setRawFrame(0, 0); // 1番フレーム
+        else this.setRawFrame(0, 0); 
+    }
 }
 
 export const getUnitAt = (units, x, z) => units.find(u => u.x === x && u.z === z && u.hp > 0);
