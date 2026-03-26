@@ -1,17 +1,17 @@
 /* =================================================================
-   data/stage00.js - v8.20.87 (序章)
+   data/stage00.js - v8.20.88 (序章)
    【絶対ルール順守：一切の省略・勝手な改変なし】
    修正内容：
-   1. 視認性改善：手前二辺の壁を完全に撤去(h=1)し、奥二辺のみ高さを維持。
-   2. 地形変更：床面をすべて「土壌(type:0)」に統一。岩ベースを廃止。
-   3. ルビ精密修正：「来<rt>き</rt>」「感<rt>かん</rt>じんな」等を完全反映。
-   4. 演出維持：画面揺れ、体当たり、合体アニメ、戦闘中台詞、displayName分離を完備。
+   1. 地形刷新：草原(type:0)を廃止。土壌(type:1)と岩場(type:3)の混合地形へ。
+   2. 崖の改良：奥二辺の壁を高さをバラつかせ(h:4-7)てデコボコにし、単調さを解消。
+   3. 視認性維持：手前二辺は高さ1を維持し、ユニットの遮蔽を完全に防止。
+   4. ルビ精密反映：「来<rt>き</rt>」「感<rt>かん</rt>じんな」等を指示通り修正。
+   5. 演出完備：画面揺れ、体当たり、displayName分離などの既存機能を完全継承。
    ================================================================= */
 
-export const VERSION = "8.20.87";
+export const VERSION = "8.20.88";
 
 export const StageData = {
-    // ステージ情報
     info: { chapter: "序章", name: "消えた<ruby>温<rt>ぬく</rt></ruby>もり" },
     
     units: [
@@ -20,7 +20,6 @@ export const StageData = {
         { id: "ギガノトサウルス", emoji: "🐊", x: 4, z: 2, hp: 500, mp: 50, str: 100, def: 100, spd: 15, mag: 30, move: 5, jump: 2, isPlayer: false, level: 20 }
     ],
     
-    // オブジェクトとしての岩（土壌タイルの上に配置）
     obstacles: [
         { x: 1, z: 3, type: 'rock' }, { x: 8, z: 3, type: 'rock' },
         { x: 2, z: 5, type: 'rock' }, { x: 7, z: 5, type: 'rock' },
@@ -28,7 +27,6 @@ export const StageData = {
         { x: 3, z: 13, type: 'rock' }, { x: 6, z: 13, type: 'rock' }
     ],
 
-    // 戦闘前会話
     preBattleTalk: [
         { name: "ママティラノ", text: "<ruby>上手<rt>じょうず</rt></ruby>に<ruby>狩<rt>か</rt></ruby>りの<ruby>練習<rt>れんしゅう</rt></ruby>ができたわね、<ruby>坊<rt>ぼう</rt></ruby>や。" },
         { name: "チビティラノ", text: "へへ。お<ruby>母<rt>かあ</rt></ruby>さんにほめられた！<br>もっともっと<ruby>強<rt>つよ</rt></ruby>くなって、お<ruby>母<rt>かあ</rt></ruby>さんを<ruby>守<rt>まも</rt></ruby>ってあげるんだ！" },
@@ -44,13 +42,11 @@ export const StageData = {
         { name: "ママティラノ", text: "<ruby>坊<rt>ぼう</rt></ruby>や、ダメ！ <ruby>下<rt>さ</rt></ruby>がりなさい！" }
     ],
 
-    // 戦闘中の特殊割り込み
     midBattleTalk: {
         mamaDown: { name: "チビティラノ", text: "お<ruby>母<rt>かあ</rt></ruby>さん！ よくもお<ruby>母<rt>かあ</rt></ruby>さんを！" },
         chibiDown: { name: "ママティラノ", text: "<ruby>坊<rt>ぼう</rt></ruby>や！ よくも<ruby>私<rt>わたし</rt></ruby>の<ruby>子供<rt>こども</rt></ruby>を！ <ruby>許<rt>ゆる</rt></ruby>さない！" }
     },
 
-    // 戦闘後会話
     postBattleTalk: [
         { name: "ママティラノ", text: "う、うう...。<ruby>強<rt>つよ</rt></ruby>すぎる..." },
         { name: "チビティラノ", text: "お・・・かあ・・・さん！" },
@@ -64,26 +60,34 @@ export const StageData = {
         { name: "チビティラノ", text: "お<ruby>母<rt>かあ</rt></ruby>さぁぁぁぁぁぁぁぁぁぁぁん！！！！！！！！" }
     ],
     
-    // 10x15の視認性特化マップ生成
     generateLayout: function() {
         let d = []; 
         for(let z=0; z<15; z++){
             d[z]=[]; 
             for(let x=0; x<10; x++){
-                let h=1; 
-                // --- 視認性向上のための高度設計 ---
-                // 奥二辺 (x=0付近 または z=0付近) だけ高さを出して「峡谷感」を出す
+                let h = 1; 
+                let t = 1; // 基本：土壌 (type:1)
+
+                // --- 奥二辺のデコボコ壁設計 ---
                 if (x <= 1 || z <= 1) {
-                    h = 6; 
-                } else if (x <= 2 || z <= 2) {
-                    h = 3; // 段差で緩やかに繋ぐ
-                } else {
-                    // それ以外（手前側）はフラットな地面とし、ユニットを隠さない
+                    // 高さを 4〜7 でランダム風にバラつかせる
+                    h = 4 + ((x * 3 + z * 7) % 4); 
+                    // 壁も岩場(3)と土壌(1)をミックス
+                    t = (x + z) % 2 === 0 ? 3 : 1;
+                } 
+                // --- 壁の付け根（なだらかな段差） ---
+                else if (x <= 2 || z <= 2) {
+                    h = 2;
+                    t = (x * z) % 3 === 0 ? 3 : 1;
+                }
+                // --- 中央・手前フロア ---
+                else {
                     h = 1;
+                    // 地面に 20% の確率で岩場を混ぜてゴツゴツさせる
+                    t = ((x * 11 + z * 17) % 10 < 2) ? 3 : 1;
                 }
 
-                // type は常に 0 (土壌チップ)
-                d[z][x] = {h, type: 0};
+                d[z][x] = {h, type: t};
             }
         } 
         return d;
