@@ -1,27 +1,27 @@
 /* =================================================================
-   data/stage00.js - v8.20.69 (序章)
+   data/stage00.js - v8.20.79 (序章)
    【絶対ルール順守：一切の省略・勝手な改変なし】
    修正内容：
-   1. マップ：土壌（type:0）と岩壁（type:3）を組み合わせた10✕15の峽谷。
-   2. ユニットID：第1話との互換性のため「ティラノ」に統合（会話表示はチビティラノ）。
-   3. バランス：ギガノトを「絶対的な壁」として設定し、敗北イベントを誘発。
-   4. 演出：全セリフにRubyタグを完備し、悲劇の導入を強化。
+   1. 名称変更：ユニットを「チビティラノ」「ママティラノ」「ギガノトサウルス」に統一。
+   2. 内部ID分離：チビティラノは内部IDを「ティラノ」とし、表示名のみ「チビティラノ」とする。
+   3. 会話データ同期：talkデータのnameプロパティを新しい表示名に完全準拠。
+   4. 既存維持：土壌と岩壁のマップ、ギガノトの圧倒的強さ、Rubyタグを完備。
    ================================================================= */
 
-export const VERSION = "8.20.69";
+export const VERSION = "8.20.79";
 
 export const StageData = {
     // ステージ情報：序章
     info: { chapter: "序章", name: "消えた<ruby>温<rt>ぬく</rt></ruby>もり" },
     
     units: [
-        // チビティラノ（プレイヤー）：第1話のID「ティラノ」と同期
-        { id: "ティラノ", emoji: "🦖", x: 4, z: 12, hp: 30, mp: 5, str: 8, def: 6, spd: 8, mag: 2, move: 4, jump: 1, isPlayer: true, level: 1 },
+        // チビティラノ（プレイヤー）：内部IDは「ティラノ」で第1話と同期
+        { id: "ティラノ", displayName: "チビティラノ", emoji: "🦖", x: 4, z: 12, hp: 30, mp: 5, str: 8, def: 6, spd: 8, mag: 2, move: 4, jump: 1, isPlayer: true, level: 1 },
         
-        // 母ティラノ（NPC/味方）：非常に強力だが、ギガノトには及ばない
-        { id: "母ティラノ", emoji: "🦖", x: 5, z: 10, hp: 120, mp: 30, str: 35, def: 25, spd: 12, mag: 15, move: 4, jump: 1, isPlayer: true, level: 10 },
+        // ママティラノ（NPC/味方）：非常に強力だが、ギガノトには及ばない
+        { id: "ママティラノ", emoji: "🦖", x: 5, z: 10, hp: 120, mp: 30, str: 35, def: 25, spd: 12, mag: 15, move: 4, jump: 1, isPlayer: true, level: 10 },
         
-        // ギガノトサウルス（敵/ボス）：圧倒的なステータス（Str:100, Def:100）
+        // ギガノトサウルス（敵/ボス）：圧倒的なステータス
         { id: "ギガノトサウルス", emoji: "🐊", x: 4, z: 2, hp: 500, mp: 50, str: 100, def: 100, spd: 15, mag: 30, move: 5, jump: 2, isPlayer: false, level: 20 }
     ],
     
@@ -35,34 +35,34 @@ export const StageData = {
 
     // 戦闘前会話（イベントカットシーン）
     preBattleTalk: [
-        { name: "母ティラノ", face: "🦖", text: "<ruby>上手<rt>じょうず</rt></ruby>に<ruby>狩<rt>か</rt></ruby>りの<ruby>練習<rt>れんしゅう</rt></ruby>ができたわね、<ruby>坊<rt>ぼう</rt></ruby>や。" },
+        { name: "ママティラノ", face: "🦖", text: "<ruby>上手<rt>じょうず</rt></ruby>に<ruby>狩<rt>か</rt></ruby>りの<ruby>練習<rt>れんしゅう</rt></ruby>ができたわね、<ruby>坊<rt>ぼう</rt></ruby>や。" },
         { name: "チビティラノ", face: "🦖", text: "へへ。お<ruby>母<rt>かあ</rt></ruby>さんにほめられた！<br>もっともっと<ruby>強<rt>つよ</rt></ruby>くなって、お母さんを<ruby>守<rt>まも</rt></ruby>ってあげるんだ！" },
-        { name: "母ティラノ", face: "🦖", text: "うふふ、頼もしいわね。<ruby>明日<rt>あした</rt></ruby>はもっと<ruby>遠<rt>とお</rt></ruby>くの岩場まで行ってみましょう..." },
+        { name: "ママティラノ", face: "🦖", text: "うふふ、頼もしいわね。<ruby>明日<rt>あした</rt></ruby>はもっと<ruby>遠<rt>とお</rt></ruby>くの岩場まで行ってみましょう..." },
         { name: "システム", face: "🌐", text: "（……<ruby>不穏<rt>ふおん</rt></ruby>な<ruby>地鳴<rt>じな</rt></ruby>りが<ruby>峡谷<rt>きょうこく</rt></ruby>に<ruby>響<rt>ひび</rt></ruby>く……）" },
-        { name: "母ティラノ", face: "🦖", text: "...！ 坊や、私の後ろに！" },
+        { name: "ママティラノ", face: "🦖", text: "...！ 坊や、私の後ろに！" },
         { name: "ギガノトサウルス", face: "🐊", text: "<ruby>くっくっく<rt>クックック</rt></ruby>...。<ruby>噂<rt>うわさ</rt></ruby>通りの<ruby>上玉<rt>じょうだま</rt></ruby>だ。" },
-        { name: "母ティラノ", face: "🦖", text: "お<ruby>前<rt>まえ</rt></ruby>は...！ 峡谷の<ruby>暴君<rt>ぼうくん</rt></ruby>、ギガノトサウルス！<br>私の<ruby>子供<rt>こども</rt></ruby>には<ruby>手<rt>手</rt></ruby>をさせないッ！" },
+        { name: "ママティラノ", face: "🦖", text: "お<ruby>前<rt>まえ</rt></ruby>は...！ 峡谷の<ruby>暴君<rt>ぼうくん</rt></ruby>、ギガノトサウルス！<br>私の<ruby>子供<rt>こども</rt></ruby>には<ruby>手<rt>手</rt></ruby>をさせないッ！" },
         { name: "ギガノトサウルス", face: "🐊", text: "ほう、<ruby>威勢<rt>いせい</rt></ruby>がいい。<br>だが、オレ様が<ruby>用<rt>よう</rt></ruby>があるのはそのチビではなく、お<ruby>前<rt>まえ</rt></ruby>の方だ。" },
-        { name: "母ティラノ", face: "🦖", text: "なんですって...？" },
+        { name: "ママティラノ", face: "🦖", text: "なんですって...？" },
         { name: "ギガノトサウルス", face: "🐊", text: "オレ様の<ruby>コレクション<rt>コレクション</rt></ruby>に<ruby>加<rt>くわ</rt></ruby>えてやる。<ruby>光栄<rt>こうえい</rt></ruby>に思え。" },
         { name: "チビティラノ", face: "🦖", text: "お、お<ruby>母<rt>かあ</rt></ruby>さんは<ruby>渡<rt>わた</rt></ruby>さないぞッ！！" },
-        { name: "母ティラノ", face: "🦖", text: "坊や、ダメ！ 下がりなさい！" }
+        { name: "ママティラノ", face: "🦖", text: "坊や、ダメ！ 下がりなさい！" }
     ],
 
     // 戦闘後会話（母親連れ去りイベント）
     postBattleTalk: [
-        { name: "母ティラノ", face: "🦖", text: "う、うう...。<ruby>強<rt>つよ</rt></ruby>すぎる..." },
+        { name: "ママティラノ", face: "🦖", text: "う、うう...。<ruby>強<rt>つよ</rt></ruby>すぎる..." },
         { name: "チビティラノ", face: "🦖", text: "お<ruby>母<rt>かあ</rt></ruby>さん！" },
         { name: "ギガノトサウルス", face: "🐊", text: "<ruby>決着<rt>けっちゃく</rt></ruby>だな。さあ、<ruby>来<rt>こ</rt></ruby>てもらおうか。" },
-        { name: "システム", face: "🌐", text: "（ギガノトサウルスが母ティラノの<ruby>首筋<rt>くびすじ</rt></ruby>を<ruby>捉<rt>とら</rt></ruby>える）" },
+        { name: "システム", face: "🌐", text: "（ギガノトサウルスがママティラノの<ruby>首筋<rt>くびすじ</rt></ruby>を<ruby>捉<rt>とら</rt></ruby>える）" },
         { name: "チビティラノ", face: "🦖", text: "うおおおおッ！ お<ruby>母<rt>かあ</rt></ruby>さんをはなせぇッ！！！" },
         { name: "システム", face: "🌐", text: "（チビティラノが<ruby>渾身<rt>こんしん</rt></ruby>の<ruby>力<rt>ちから</rt></ruby>でギガノトに体当たりするが、<ruby>岩<rt>いわ</rt></ruby>のように<ruby>動<rt>うご</rt></ruby>かない）" },
         { name: "ギガノトサウルス", face: "🐊", text: "......<ruby>蚊<rt>か</rt></ruby>に<ruby>刺<rt>さ</rt></ruby>されたほどにも感じんな。<ruby>邪魔<rt>じゃま</rt></ruby>だ、<ruby>失<rt>う</rt></ruby>せろ。" },
         { name: "システム", face: "🌐", text: "（ギガノトサウルスの<ruby>尻尾<rt>しっぽ</rt></ruby>の一撃で、チビティラノは<ruby>彼方<rt>かなた</rt></ruby>へ吹き飛ばされる）" },
         { name: "チビティラノ", face: "🦖", text: "ぐはッ......！" },
-        { name: "母ティラノ", face: "🦖", text: "坊や！ ...坊や、生きるのよ...。必ず...！" },
+        { name: "ママティラノ", face: "🦖", text: "坊や！ ...坊や、生きるのよ...。必ず...！" },
         { name: "ギガノトサウルス", face: "🐊", text: "<ruby>無駄<rt>むだ</rt></ruby>な<ruby>会話<rt>かいわ</rt></ruby>は終わりだ。行くぞ。" },
-        { name: "システム", face: "🌐", text: "（ギガノトサウルスは母ティラノを<ruby>引きずり<rt>ひきずり</rt></ruby>ながら、峡谷の奥へと消えていった）" },
+        { name: "システム", face: "🌐", text: "（ギガノトサウルスはママティラノを<ruby>引きずり<rt>ひきずり</rt></ruby>ながら、峡谷の奥へと消えていった）" },
         { name: "チビティラノ", face: "🦖", text: "<ruby>待<rt>ま</rt></ruby>って......！ 待ってよぉ......ッ！" },
         { name: "チビティラノ", face: "🦖", text: "お母さぁぁぁぁぁぁぁぁぁぁぁん！！！！！！！！" },
         { name: "システム", face: "🌐", text: "（峡谷にチビティラノの<ruby>悲痛<rt>ひつう</rt></ruby>な叫びが<ruby>虚<rt>むな</rt></ruby>しく<ruby>響<rt>ひび</rt></ruby>き<ruby>渡<rt>わた</rt></ruby>った……）" },
@@ -76,23 +76,10 @@ export const StageData = {
             d[z]=[]; 
             for(let x=0; x<10; x++){
                 let h=1, t=0; // 基本は土壌 (type:0)
-
-                // --- 高さの設計：谷間の遊び場 ---
-                // マップの中心付近は土壌で低く、親子が遊べるスペースにする
-                if(x >= 3 && x <= 6 && z >= 8 && z <= 12) {
-                    h = 1; t = 0; 
-                }
-                // 周囲は切り立った岩壁(type:3)にしていく
-                else if (x <= 1 || x >= 8 || z <= 2 || z >= 14) {
-                    h = 6; t = 3; // 最外周は非常に高い岩壁
-                }
-                else if (x <= 2 || x >= 7 || z <= 4 || z >= 13) {
-                    h = 4; t = 3; // その内側は中程度の岩壁
-                }
-                else {
-                    h = 2; t = 0; // それ以外は少し高い土の斜面
-                }
-
+                if(x >= 3 && x <= 6 && z >= 8 && z <= 12) { h = 1; t = 0; }
+                else if (x <= 1 || x >= 8 || z <= 2 || z >= 14) { h = 6; t = 3; }
+                else if (x <= 2 || x >= 7 || z <= 4 || z >= 13) { h = 4; t = 3; }
+                else { h = 2; t = 0; }
                 d[z][x] = {h, type: t};
             }
         } 
