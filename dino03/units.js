@@ -1,14 +1,14 @@
 /* =================================================================
-   units.js - v8.20.66
+   units.js - v8.20.71
    【絶対ルール順守：一切の省略なし】
    修正・統合内容：
-   1. 母ティラノ対応：3x5グリッド素材（1〜15番）のインデックス計算を実装。
-   2. アニメーション：1-11番の歩行、13番やられ、14番倒れ、15番攻撃を定義。
+   1. 母ティラノのアニメーション反転：11番から1番への逆行ループに変更。
+   2. 既存維持：3x5グリッド素材（1〜15番）の座標変換ロジックを完備。
    3. 描画設定：影の renderOrder=10、本体 renderOrder=999 を維持。
-   4. 既存維持：レベルアップ時のATTACKポーズ、Str/Def強化バランスを完備。
+   4. アクション定義：13番やられ、14番倒れ、15番攻撃の設定を完全継承。
    ================================================================= */
 
-export const VERSION = "8.20.66";
+export const VERSION = "8.20.71";
 
 export class Unit {
     constructor(id, emoji, x, z, hp, mp, str, def, spd, mag, move, jump, isPlayer, spriteConfig, level = 1) {
@@ -79,7 +79,6 @@ export class Unit {
         this.sprite.renderOrder = 999;
         
         const cellW = conf.w / conf.cols; const cellH = conf.h / conf.rows;
-        // 高設定：ブラキオ90, 母85, プレイヤー・他60
         let h = 60;
         if (conf.type === 'bra') h = 90;
         else if (conf.type === 'mom') h = 85; 
@@ -116,8 +115,8 @@ export class Unit {
             this.setRawFrame(0, frame);
         } 
         else if(this.spriteConfig.type === 'mom') {
-            // 母ティラノ：1〜11番のループ（3列x5行）
-            const idx = (Math.floor(this.animTime / 150) % 11) + 1;
+            // ★修正：母ティラノ 11番から1番への逆行ループ（3列x5行）
+            const idx = 11 - (Math.floor(this.animTime / 150) % 11);
             const col = (idx - 1) % 3;
             const row = Math.floor((idx - 1) / 3);
             this.setRawFrame(col, row);
@@ -147,7 +146,6 @@ export class Unit {
             this.setRawFrame(0, action === 'ATTACK' ? 2 : 3);
         } 
         else if(this.spriteConfig.type === 'mom') {
-            // 母ティラノ：13番やられ、14番倒れ、15番攻撃
             if(action === 'ATTACK') this.setRawFrame(2, 4);      // 15番
             else if(action === 'HURT') this.setRawFrame(0, 4);   // 13番
             else if(action === 'DOWN') this.setRawFrame(1, 4);   // 14番
@@ -166,7 +164,7 @@ export class Unit {
 
     setIdle() { 
         this.animState = 'IDLE'; 
-        if(this.spriteConfig.type === 'mom') this.setRawFrame(0, 0); // 1番フレーム
+        if(this.spriteConfig.type === 'mom') this.setRawFrame(0, 0); 
         else this.setRawFrame(0, 0); 
     }
 }
