@@ -1,15 +1,15 @@
 /* =================================================================
-   main.js - v8.20.84
+   main.js - v8.20.93
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. UI復旧：消えていた「ユニット選択ボタン(unit-selector-ui)」の表示制御を再実装。
-   2. 序章演出維持：画面揺れ、体当たり、ギガノトのママ連れ去りロジックを完備。
-   3. 合体移動：grabbedBy フラグによるスプライトの親子付け追従を継続。
-   4. 浅瀬対応：Stage 01 の水（type:4）での沈み込みと影消去を維持。
-   5. 名称対応：ママティラノ、チビティラノ(displayName)の設定を保持。
+   1. 致命的バグ修正：showHighlight 内の offsetZ を offZ へ修正し、移動のフリーズを解消。
+   2. 演出安定化：GSAPアニメーションを Promise で確実に待機し、会話が止まるのを防止。
+   3. 序章演出完備：地鳴り、体当たり、咥えての移動、数年後遷移を完全実装。
+   4. 互換性維持：ママティラノ、チビティラノ(displayName)の判定を強化。
+   5. 描画維持：雨、水中の沈み込み、ユニット選択UIの表示制御を完備。
    ================================================================= */
 
-export const VERSION = "8.20.84";
+export const VERSION = "8.20.93";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -80,12 +80,9 @@ async function runGame() {
         const sheetImg = new Image(); sheetImg.src = 'img/plate01.png';
         sheetImg.onload = async () => {
             const [braTex, rexTex, momTex, gigaTex, compTex, treeTex, rockTex] = await Promise.all([
-                loadTex('img/bra.png'), 
-                loadTex('img/tactyrano01.png'), 
-                loadTex('img/momtyrano.png'), 
-                loadTex('img/giga.png'), 
-                loadTex('img/comp.png'),
-                loadTex('img/tree01.png'), 
+                loadTex('img/bra.png'), loadTex('img/tactyrano01.png'), 
+                loadTex('img/momtyrano.png'), loadTex('img/giga.png'), 
+                loadTex('img/comp.png'), loadTex('img/tree01.png'), 
                 loadTex('img/rock01.png')
             ]);
             window.gameTextures = { sheetImg, braTex, rexTex, momTex, gigaTex, compTex, treeTex, rockTex };
@@ -113,7 +110,6 @@ function init(stageIndex) {
     stageData = (currentStage === 0) ? Stage00 : Stage01;
     mapData = stageData.generateLayout();
     isEndingProcessed = false;
-
     const container = document.getElementById('canvas-container');
     container.innerHTML = ""; 
     scene = new THREE.Scene();
@@ -122,15 +118,12 @@ function init(stageIndex) {
     renderer = new THREE.WebGLRenderer({ antialias: false }); renderer.setSize(w, h); renderer.setClearColor(0x1a1a1a);
     container.appendChild(renderer.domElement);
     scene.add(new THREE.AmbientLight(0xffffff, 0.7));
-    
     const tex = window.gameTextures;
     buildMapMeshes(scene, tex.sheetImg, tex.treeTex, tex.rockTex, mapData, stageData.obstacles);
-
     cameraCtrl = new CameraControl(camera, new THREE.OrbitControls(camera, renderer.domElement));
     uiCtrl = new UIControl(cameraCtrl);
     battleSys = new BattleSystem(uiCtrl, cameraCtrl);
     uiCtrl.hideAll();
-
     if (rainSystem) {
         if (rainSystem.geometry) rainSystem.geometry.dispose();
         if (rainSystem.material) rainSystem.material.dispose();
@@ -138,7 +131,6 @@ function init(stageIndex) {
     }
     if (currentStage === 0) { createRain(scene); renderer.setClearColor(0x0a0a0f); } 
     else { renderer.setClearColor(0x1a1a1a); }
-
     const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
     window.units = stageData.units.map(u => {
         let conf = null;
@@ -147,11 +139,9 @@ function init(stageIndex) {
         else if (u.id === 'ギガノトサウルス') conf = { tex: tex.gigaTex?.clone(), cols: 4, rows: 4, type: 'giga', w: 3000, h: 1662 };
         else if (u.id === 'ティラノ') conf = { tex: tex.rexTex?.clone(), cols: 4, rows: 4, type: 'rex', w: 1200, h: 840 };
         else conf = { tex: tex.compTex?.clone(), cols: 3, rows: 2, type: 'comp', w: 1080, h: 480 };
-        
         if (conf && conf.tex) conf.tex.needsUpdate = true;
         const unit = new Unit(u.id, u.emoji, u.x, u.z, u.hp, u.mp, u.str, u.def, u.spd, u.mag, u.move, u.jump, u.isPlayer, conf, u.level, u.displayName);
         unit.h = mapData[unit.z][unit.x].h; 
-        
         if (unit.sprite) {
             scene.add(unit.sprite);
             const isWater = mapData[unit.z][unit.x].type === 4;
@@ -163,16 +153,13 @@ function init(stageIndex) {
         if(unit.isPlayer && u.id !== 'ママティラノ') window.player = unit; 
         return unit;
     });
-
     setupEventListeners();
     animate();
-
     if (window.player && window.player.sprite) {
         const playerCenter = new THREE.Vector3();
         new THREE.Box3().setFromObject(window.player.sprite).getCenter(playerCenter);
         cameraCtrl.setInitialAngle(playerCenter);
     }
-
     const o = document.getElementById('stage-overlay');
     if (o) {
         document.getElementById('chapter-num').innerHTML = stageData.info.chapter;
@@ -193,7 +180,6 @@ function startDialogue() {
     gameStore.setState({ gameState: 'TALKING', talkIndex: 0 });
     uiCtrl.hideAll(); cameraCtrl.setZoom(2.5);
     const evUi = document.getElementById('event-ui'); if (evUi) evUi.style.display = 'flex';
-    
     const playLine = (idx) => { 
         const lineData = talkData[idx]; 
         uiCtrl.renderTalkLine(lineData, window.units, window.player); 
@@ -203,54 +189,46 @@ function startDialogue() {
     window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
         const lineData = talkData[getStore().talkIndex];
-
         if (currentStage === 0 && isPostBattle) {
             const giga = window.units.find(u => u.id === 'ギガノトサウルス');
             const mama = window.units.find(u => u.id === 'ママティラノ');
-            
             if (idx === 3) {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
                 mama.setAction('DOWN');
-                gsap.to(mama.sprite.position, { 
-                    x: giga.sprite.position.x + (giga.facing * 30), 
-                    y: giga.sprite.position.y + 10,
-                    z: giga.sprite.position.z,
-                    duration: 0.5,
-                    onComplete: () => { mama.grabbedBy = giga; } 
-                });
+                await new Promise(res => gsap.to(mama.sprite.position, { 
+                    x: giga.sprite.position.x + (giga.facing * 30), y: giga.sprite.position.y + 10, z: giga.sprite.position.z, duration: 0.5, onComplete: res
+                }));
+                mama.grabbedBy = giga;
                 await new Promise(res => setTimeout(res, 800));
                 if (evUi) evUi.style.display = 'flex';
+                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
             }
-
             if (lineData.action === "body_slam_start") {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
                 const startPos = window.player.sprite.position.clone();
-                await gsap.to(window.player.sprite.position, { 
-                    x: giga.sprite.position.x - (giga.facing * 20), 
-                    z: giga.sprite.position.z, duration: 0.2, ease: "power2.in" 
-                });
+                await new Promise(res => gsap.to(window.player.sprite.position, { 
+                    x: giga.sprite.position.x - (giga.facing * 20), z: giga.sprite.position.z, duration: 0.2, ease: "power2.in", onComplete: res
+                }));
                 uiCtrl.screenShake(5, 0.2);
-                await gsap.to(window.player.sprite.position, { 
-                    x: startPos.x, z: startPos.z, duration: 0.6, ease: "back.out(2)" 
-                });
+                await new Promise(res => gsap.to(window.player.sprite.position, { 
+                    x: startPos.x, z: startPos.z, duration: 0.6, ease: "back.out(2)", onComplete: res
+                }));
                 if (evUi) evUi.style.display = 'flex';
-                gameStore.setState({ talkIndex: idx }); playLine(idx);
-                gameStore.setState({ gameState: 'TALKING' }); return;
+                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
             }
-
             if (idx === 6) {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
                 giga.setAction('ATTACK');
                 uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
                 window.player.setAction('DOWN');
-                gsap.to(window.player.sprite.position, { x: "-=100", z: "+=100", duration: 0.5, ease: "power2.out" });
+                await new Promise(res => gsap.to(window.player.sprite.position, { x: "-=100", z: "+=100", duration: 0.5, ease: "power2.out", onComplete: res }));
                 await new Promise(res => setTimeout(res, 1000));
                 if (evUi) evUi.style.display = 'flex';
+                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
             }
-
             if (idx === 8) {
                 if (evUi) evUi.style.display = 'none';
                 gameStore.setState({ gameState: 'ANIMATING' });
@@ -258,27 +236,23 @@ function startDialogue() {
                 await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 3.0));
                 giga.sprite.visible = false; mama.sprite.visible = false;
                 if (evUi) evUi.style.display = 'flex';
+                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
             }
         }
-
-        if(idx < talkData.length) {
-            gameStore.setState({ talkIndex: idx }); playLine(idx);
-        } else {
+        if(idx < talkData.length) { gameStore.setState({ talkIndex: idx }); playLine(idx); } 
+        else {
             if (evUi) evUi.style.display = 'none'; cameraCtrl.setZoom(1.5);
             if (isPostBattle) {
                 if (isEndingProcessed) return; isEndingProcessed = true;
-                if (currentStage === 0) {
-                    uiCtrl.showTimeSkip("数年後・・・", () => init(1));
-                } else {
+                if (currentStage === 0) { uiCtrl.showTimeSkip("数年後・・・", () => init(1)); } 
+                else {
                     const clearOverlay = document.getElementById('episode-clear-overlay');
                     if(clearOverlay) {
                         clearOverlay.querySelector('.clear-text').innerHTML = "第1話 クリア！<br><span style='font-size:0.5em;'>続きは現在制作中です！</span>";
                         clearOverlay.style.display = 'flex'; gsap.fromTo(clearOverlay, { opacity: 0, scale: 0.5 }, { opacity: 1, scale: 1, duration: 1.2 });
                     }
                 }
-            } else {
-                gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' });
-            }
+            } else { gameStore.setState({ gameState: 'IDLE', phase: 'PLAYER_PHASE' }); }
         }
     };
     playLine(0);
@@ -314,7 +288,7 @@ function selectNextUnit() {
     const selectable = window.units.filter(u => u.isPlayer && u.hp > 0 && !u.hasActed); if (selectable.length === 0) return;
     let nextUnit = selectable[0];
     const currentName = document.getElementById('st-name')?.innerText;
-    const currentIndex = selectable.findIndex(u => u.displayName === currentName || u.id === currentName);
+    const currentIndex = selectable.findIndex(u => (u.displayName || u.id) === currentName);
     if (currentIndex !== -1 && selectable.length > 1) nextUnit = selectable[(currentIndex + 1) % selectable.length];
     const center = new THREE.Vector3(); new THREE.Box3().setFromObject(nextUnit.sprite).getCenter(center);
     cameraCtrl.centerOn(center); uiCtrl.showStatus(nextUnit); uiCtrl.updateCommandMenu(nextUnit);
@@ -354,7 +328,7 @@ function onPointerClick(event) {
 
 function execCommand(cmd) {
     const currentName = document.getElementById('st-name')?.innerText;
-    const unit = window.units.find(u => u.displayName === currentName || u.id === currentName) || window.player;
+    const unit = window.units.find(u => (u.displayName || u.id) === currentName) || window.player;
     if(cmd === 'move') {
         const tiles = getWalkableNodes(window.units, unit, mapData);
         if(tiles.length > 0) {
@@ -393,7 +367,7 @@ function answerConfirm(isYes) {
     }
     clearHighlights(); gameStore.setState({ gameState: 'ANIMATING' });
     if(store.confirmMode === 'MOVE') {
-        const unit = window.units.find(u => u.displayName === document.getElementById('st-name')?.innerText || u.id === document.getElementById('st-name')?.innerText) || window.player;
+        const unit = window.units.find(u => (u.displayName || u.id) === document.getElementById('st-name')?.innerText) || window.player;
         battleSys.executeMovement(unit, store.pendingData, () => { 
             unit.hasMoved = true; gameStore.setState({ gameState: 'IDLE' }); uiCtrl.updateCommandMenu(unit); document.getElementById('command-ui').style.display = 'block'; 
         });
@@ -470,8 +444,6 @@ function animate() {
         for (let i = 1; i < positions.length; i += 3) { positions[i] -= 12; if (positions[i] < -100) positions[i] = 1000; }
         rainSystem.geometry.attributes.position.needsUpdate = true;
     }
-
-    // ★復旧：ユニット選択UIの表示制御
     const selectorUi = document.getElementById('unit-selector-ui');
     const countEl = document.getElementById('remaining-count');
     if (selectorUi && countEl) {
@@ -480,7 +452,6 @@ function animate() {
             selectorUi.style.display = 'block'; countEl.innerText = unacted.length;
         } else { selectorUi.style.display = 'none'; }
     }
-
     window.units.forEach(u => {
         if (u.updateAnimation) u.updateAnimation(delta);
         if (u.grabbedBy && u.grabbedBy.sprite) {
