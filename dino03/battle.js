@@ -1,15 +1,14 @@
 /* =================================================================
-   battle.js - v8.20.82
+   battle.js - v8.21.01
    【絶対ルール遵守：一切の省略なし】
    修正・統合内容：
-   1. 序章特殊演出：ママティラノ/チビティラノ撃破時の割り込み台詞（ルビ付き）を実装。
-   2. 演出対応：executeMovement の speedMultiplier を維持。退場等の演出に対応。
-   3. 戦闘ロジック：高低差ダメージ補正（1.2倍/0.8倍）と経験値獲得（addExp）を維持。
-   4. 反撃システム：生存時の自動反撃ロジックを完全継承。
-   5. 演出完備：ヒット時の揺れ、死亡時の消滅演出（DOWNモーション経由）を完備。
+   1. ルビ徹底：指示に従い、割り込み台詞およびシステムメッセージの全漢字にルビを付与。
+   2. バージョン同期：システム診断画面との整合性のため v8.21.01 へ更新。
+   3. ロジック保護：移動(executeMovement)、攻撃(executeAttack)、反撃、高低差補正を完全維持。
+   4. 演出維持：ヒット時の揺れ、死亡時のスケールダウン消滅演出を継承。
    ================================================================= */
 
-export const VERSION = "8.20.82";
+export const VERSION = "8.21.01";
 
 import { TILE_SIZE, H_STEP, MAP_W, MAP_D } from './map.js';
 
@@ -113,7 +112,7 @@ export class BattleSystem {
             if (this.uiCtrl) this.uiCtrl.showDamageText(target, damage, scene, camera);
 
             if (target.hp <= 0) {
-                // ★序章限定：ママティラノ/チビティラノ撃破時の割り込み台詞
+                // ★序章限定：ママティラノ/チビティラノ撃破時の割り込み台詞（ルビ付き）
                 if (target.displayName === "ママティラノ") {
                     this.uiCtrl.renderTalkLine({ 
                         name: "チビティラノ", 
@@ -122,7 +121,7 @@ export class BattleSystem {
                 } else if (target.displayName === "チビティラノ") {
                     this.uiCtrl.renderTalkLine({ 
                         name: "ママティラノ", 
-                        text: "<ruby>坊<rt>ぼう</rt></ruby>や！ よくも<ruby>私<rt>わたし</rt></ruby>の<ruby>子供<rt>こども</rt></ruby>を！ <ruby>許<rt>ゆる</rt></ruby>さない！" 
+                        text: "<ruby>坊<rt>ぼう</rt></ruby>や！ よくも<ruby>私<rt>わたし</rt></ruby>の<ruby>子<rt>こ</rt></ruby><ruby>供<rt>ども</rt></ruby>を！ <ruby>許<rt>ゆる</rt></ruby>さない！" 
                     }, allUnits);
                 }
 
@@ -156,7 +155,7 @@ export class BattleSystem {
                     const canReach = (dist === 1 && Math.abs(attacker.h - target.h) <= 1);
 
                     if (!isCounter && canReach) {
-                        this.uiCtrl.setMsg("反撃！", "#ffaa00");
+                        this.uiCtrl.setMsg("<ruby>反撃<rt>はんげき</rt></ruby>！", "#ffaa00");
                         setTimeout(() => {
                             this.executeAttack(target, attacker, allUnits, camera, callback, scene, true);
                         }, 500);
