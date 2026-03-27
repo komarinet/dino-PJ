@@ -1,15 +1,14 @@
 /* =================================================================
-   main.js - v8.20.93
+   main.js - v8.21.02
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 致命的バグ修正：showHighlight 内の offsetZ を offZ へ修正し、移動のフリーズを解消。
-   2. 演出安定化：GSAPアニメーションを Promise で確実に待機し、会話が止まるのを防止。
-   3. 序章演出完備：地鳴り、体当たり、咥えての移動、数年後遷移を完全実装。
-   4. 互換性維持：ママティラノ、チビティラノ(displayName)の判定を強化。
-   5. 描画維持：雨、水中の沈み込み、ユニット選択UIの表示制御を完備。
+   1. シナリオ対応：新stage00（コンプ戦、ギガノト強襲）のイベントフローを完全実装。
+   2. 演出同期：会話インデックス（idx）に合わせた動的ユニット生成とアクションの制御。
+   3. 既存維持：雨、水中沈み込み、カメラ、Zustandストア連携等の全機能を保護。
+   4. バグ防止：ギガノト動的生成時のスプライト設定（4x4）を正確に適用。
    ================================================================= */
 
-export const VERSION = "8.20.93";
+export const VERSION = "8.21.02";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -43,7 +42,7 @@ function checkSystems() {
     if(list) {
         list.innerHTML = "";
         for (let [file, curVer] of Object.entries(currentVersions)) {
-            const isLatest = curVer && curVer.startsWith("8.20");
+            const isLatest = curVer && curVer.startsWith("8.21");
             list.innerHTML += `<div style="color:${isLatest ? '#0f0' : '#f00'}">
                 ${file.padEnd(16)}: ver ${curVer || '---'}
             </div>`;
@@ -189,56 +188,95 @@ function startDialogue() {
     window.onGlobalTap = async () => {
         const idx = getStore().talkIndex + 1;
         const lineData = talkData[getStore().talkIndex];
-        if (currentStage === 0 && isPostBattle) {
-            const giga = window.units.find(u => u.id === 'ギガノトサウルス');
+        
+        if (currentStage === 0) {
+            const rex = window.player;
             const mama = window.units.find(u => u.id === 'ママティラノ');
-            if (idx === 3) {
-                if (evUi) evUi.style.display = 'none';
-                gameStore.setState({ gameState: 'ANIMATING' });
-                mama.setAction('DOWN');
-                await new Promise(res => gsap.to(mama.sprite.position, { 
-                    x: giga.sprite.position.x + (giga.facing * 30), y: giga.sprite.position.y + 10, z: giga.sprite.position.z, duration: 0.5, onComplete: res
-                }));
-                mama.grabbedBy = giga;
-                await new Promise(res => setTimeout(res, 800));
-                if (evUi) evUi.style.display = 'flex';
-                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
-            }
-            if (lineData.action === "body_slam_start") {
-                if (evUi) evUi.style.display = 'none';
-                gameStore.setState({ gameState: 'ANIMATING' });
-                const startPos = window.player.sprite.position.clone();
-                await new Promise(res => gsap.to(window.player.sprite.position, { 
-                    x: giga.sprite.position.x - (giga.facing * 20), z: giga.sprite.position.z, duration: 0.2, ease: "power2.in", onComplete: res
-                }));
-                uiCtrl.screenShake(5, 0.2);
-                await new Promise(res => gsap.to(window.player.sprite.position, { 
-                    x: startPos.x, z: startPos.z, duration: 0.6, ease: "back.out(2)", onComplete: res
-                }));
-                if (evUi) evUi.style.display = 'flex';
-                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
-            }
-            if (idx === 6) {
-                if (evUi) evUi.style.display = 'none';
-                gameStore.setState({ gameState: 'ANIMATING' });
-                giga.setAction('ATTACK');
-                uiCtrl.showFloatingText(window.player, "9999", "damage", camera, 30);
-                window.player.setAction('DOWN');
-                await new Promise(res => gsap.to(window.player.sprite.position, { x: "-=100", z: "+=100", duration: 0.5, ease: "power2.out", onComplete: res }));
-                await new Promise(res => setTimeout(res, 1000));
-                if (evUi) evUi.style.display = 'flex';
-                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
-            }
-            if (idx === 8) {
-                if (evUi) evUi.style.display = 'none';
-                gameStore.setState({ gameState: 'ANIMATING' });
-                const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: -2, h: 4}];
-                await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 3.0));
-                giga.sprite.visible = false; mama.sprite.visible = false;
-                if (evUi) evUi.style.display = 'flex';
-                gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
+            const tex = window.gameTextures;
+            const offX = (MAP_W * TILE_SIZE) / 2, offZ = (MAP_D * TILE_SIZE) / 2;
+
+            if (!isPostBattle) {
+                // --- 序章 開幕イベント演出 ---
+                if (idx === 3) { // 「ふふ、もう立派なハンターね。」の直前：コンプ撃破
+                    if (evUi) evUi.style.display = 'none';
+                    gameStore.setState({ gameState: 'ANIMATING' });
+                    const comp = window.units.find(u => u.id === 'コンプソグナトゥス');
+                    if (comp) {
+                        rex.setAction('ATTACK');
+                        await new Promise(res => setTimeout(res, 300));
+                        comp.setAction('DOWN'); comp.hp = 0;
+                        uiCtrl.showFloatingText(comp, "撃破！", "damage", camera, 30);
+                        await new Promise(res => setTimeout(res, 1000));
+                    }
+                    if (evUi) evUi.style.display = 'flex';
+                    gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
+                }
+                if (idx === 5) { // 「...見付けたぞ。」の直前：ギガノト強襲
+                    if (evUi) evUi.style.display = 'none';
+                    gameStore.setState({ gameState: 'ANIMATING' });
+                    uiCtrl.screenShake(20, 1.5);
+                    // ギガノト動的生成（高台 z=2 に出現）
+                    const gConf = { tex: tex.gigaTex?.clone(), cols: 4, rows: 4, type: 'giga', w: 3000, h: 1662 };
+                    const giga = new Unit("ギガノトサウルス", "🐊", 4, 2, 500, 50, 100, 100, 15, 30, 5, 2, false, gConf, 20);
+                    giga.h = mapData[giga.z][giga.x].h;
+                    giga.sprite.position.set((giga.x * TILE_SIZE) - offX, (giga.h * H_STEP), (giga.z * TILE_SIZE) - offZ);
+                    scene.add(giga.sprite); scene.add(giga.shadow); window.units.push(giga);
+                    cameraCtrl.centerOn(giga.sprite.position);
+                    await new Promise(res => setTimeout(res, 1500));
+                    if (evUi) evUi.style.display = 'flex';
+                    gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
+                }
+            } else {
+                // --- 序章 終幕イベント演出 ---
+                const giga = window.units.find(u => u.id === 'ギガノトサウルス');
+                if (idx === 2) { // 「......蚊に刺されたほどにも感じんな。」：体当たり演出
+                    if (evUi) evUi.style.display = 'none';
+                    gameStore.setState({ gameState: 'ANIMATING' });
+                    const startPos = rex.sprite.position.clone();
+                    await new Promise(res => gsap.to(rex.sprite.position, { 
+                        x: giga.sprite.position.x - (giga.facing * 20), z: giga.sprite.position.z, duration: 0.2, ease: "power2.in", onComplete: res
+                    }));
+                    uiCtrl.screenShake(5, 0.2);
+                    await new Promise(res => gsap.to(rex.sprite.position, { 
+                        x: startPos.x, z: startPos.z, duration: 0.6, ease: "back.out(2)", onComplete: res
+                    }));
+                    if (evUi) evUi.style.display = 'flex';
+                    gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
+                }
+                if (idx === 3) { // 「ぐはッ......！」：返り討ち演出
+                    if (evUi) evUi.style.display = 'none';
+                    gameStore.setState({ gameState: 'ANIMATING' });
+                    giga.setAction('ATTACK');
+                    uiCtrl.showFloatingText(rex, "9999", "damage", camera, 30);
+                    rex.setAction('DOWN');
+                    await new Promise(res => gsap.to(rex.sprite.position, { x: "-=100", z: "+=100", duration: 0.5, ease: "power2.out", onComplete: res }));
+                    await new Promise(res => setTimeout(res, 1000));
+                    if (evUi) evUi.style.display = 'flex';
+                    gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
+                }
+                if (idx === 5) { // 「お前はこっちだ。行くぞ」：連れ去り（咥える）
+                    if (evUi) evUi.style.display = 'none';
+                    gameStore.setState({ gameState: 'ANIMATING' });
+                    mama.setAction('DOWN');
+                    await new Promise(res => gsap.to(mama.sprite.position, { 
+                        x: giga.sprite.position.x + (giga.facing * 30), y: giga.sprite.position.y + 10, z: giga.sprite.position.z, duration: 0.5, onComplete: res
+                    }));
+                    mama.grabbedBy = giga;
+                    await new Promise(res => setTimeout(res, 800));
+                    if (evUi) evUi.style.display = 'flex';
+                    gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
+                }
+                if (idx === 7 || (idx === talkData.length && idx === 7)) { // 退場演出
+                    if (evUi) evUi.style.display = 'none';
+                    gameStore.setState({ gameState: 'ANIMATING' });
+                    const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: -2, h: 4}];
+                    await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 3.0));
+                    giga.sprite.visible = false; mama.sprite.visible = false;
+                    // 以降、会話終了処理へ
+                }
             }
         }
+
         if(idx < talkData.length) { gameStore.setState({ talkIndex: idx }); playLine(idx); } 
         else {
             if (evUi) evUi.style.display = 'none'; cameraCtrl.setZoom(1.5);
