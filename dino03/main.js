@@ -1,14 +1,14 @@
 /* =================================================================
-   main.js - v8.21.02
+   main.js - v8.21.03
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. シナリオ対応：新stage00（コンプ戦、ギガノト強襲）のイベントフローを完全実装。
-   2. 演出同期：会話インデックス（idx）に合わせた動的ユニット生成とアクションの制御。
-   3. 既存維持：雨、水中沈み込み、カメラ、Zustandストア連携等の全機能を保護。
-   4. バグ防止：ギガノト動的生成時のスプライト設定（4x4）を正確に適用。
+   1. バグ修正：ギガノト強襲演出時にスプライトが表示されない（影のみ出る）問題を修正。
+   2. 座標調整：新マップ設計（右上高台）に合わせ、ギガノト出現位置を x=8, z=2 に変更。
+   3. 演出強化：ギガノト生成時にテクスチャの強制更新(needsUpdate)と表示設定を徹底。
+   4. 互換性維持：演出トリガーのインデックス(idx)や既存の雨、カメラ、UI機能を完全保護。
    ================================================================= */
 
-export const VERSION = "8.21.02";
+export const VERSION = "8.21.03";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -197,7 +197,7 @@ function startDialogue() {
 
             if (!isPostBattle) {
                 // --- 序章 開幕イベント演出 ---
-                if (idx === 3) { // 「ふふ、もう立派なハンターね。」の直前：コンプ撃破
+                if (idx === 3) { // コンプ撃破
                     if (evUi) evUi.style.display = 'none';
                     gameStore.setState({ gameState: 'ANIMATING' });
                     const comp = window.units.find(u => u.id === 'コンプソグナトゥス');
@@ -211,16 +211,31 @@ function startDialogue() {
                     if (evUi) evUi.style.display = 'flex';
                     gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
                 }
-                if (idx === 5) { // 「...見付けたぞ。」の直前：ギガノト強襲
+                if (idx === 5) { // ギガノト強襲
                     if (evUi) evUi.style.display = 'none';
                     gameStore.setState({ gameState: 'ANIMATING' });
                     uiCtrl.screenShake(20, 1.5);
-                    // ギガノト動的生成（高台 z=2 に出現）
+                    
+                    // ★修正：座標を x=8, z=2（右上の高台）に変更
+                    const gigaX = 8, gigaZ = 2;
                     const gConf = { tex: tex.gigaTex?.clone(), cols: 4, rows: 4, type: 'giga', w: 3000, h: 1662 };
-                    const giga = new Unit("ギガノトサウルス", "🐊", 4, 2, 500, 50, 100, 100, 15, 30, 5, 2, false, gConf, 20);
+                    if (gConf.tex) gConf.tex.needsUpdate = true; // バグ対策：テクスチャ強制更新
+
+                    const giga = new Unit("ギガノトサウルス", "🐊", gigaX, gigaZ, 500, 50, 100, 100, 15, 30, 5, 2, false, gConf, 20);
                     giga.h = mapData[giga.z][giga.x].h;
-                    giga.sprite.position.set((giga.x * TILE_SIZE) - offX, (giga.h * H_STEP), (giga.z * TILE_SIZE) - offZ);
-                    scene.add(giga.sprite); scene.add(giga.shadow); window.units.push(giga);
+                    
+                    // バグ対策：本体スプライトと影の追加・表示を明示
+                    if (giga.sprite) {
+                        giga.sprite.position.set((giga.x * TILE_SIZE) - offX, (giga.h * H_STEP), (giga.z * TILE_SIZE) - offZ);
+                        scene.add(giga.sprite);
+                        giga.sprite.visible = true;
+                    }
+                    if (giga.shadow) {
+                        scene.add(giga.shadow);
+                        giga.shadow.visible = true;
+                    }
+                    window.units.push(giga);
+
                     cameraCtrl.centerOn(giga.sprite.position);
                     await new Promise(res => setTimeout(res, 1500));
                     if (evUi) evUi.style.display = 'flex';
@@ -229,7 +244,7 @@ function startDialogue() {
             } else {
                 // --- 序章 終幕イベント演出 ---
                 const giga = window.units.find(u => u.id === 'ギガノトサウルス');
-                if (idx === 2) { // 「......蚊に刺されたほどにも感じんな。」：体当たり演出
+                if (idx === 2) { // 体当たり演出
                     if (evUi) evUi.style.display = 'none';
                     gameStore.setState({ gameState: 'ANIMATING' });
                     const startPos = rex.sprite.position.clone();
@@ -243,7 +258,7 @@ function startDialogue() {
                     if (evUi) evUi.style.display = 'flex';
                     gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
                 }
-                if (idx === 3) { // 「ぐはッ......！」：返り討ち演出
+                if (idx === 3) { // 被弾演出
                     if (evUi) evUi.style.display = 'none';
                     gameStore.setState({ gameState: 'ANIMATING' });
                     giga.setAction('ATTACK');
@@ -254,7 +269,7 @@ function startDialogue() {
                     if (evUi) evUi.style.display = 'flex';
                     gameStore.setState({ talkIndex: idx, gameState: 'TALKING' }); playLine(idx); return;
                 }
-                if (idx === 5) { // 「お前はこっちだ。行くぞ」：連れ去り（咥える）
+                if (idx === 5) { // 連れ去り（咥える）
                     if (evUi) evUi.style.display = 'none';
                     gameStore.setState({ gameState: 'ANIMATING' });
                     mama.setAction('DOWN');
@@ -269,10 +284,9 @@ function startDialogue() {
                 if (idx === 7 || (idx === talkData.length && idx === 7)) { // 退場演出
                     if (evUi) evUi.style.display = 'none';
                     gameStore.setState({ gameState: 'ANIMATING' });
-                    const exitPath = [{x: 4, z: 1, h: 4}, {x: 4, z: -2, h: 4}];
+                    const exitPath = [{x: 8, z: 1, h: 4}, {x: 8, z: -2, h: 4}]; // 右奥から退場
                     await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 3.0));
                     giga.sprite.visible = false; mama.sprite.visible = false;
-                    // 以降、会話終了処理へ
                 }
             }
         }
