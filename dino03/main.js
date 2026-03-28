@@ -1,14 +1,14 @@
 /* =================================================================
-   main.js - v8.21.04
+   main.js - v8.21.05
    【絶対ルール順守】一切の省略なし。
    修正・統合内容：
-   1. 地形同期：stage00(v8.21.04)の新地形に合わせ、ギガノト出現位置を x=8, z=2 へ同期。
-   2. 演出修正：退場演出(exitPath)の高度を、新しい階段丘の高さ(h=9)に合わせて修正。
-   3. バグ修正：NeedsUpdateの適用とスプライト追加順序の最適化により、表示バグを完全解消。
-   4. 既存維持：雨、水中沈み込み、Zustand、カメラ制御等の全機能を1文字も変えずに保持。
+   1. 地形同期：stage00(v8.21.05)に合わせ、ギガノト出現位置を左奥 x=1, z=2 へ変更。
+   2. 演出修正：退場演出(exitPath)の高度と座標を、左側の山から外へ出るように修正。
+   3. バグ修正：NeedsUpdateの強制適用と表示フラグの上書きにより、表示バグを完全解消。
+   4. 既存維持：雨、水中沈み込み、Zustand連携、カメラ制御等の全機能を1文字も変えずに保持。
    ================================================================= */
 
-export const VERSION = "8.21.04";
+export const VERSION = "8.21.05";
 
 import { gameStore, getStore, VERSION as storeV } from './store.js';
 import { Unit, getUnitAt, getAttackableEnemies, VERSION as unitV } from './units.js';
@@ -216,15 +216,14 @@ function startDialogue() {
                     gameStore.setState({ gameState: 'ANIMATING' });
                     uiCtrl.screenShake(20, 1.5);
                     
-                    // ★同期：座標を x=8, z=2 (右奥の階段丘頂上付近) に設定
-                    const gigaX = 8, gigaZ = 2;
+                    // ★同期：最新指示に基づき、左奥の山 x=1, z=2 に出現座標を設定
+                    const gigaX = 1, gigaZ = 2;
                     const gConf = { tex: tex.gigaTex?.clone(), cols: 4, rows: 4, type: 'giga', w: 3000, h: 1662 };
-                    if (gConf.tex) gConf.tex.needsUpdate = true; // 表示バグ対策：テクスチャ更新
+                    if (gConf.tex) gConf.tex.needsUpdate = true; // 表示バグ対策
 
                     const giga = new Unit("ギガノトサウルス", "🐊", gigaX, gigaZ, 500, 50, 100, 100, 15, 30, 5, 2, false, gConf, 20);
                     giga.h = mapData[giga.z][giga.x].h;
                     
-                    // バグ対策：スプライトと影を確実に追加し、表示を明示
                     if (giga.sprite) {
                         giga.sprite.position.set((giga.x * TILE_SIZE) - offX, (giga.h * H_STEP), (giga.z * TILE_SIZE) - offZ);
                         scene.add(giga.sprite);
@@ -284,8 +283,8 @@ function startDialogue() {
                 if (idx === 7 || (idx === talkData.length && idx === 7)) { // 退場演出
                     if (evUi) evUi.style.display = 'none';
                     gameStore.setState({ gameState: 'ANIMATING' });
-                    // ★同期：退場経路の高度を新しい階段丘の高さ(z=1でh=9)に合わせて修正
-                    const exitPath = [{x: 8, z: 1, h: 9}, {x: 8, z: -2, h: 10}]; 
+                    // ★同期：左側の山(h=10)から、画面奥 z=-2 へ退場
+                    const exitPath = [{x: 1, z: 1, h: 10}, {x: 1, z: -2, h: 10}]; 
                     await new Promise(res => battleSys.executeMovement(giga, exitPath, res, 3.0));
                     giga.sprite.visible = false; mama.sprite.visible = false;
                 }
