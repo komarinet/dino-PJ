@@ -1,11 +1,11 @@
 /* =================================================================
    data/stage00.js - v8.21.05 (序章)
-   【絶対ルール遵守：一切の省略・勝手な改変なし】
+   【絶対ルール遵守：一切の省略なし】
    修正・統合内容：
    1. 地形刷新：最新指示に基づき、左端(x=0)と上端(z=0)をランダムな壁(水色エリア)に変更。
-   2. 山の配置：左奥を頂上(h=10)とし、そこへ向かって1段ずつ登れる「左側の山」を構築。
-   3. 配置同期：ギガノト出現位置を左奥の高台 (x=1, z=2) へ移動。
-   4. タイポ修正：postBattleTalk の「チビティナノ」を「チビティラノ」へ完全修正。
+   2. 山の配置：左奥(x=1, z=1)を頂上とし、そこへ向かって1段ずつ登れる「左側の山」を構築。
+   3. 配置同期：ギガノト出現位置を左側の山の高台 (x=1, z=2) へ設定。
+   4. タイポ修正：postBattleTalk の「チビティナノ」を「チビティラノ」へ修正。
    5. 既存維持：全ユニットデータ、精密ルビ付きセリフ、obstacles、プロパティ名を完全保護。
    ================================================================= */
 
@@ -17,9 +17,9 @@ export const StageData = {
         name: "<ruby>消<rt>き</rt></ruby>えた<ruby>温<rt>ぬく</rt></ruby>もり" 
     },
     units: [
-        { id: "ティラノ", displayName: "チビティラノ", emoji: "Rex", x: 4, z: 12, hp: 30, mp: 5, str: 8, def: 6, spd: 8, mag: 2, move: 4, jump: 1, isPlayer: true, level: 1 },
-        { id: "ママティラノ", emoji: "Rex", x: 5, z: 10, hp: 120, mp: 30, str: 35, def: 25, spd: 12, mag: 15, move: 4, jump: 1, isPlayer: true, level: 10 },
-        { id: "コンプソグナトゥス", emoji: "Comp", x: 4, z: 10, hp: 10, mp: 0, str: 1, def: 1, spd: 5, mag: 1, move: 3, jump: 1, isPlayer: false, level: 1 }
+        { id: "ティラノ", displayName: "チビティラノ", emoji: "🦖", x: 4, z: 12, hp: 30, mp: 5, str: 8, def: 6, spd: 8, mag: 2, move: 4, jump: 1, isPlayer: true, level: 1 },
+        { id: "ママティラノ", emoji: "🦖", x: 5, z: 10, hp: 120, mp: 30, str: 35, def: 25, spd: 12, mag: 15, move: 4, jump: 1, isPlayer: true, level: 10 },
+        { id: "コンプソグナトゥス", emoji: "🦎", x: 4, z: 10, hp: 10, mp: 0, str: 1, def: 1, spd: 5, mag: 1, move: 3, jump: 1, isPlayer: false, level: 1 }
     ],
     obstacles: [
         { x: 2, z: 2, type: 'moss_rock' }, { x: 3, z: 1, type: 'moss_rock' },
@@ -48,30 +48,30 @@ export const StageData = {
         for(let z=0; z<15; z++){
             d[z]=[]; 
             for(let x=0; x<10; x++){
-                let h = 1; let t = 2; // デフォルト：ひらけた野原
+                let h = 1; let t = 2; // デフォルト：野原
 
-                // 🟦 水色のエリア：上端(z=0)と左端(x=0)のランダム壁
+                // 🟦 水色エリア：上端(z=0)と左端(x=0)のランダムな壁
                 if (z === 0 || x === 0) {
-                    h = 6 + Math.floor(Math.random() * 5); // 6~10のランダム
+                    h = 6 + Math.floor(Math.random() * 5); // h=6~10
                     t = (Math.random() > 0.5) ? 1 : 3; // 土か岩
                 } 
-                // ⛰️ 左側の山：階段状の丘 (x=1〜6, z=1〜8)
+                // 🟩 緑エリア：左側の山 (x=1~6, z=1~8)
                 else if (x >= 1 && x <= 6 && z >= 1 && z <= 8) {
                     t = 1; // 土壌
                     // 左奥(1, 1)を頂上(h=10)とした階段構造
                     let dist = (x - 1) + (z - 1);
                     let hillH = 10 - dist;
-                    // 確実に登れるよう1段差以内を維持しつつ、ランダム要素を追加
+                    // 登れるよう1段差以内を維持しつつ、ランダム要素を付与
                     if (Math.random() > 0.8) hillH -= 1;
                     h = Math.max(1, hillH);
                 }
 
-                // 🟥 ギガノト出現ポイントの足場保証 (左側の山の上：x=1, z=2)
+                // 🟥 赤エリア：ギガノト出現ポイントの足場保証 (x=1, z=2)
                 if (x === 1 && z === 2) {
                     h = 9; t = 1; 
                 }
 
-                // 親子練習エリア：手前全体 (z>=9)
+                // 手前全体 (z>=9)
                 if (z >= 9) { h = 1; t = 2; }
 
                 d[z][x] = {h: Math.min(h, 10), type: t};
