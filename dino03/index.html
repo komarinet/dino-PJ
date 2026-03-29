@@ -3,119 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>ちびっこティラノ：タクティクス (v8.20.60)</title>
-    <link rel="stylesheet" href="style.css">
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.2/gsap.min.js"></script>
+    <title>Cyber-Sweep v5.6</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="style.css?v=5.6">
 </head>
-<body>
+<body class="scan-effect">
 
-<div id="boot-screen" style="position:fixed; inset:0; background:#111; color:#fff; z-index:20000; padding:20px; font-family:monospace; display:flex; flex-direction:column;">
-    <h2 style="color:#0f0; border-bottom:1px solid #333;">SYSTEM DIAGNOSTICS v8.20.60</h2>
-    <div id="ver-list" style="flex:1; overflow-y:auto; margin:10px 0; font-size:14px; line-height:1.6;"></div>
-    <div style="display:flex; gap:10px;">
-        <button id="btn-clear-data" style="flex:1; padding:15px; background:#444; color:#fff; border:none; border-radius:4px; font-weight:bold;">データオールクリア</button>
-        <button id="btn-start-game" style="flex:1; padding:15px; background:#0066cc; color:#fff; border:none; border-radius:4px; font-weight:bold; display:none;">続ける</button>
+    <div id="scene-title" class="scene flex flex-col items-center justify-center p-4">
+        <h1 class="text-5xl font-bold font-orbitron text-[var(--neon-blue)] tracking-tighter mb-2">CYBER-SWEEP</h1>
+        <p class="text-xs text-gray-500 mb-12">TACTICAL OVERLOAD v5.6</p>
+        <button id="start-btn" class="cyber-panel px-12 py-4 rounded-lg font-bold text-[var(--neon-blue)] active:scale-95 transition-all">
+            INITIALIZE CONNECTION
+        </button>
     </div>
-</div>
 
-<div id="error-log" style="position:fixed; top:0; left:0; width:100%; background:#f00; color:#fff; z-index:30000; padding:10px; display:none; white-space:pre-wrap;"></div>
-<div id="loading-screen" style="display:none;"><div class="loader-text">Now Loading...</div></div>
-<div id="version-display">v8.20.60 (Target Preview Update)</div>
-
-<div id="canvas-container"></div>
-<div id="msg-ui" class="rpg-window"></div>
-
-<div id="event-ui" class="rpg-window">
-    <div class="ev-left">
-        <div id="ev-portrait"></div>
-        <div id="ev-name-plate"></div>
+    <div id="scene-prologue" class="scene hidden relative overflow-hidden bg-black z-50">
+        <div id="space-bg"></div>
+        <img src="img/ship.png" id="prologue-ship" alt="ship" class="absolute">
+        <div id="explosion-layer"></div>
+        <div id="prologue-text" class="absolute inset-0 flex flex-col items-center justify-center pointer-events-none z-[60]">
+            <h2 class="text-4xl font-orbitron font-bold text-[var(--neon-pink)] opacity-0 transition-opacity duration-500">SYSTEM BREACH</h2>
+            <p class="text-[var(--neon-blue)] opacity-0 transition-opacity duration-1000 mt-2">EMERGENCY PROTOCOL ACTIVATED</p>
+        </div>
+        <button id="skip-prologue-btn" class="absolute bottom-10 right-10 text-[10px] text-gray-600 border border-gray-800 px-2 py-1 rounded z-[70]">SKIP >></button>
     </div>
-    <div class="ev-right">
-        <div id="ev-text-area"><p id="ev-text"></p></div>
-        <div id="ev-click-hint">▲</div>
+
+    <div id="scene-select" class="scene hidden flex flex-col items-center justify-center p-4">
+        <h2 class="text-2xl font-orbitron font-bold text-[var(--neon-blue)] mb-8">SELECT SECTOR</h2>
+        <div id="stage-buttons" class="grid grid-cols-1 gap-4 w-full max-w-xs"></div>
     </div>
-</div>
 
-<div id="status-ui" class="rpg-window" style="display:none;">
-    <div id="st-name" class="unit-name"></div>
-    <div class="stat-row" style="border:none; margin-bottom:0;"><span>🌟 Lv</span><span id="st-lv"></span></div>
-    <div id="st-hp-label" style="font-size:0.8rem;"><ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id="st-hp"></span></div>
-    <div class="bar-bg"><div id="st-hp-bar" class="hp-bar"></div></div>
-    <div id="st-mp-label" style="font-size:0.8rem;"><ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby> (MP): <span id="st-mp"></span></div>
-    <div class="bar-bg"><div id="st-mp-bar" class="mp-bar"></div></div>
-    <button class="btn-detail" id="btn-toggle-detail"><ruby>詳細<rt>しょうさい</rt></ruby>を見る ▼</button>
-</div>
-
-<div id="detail-ui" class="rpg-window" style="display:none;">
-    <div class="unit-name"><ruby>能力値<rt>のうりょくち</rt></ruby></div>
-    <div class="stat-row"><span>💪 <ruby>力<rt>ちから</rt></ruby></span><span id="dt-str"></span></div>
-    <div class="stat-row"><span>🛡️ <ruby>防御<rt>ぼうぎょ</rt></ruby></span><span id="dt-def"></span></div>
-    <div class="stat-row"><span>👟 <ruby>速度<rt>そくど</rt></ruby></span><span id="dt-spd"></span></div>
-    <div class="stat-row"><span>✨ <ruby>恐竜力<rt>きょうりゅうりょく</rt></ruby></span><span id="dt-mag"></span></div>
-</div>
-
-<div id="command-ui" class="rpg-window" style="display:none;">
-    <button id="cmd-move" class="cmd-btn">🚶 <ruby>移動<rt>いどう</rt></ruby></button>
-    <button id="cmd-attack" class="cmd-btn">⚔️ <ruby>攻撃<rt>こうげき</rt></ruby></button>
-    <button id="cmd-wait" class="cmd-btn">⏳ <ruby>待機<rt>たいき</rt></ruby></button>
-    <button id="cmd-cancel" class="cmd-btn" style="color:#ff8888; border-top:1px dashed #555;">↩ <ruby>戻<rt>もど</rt></ruby>る</button>
-</div>
-
-<div id="target-ui" class="rpg-window" style="display:none;">
-    <div class="unit-name">誰を<ruby>攻撃<rt>こうげき</rt></ruby>する？</div>
-    <div id="target-list"></div>
-    <button class="cmd-btn" id="btn-cancel-attack" style="border-top:1px dashed #555;">❌ キャンセル</button>
-</div>
-
-<div id="target-preview-ui" class="rpg-window" style="display:none;">
-    <div id="tp-name" class="unit-name" style="color:#ff5555;"></div>
-    <div class="stat-row" style="border:none; margin-bottom:0;"><span>🌟 Lv</span><span id="tp-lv"></span></div>
-    <div id="tp-hp-label" style="font-size:0.8rem;"><ruby>体力<rt>たいりょく</rt></ruby> (HP): <span id="tp-hp"></span></div>
-    <div class="bar-bg"><div id="tp-hp-bar" class="hp-bar" style="background:#ff3300;"></div></div>
-    <div class="stat-row"><span>🛡️ <ruby>防御<rt>ぼうぎょ</rt></ruby></span><span id="tp-def"></span></div>
-</div>
-
-<div id="confirm-ui" class="rpg-window" style="display:none;">
-    <p id="confirm-text"></p>
-    <div class="confirm-btns">
-        <button class="btn-yes">はい</button>
-        <button class="btn-no">いいえ</button>
+    <div id="scene-game" class="scene hidden flex flex-col items-center justify-center p-4">
+        <div class="w-full max-w-md mb-4 space-y-3 relative">
+            <div class="flex justify-between items-start">
+                <div>
+                    <h1 id="game-title-text" class="text-2xl font-bold font-orbitron text-[var(--neon-blue)] tracking-wider">CYBER-SWEEP</h1>
+                    <p id="level-label" class="text-[10px] text-gray-500">SECTOR DECRYPTING...</p>
+                </div>
+                <div class="flex flex-col items-end gap-2">
+                    <button id="audio-toggle-btn" class="font-bold">SOUND: ON</button>
+                    <div id="level-display" class="text-xs text-[var(--neon-pink)] font-bold">LEVEL: 01 / 05</div>
+                </div>
+            </div>
+            <div class="cyber-panel p-3 rounded-lg space-y-2">
+                <div class="flex items-center gap-2"><span class="text-[10px] w-8 text-gray-400">HP</span><div class="flex-1 bg-gray-800 rounded-full overflow-hidden border border-gray-700"><div id="hp-bar" class="progress-bar bg-[var(--neon-pink)] w-full"></div></div><span id="hp-text" class="text-[10px] w-8 text-right font-bold text-[var(--neon-pink)]">100%</span></div>
+                <div class="flex items-center gap-2"><span class="text-[10px] w-8 text-gray-400">ENG</span><div class="flex-1 bg-gray-800 rounded-full overflow-hidden border border-gray-700"><div id="energy-bar" class="progress-bar bg-[var(--neon-blue)] w-0"></div></div><span id="energy-text" class="text-[10px] w-8 text-right font-bold text-[var(--neon-blue)]">0%</span></div>
+            </div>
+        </div>
+        <div id="game-viewport">
+            <div id="edge-top" class="edge-bar"></div><div id="edge-bottom" class="edge-bar"></div><div id="edge-left" class="edge-bar"></div><div id="edge-right" class="edge-bar"></div>
+            <div id="game-container"><div id="grid" class="grid gap-1 p-6" style="width: fit-content;"></div></div>
+        </div>
+        <div class="w-full max-w-md mt-4 grid grid-cols-3 gap-2">
+            <button id="flag-mode-btn" class="cyber-panel p-2 rounded-lg flex flex-col items-center justify-center"><span class="text-[10px] font-bold">MARK</span></button>
+            <button id="scan-btn" class="cyber-panel p-2 rounded-lg flex flex-col items-center justify-center opacity-50" disabled><span class="text-[10px] font-bold text-[var(--neon-blue)]">SCAN</span></button>
+            <button id="back-to-menu-btn" class="cyber-panel p-2 rounded-lg flex flex-col items-center justify-center"><span class="text-[10px] font-bold text-[var(--neon-yellow)]">ABORT</span></button>
+        </div>
     </div>
-</div>
 
-<div id="unit-selector-ui" class="rpg-window">
-    <button id="btn-next-unit" class="cmd-btn">🦖 <ruby>次<rt>つぎ</rt></ruby>の<ruby>味方<rt>みかた</rt></ruby>へ</button>
-    <div id="unit-count-display" style="font-size: 0.7rem; text-align: center; margin-top: 5px; color: #aaa;">
-        <ruby>残<rt>のこ</rt></ruby>り: <span id="remaining-count">0</span>
+    <div id="modal" class="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] hidden backdrop-blur-md">
+        <div class="cyber-panel p-8 rounded-2xl text-center max-w-sm w-full mx-4">
+            <h2 id="modal-title" class="text-3xl font-orbitron font-bold mb-4">SYSTEM HALT</h2>
+            <p id="modal-desc" class="text-sm text-gray-300 mb-8"></p>
+            <button id="modal-btn-main" class="w-full py-3 rounded-lg border-2 border-[var(--neon-blue)] text-[var(--neon-blue)] font-bold">再接続</button>
+        </div>
     </div>
-</div>
+    <div id="toast" class="fixed bottom-10 left-1/2 -translate-x-1/2 bg-[var(--neon-blue)] text-black px-4 py-2 rounded-full font-bold text-xs opacity-0 transition-opacity pointer-events-none z-[110]"></div>
 
-<div id="camera-ui" class="rpg-window collapsed">
-    <div id="ui-header">📷 カメラ<ruby>操作<rt>そうさ</rt></ruby> (<ruby>開閉<rt>かいへい</rt></ruby>)</div>
-    <div class="ui-grid">
-        <button class="ui-btn" data-cam="rotate-left"><ruby>回<rt>まわ</rt></ruby>す ◀</button>
-        <button class="ui-btn" data-cam="pan-up"><ruby>上<rt>うえ</rt></ruby></button>
-        <button class="ui-btn" data-cam="rotate-right">▶ <ruby>回<rt>まわ</rt></ruby>す</button>
-        <button class="ui-btn" data-cam="pan-left"><ruby>左<rt>ひだり</rt></ruby></button>
-        <button class="ui-btn" data-cam="center"><ruby>中心<rt>ちゅうしん</rt></ruby></button>
-        <button class="ui-btn" data-cam="pan-right"><ruby>右<rt>みぎ</rt></ruby></button>
-        <button class="ui-btn" data-cam="zoom-in"><ruby>寄<rt>よ</rt></ruby>る ＋</button>
-        <button class="ui-btn" data-cam="pan-down"><ruby>下<rt>した</rt></ruby></button>
-        <button class="ui-btn" data-cam="zoom-out">ー <ruby>引<rt>ひ</rt></ruby>く</button>
-    </div>
-</div>
-
-<div id="stage-overlay" class="big-text-overlay">
-    <div id="chapter-num" class="cool-text"></div>
-    <div id="stage-title" class="cool-text"></div>
-</div>
-<div id="battle-start-overlay" class="big-text-overlay"><div class="battle-text">BATTLE START！</div></div>
-<div id="episode-clear-overlay" class="big-text-overlay">
-    <div class="clear-text">第1話 クリア</div>
-</div>
-
-<script type="module" src="main.js?v=20260325"></script>
+    <script src="audio.js?v=5.6"></script>
+    <script src="game.js?v=5.6"></script>
+    <script src="main.js?v=5.6"></script>
 </body>
 </html>
