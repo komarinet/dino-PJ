@@ -1,54 +1,130 @@
-/* CYBER-SWEEP v5.6 | style.css */
-@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700&family=JetBrains+Mono:wght@400;700&display=swap');
+/* =================================================================
+   style.css - v8.20.60
+   【絶対ルール順守：一切の省略・勝手な削除なし】
+   修正内容：
+   1. #target-preview-ui: ターゲット選択時に画面下部に表示される敵ステータス窓。
+   2. 演出同期: 第1話クリア演出、フローティングテキスト、ユニットセレクターを完備。
+   3. バージョン管理: Target Preview Update に合わせ v8.20.60 へ。
+   ================================================================= */
 
-:root {
-    --neon-blue: #00f3ff;
-    --neon-pink: #ff00ff;
-    --neon-yellow: #fff200;
-    --bg-dark: #0a0a0f;
+body { margin: 0; overflow: hidden; background-color: #111; font-family: sans-serif; touch-action: none; user-select: none; }
+#canvas-container { width: 100vw; height: 100vh; position: absolute; top: 0; left: 0; z-index: 1; }
+
+#version-display { position: absolute; top: 5px; right: 5px; color: rgba(255, 255, 255, 0.4); font-size: 0.7rem; font-family: monospace; z-index: 9999; pointer-events: none; }
+
+/* ルビ設定（縦並び・サイズ調整） */
+ruby { display: inline-flex; flex-direction: column-reverse; vertical-align: bottom; align-items: center; }
+rt { display: block; line-height: 1.1; font-size: 0.55em; color: #ddd; text-align: center; margin-bottom: 2px; }
+
+.rpg-window {
+    position: absolute; background: rgba(0, 15, 60, 0.96); color: white;
+    border: 2px solid #ddd; border-radius: 8px; box-shadow: 0 0 20px rgba(0,0,0,0.8);
+    padding: 10px; z-index: 1000; box-sizing: border-box; pointer-events: auto; font-weight: bold;
 }
 
-body { background-color: var(--bg-dark); color: white; font-family: 'JetBrains Mono', monospace; overflow: hidden; margin: 0; touch-action: manipulation; }
-.font-orbitron { font-family: 'Orbitron', sans-serif; }
-.scene { position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: none; }
-.scene:not(.hidden) { display: block; }
-
-.cyber-panel { background: rgba(20, 20, 30, 0.8); border: 2px solid var(--neon-blue); box-shadow: 0 0 15px rgba(0, 243, 255, 0.3); backdrop-filter: blur(5px); }
-
-#space-bg {
-    position: absolute; width: 100%; height: 200%;
-    background: url('img/space02.png') repeat-y;
-    background-size: cover;
-    animation: scroll-space 20s linear infinite;
-    z-index: 10;
+/* 会話ウィンドウ (event-ui) */
+#event-ui {
+    display: none; bottom: 10px; left: 50%; transform: translateX(-50%);
+    width: 96vw; min-height: 120px; max-height: 35vh; z-index: 4000; flex-direction: row; padding: 12px;
 }
-@keyframes scroll-space { from { transform: translateY(0); } to { transform: translateY(-50%); } }
+.ev-left { width: 100px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; border-right: 1px solid #444; }
+#ev-portrait { width: 90px; height: 90px; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+#ev-name-plate { font-size: 0.85rem; color: #ffcc00; margin-top: 5px; text-align: center; }
+.ev-right { flex: 1; padding-left: 15px; position: relative; overflow-y: auto; }
+#ev-text { font-size: 1.05rem; line-height: 1.6; margin: 0; color: #fff; white-space: normal; overflow-wrap: break-word; }
+#ev-click-hint { position: absolute; bottom: 0; right: 5px; animation: blink 1s infinite; color: #ffcc00; }
 
-#prologue-ship {
-    bottom: 30%; left: 50%; transform: translateX(-50%);
-    width: 220px; z-index: 20;
+/* 演出テキスト・オーバーレイ */
+.big-text-overlay { position: absolute; top: 45%; left: 50%; transform: translate(-50%, -50%); z-index: 5000; text-align: center; pointer-events: none; opacity: 0; width: 100%; }
+.cool-text { color: #fff !important; text-shadow: 0 0 10px #000, 0 0 20px #000, 2px 2px 0 #000; }
+#chapter-num { font-size: 1.8rem; color: #ffcc00 !important; }
+#stage-title { font-size: 2.8rem; margin-top: 10px; }
+.battle-text { font-size: 3.5rem; font-style: italic; color: #ff3300; text-shadow: 0 0 20px #fff, 0 0 10px #000; }
+
+/* 第1話 クリア・制作中告知用スタイル */
+.clear-text { 
+    font-size: 3.5rem; font-weight: bold; color: #00ff00 !important; 
+    text-shadow: 2px 2px 4px #000, 0 0 20px #000, 0 0 10px #fff;
+    line-height: 1.2;
+    white-space: nowrap;
 }
 
-#explosion-layer {
-    position: absolute; width: 300px; height: 300px;
-    background: url('img/bomb.png');
-    background-size: 1200px 600px;
-    display: none; z-index: 30;
+/* ステータス画面 (status-ui) */
+#status-ui { top: 10px; left: 10px; width: 170px; display: none; }
+.unit-name { font-size: 1.1rem; border-bottom: 1px solid #777; margin-bottom: 5px; }
+.bar-bg { width: 100%; background: #333; height: 8px; border-radius: 4px; margin: 4px 0; overflow: hidden; }
+.hp-bar { height: 100%; background: #4caf50; transition: width 0.3s; }
+.mp-bar { height: 100%; background: #2196f3; transition: width 0.3s; }
+.btn-detail { background: #444; color: white; border: 1px solid #888; width: 100%; margin-top: 5px; padding: 4px 0; border-radius: 4px; font-size: 0.8rem;}
+
+.stat-row { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px dotted #555; padding: 2px 0; }
+.stat-row span:first-child { text-align: left; }
+.stat-row span:last-child { text-align: right; font-family: monospace; font-size: 1.1rem; color: #fff; }
+
+/* コマンドUI (command-ui) */
+#command-ui { bottom: 10px; left: 10px; width: 120px; display: none; }
+.cmd-btn { display: block; width: 100%; background: transparent; color: white; border: none; text-align: left; padding: 12px 8px; font-size: 1.1rem; border-bottom: 1px solid #444; cursor: pointer; }
+.cmd-btn:hover { background: rgba(255,255,255,0.15); }
+
+/* ターゲットUI (target-ui) */
+#target-ui { display: none; top: 15%; left: 50%; transform: translateX(-50%); width: 280px; z-index: 1800; }
+
+/* ★追加：ターゲットプレビューUI (画面下部中央) */
+#target-preview-ui {
+    display: none;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 200px;
+    border: 2px solid #ff5555; /* 敵対色 */
+    z-index: 1850;
+    pointer-events: none; /* 操作の邪魔をしない */
 }
-.bomb-play { display: block !important; animation: bomb-frames-x 0.8s steps(4) infinite, bomb-frames-y 1.6s steps(2) forwards; }
-@keyframes bomb-frames-x { from { background-position-x: 0px; } to { background-position-x: -1200px; } }
-@keyframes bomb-frames-y { from { background-position-y: 0px; } to { background-position-y: -600px; } }
 
-.shake-prologue { animation: shake-p 0.15s infinite; }
-@keyframes shake-p { 0% { transform: translate(-50%, 0); } 50% { transform: translate(-51.5%, 2px); } 100% { transform: translate(-49%, -1px); } }
+/* 味方ユニット選択UI (unit-selector-ui) */
+#unit-selector-ui {
+    bottom: 150px;
+    right: 10px;
+    width: 140px;
+    padding: 8px;
+    display: none;
+}
+#unit-selector-ui .cmd-btn {
+    text-align: center;
+    border: 1px solid #666;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.1);
+}
+#remaining-count {
+    color: #00ff00;
+    font-size: 1.2rem;
+    font-family: monospace;
+}
 
-/* UI */
-#game-viewport { position: relative; width: 100%; max-width: 450px; height: 380px; overflow: hidden; border-radius: 12px; border: 2px solid #1a1a2e; z-index: 5; }
-#game-container { width: 100%; height: 100%; overflow: auto; }
-.tile { width: 44px; height: 44px; transition: all 0.2s; cursor: pointer; flex-shrink: 0; }
-.tile-hidden { background: #1a1a2e; border: 1px solid #2d2d44; }
-.tile-revealed { background: #05050a; border: 1px solid #1a1a2e; }
-.tile-mine { background: #4a0000 !important; border-color: #ff0000 !important; }
-.progress-bar { height: 8px; transition: width 0.3s; }
-.scan-effect::after { content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(0deg, transparent 0%, var(--neon-blue) 50%, transparent 100%); opacity: 0.05; pointer-events: none; animation: scan-line 6s linear infinite; z-index: 100; }
-@keyframes scan-line { 0% { transform: translateY(-100%); } 100% { transform: translateY(100%); } }
+/* カメラUI (camera-ui) */
+#camera-ui { bottom: 10px; right: 10px; width: 195px; transition: transform 0.3s ease; z-index: 1500; font-size: 0.8rem; }
+#camera-ui.collapsed { transform: translateY(calc(100% - 34px)); }
+#ui-header { font-weight: bold; text-align: center; cursor: pointer; padding-bottom: 5px; border-bottom: 1px solid #555; margin-bottom: 5px;}
+.ui-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+.ui-btn { background: #eee; border: none; border-radius: 4px; padding: 6px 1px; font-weight: bold; box-shadow: 0 2px #999; color: #000; cursor: pointer; }
+.ui-btn:active { transform: translateY(2px); box-shadow: 0 0 #999; }
+
+/* その他共通UI */
+#msg-ui { top: 15px; left: 50%; transform: translateX(-50%); text-align: center; font-size: 1.1rem; display: none; pointer-events: none; }
+#confirm-ui { display: none; top: 20%; left: 50%; transform: translateX(-50%); text-align: center; z-index: 4500; width: 260px; }
+.confirm-btns { display: flex; justify-content: center; gap: 15px; margin-top: 15px; }
+.btn-yes { background: #4caf50; color: white; border: none; padding: 10px 30px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+.btn-no { background: #f44336; color: white; border: none; padding: 10px 30px; border-radius: 6px; font-weight: bold; cursor: pointer; }
+
+/* ロード画面 */
+#loading-screen { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background-color: #000; z-index: 15000; display: flex; justify-content: center; align-items: center; transition: opacity 0.5s ease; }
+.loader-text { color: #fff; font-size: 1.5rem; animation: blink 1.5s infinite; }
+
+@keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* 浮遊テキスト（ダメージ・レベルアップ） */
+.floating-text { 
+    position: absolute; font-size: 2.2rem; font-weight: bold; font-family: Impact, sans-serif; 
+    text-shadow: 2px 2px 0 #000, -2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000; 
+    pointer-events: none; z-index: 5000; transform: translate(-50%, -50%); 
+}
