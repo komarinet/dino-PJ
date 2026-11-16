@@ -1,0 +1,76 @@
+{
+  "files": [
+    {
+      "path": "assets/README.md",
+      "bytes": 421,
+      "git_blob_sha": "1ebbad73fab78d55543db10b272ac9fb18cb4bef"
+    },
+    {
+      "path": "assets/bite.ogg",
+      "bytes": 3841,
+      "git_blob_sha": "5dd6ca5fb452c26f6cec256862e3505adf9794bc"
+    },
+    {
+      "path": "assets/break.ogg",
+      "bytes": 4219,
+      "git_blob_sha": "940a7c7d4610148347d69e0c8975658eeaed9f4e"
+    },
+    {
+      "path": "assets/dash.ogg",
+      "bytes": 3976,
+      "git_blob_sha": "b4902f12064060d2d739a449be3dbc393de9bc9c"
+    },
+    {
+      "path": "assets/fossil.ogg",
+      "bytes": 3933,
+      "git_blob_sha": "9c996693a09bf6e61b4fca108141a569c43cd1ec"
+    },
+    {
+      "path": "assets/heal.ogg",
+      "bytes": 3894,
+      "git_blob_sha": "ba51c3106ad4e9a37e381d1864fbf4bb44c105e0"
+    },
+    {
+      "path": "assets/hurt.ogg",
+      "bytes": 4216,
+      "git_blob_sha": "1a18f351ca92c1720f3fac42031e266702fd8004"
+    },
+    {
+      "path": "assets/jump.ogg",
+      "bytes": 3861,
+      "git_blob_sha": "0ff1a4ad9b4ee98d1e7b900984883b9216a4ca5c"
+    },
+    {
+      "path": "assets/three.module.js",
+      "bytes": 1314681,
+      "git_blob_sha": "6bc781491ae24ffd29ee22c8f019cdb67c2c61b7"
+    },
+    {
+      "path": "README.md",
+      "bytes": 2824,
+      "sha256": "c14f5a893685f18410c911fc08cec882ce49473574db9fb73d32c6e79e2dc5ca"
+    },
+    {
+      "path": "THREE-LICENSE.txt",
+      "bytes": 1081,
+      "sha256": "4c40a1ef62450b857c3b2aaf294936304cd552d965fbcd9d32d4c5bcf4ba4454"
+    },
+    {
+      "path": "game.js",
+      "bytes": 30102,
+      "sha256": "baa0474a05d5101f81253531e5f4837256eb829935294f937f3ff62870c12ef2"
+    },
+    {
+      "path": "index.html",
+      "bytes": 2659,
+      "sha256": "f9dd38696912c9293ac0935583af23ec5069fa79eb8b413ddee3a6f0e871c461"
+    },
+    {
+      "path": "style.css",
+      "bytes": 11158,
+      "sha256": "60c7593a785d663d507b07fac019cf130ac0b5a2a2db90fdfde00a9554c5d8d5"
+    }
+  ],
+  "total_bytes": 1390866,
+  "note": "Assets are verified against uploaded Git blob SHA; source files use SHA-256."
+}
