@@ -1,0 +1,10 @@
+export const SAVE_KEY='rex-rescue-v2';
+export function freshSave(){return {version:2,unlocked:0,stage:0,cleared:[],fossils:[],power:0,earned:0,upgrades:{life:0,strength:0,bond:0},checkpoints:{},finished:false};}
+export function normalizeSave(raw){const d=freshSave();if(!raw||raw.version!==2)return d;for(const k of ['unlocked','stage'])d[k]=Math.max(0,Math.min(5,Math.floor(Number(raw[k])||0)));d.cleared=[...new Set((raw.cleared||[]).filter(x=>Number.isInteger(x)&&x>=0&&x<6))];d.fossils=[...new Set((raw.fossils||[]).filter(x=>/^[0-5]-[0-2]$/.test(x)))];for(const k of Object.keys(d.upgrades))d.upgrades[k]=Math.max(0,Math.min(6,Math.floor(Number(raw.upgrades?.[k])||0)));d.power=Math.max(0,Math.floor(Number(raw.power)||0));d.earned=Math.max(0,Number(raw.earned)||0);d.finished=!!raw.finished;for(const [k,v] of Object.entries(raw.checkpoints||{}))if(/^[0-5]$/.test(k)&&[0,1,2].includes(v))d.checkpoints[k]=v;return d;}
+export function completed(d,s){return [0,1,2].every(p=>d.fossils.includes(`${s}-${p}`));}
+export function collect(d,s,p,repeats){const id=`${s}-${p}`;if(repeats.has(id))return null;repeats.add(id);const fresh=!d.fossils.includes(id);if(fresh)d.fossils.push(id);const gain=fresh?2:1;d.power+=gain;d.earned+=gain;return {fresh,gain,complete:completed(d,s)};}
+export function upgradeCost(d,k){return 2+d.upgrades[k];}
+export function buyUpgrade(d,k){if(!(k in d.upgrades)||d.upgrades[k]>=6)return false;const c=upgradeCost(d,k);if(d.power<c)return false;d.power-=c;d.upgrades[k]++;return true;}
+export function stats(d){return {hp:6+d.upgrades.life*2,damage:1+d.upgrades.strength*.22,friendCD:Math.max(3,7-d.upgrades.bond*.6)};}
+export function clearStage(d,s){if(!d.cleared.includes(s)){d.cleared.push(s);d.power+=3;}d.unlocked=Math.max(d.unlocked,Math.min(5,s+1));d.stage=Math.min(5,s+1);delete d.checkpoints[s];if(s===5)d.finished=true;}
+export function chooseAttack(distance,side,small,rand=Math.random()){if(small&&distance<2.8)return rand<.5?'stomp':'bite';if(Math.abs(side)>1.05&&distance<5)return 'tail';if(distance>3.6)return 'charge';return rand<.55?'bite':'push';}

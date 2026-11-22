@@ -1,76 +1,175 @@
 {
+  "site_commit": "ec2ae27c8f90ede934c0b8938b8acbc878d2ed3b",
   "files": [
     {
-      "path": "assets/README.md",
-      "bytes": 421,
-      "git_blob_sha": "1ebbad73fab78d55543db10b272ac9fb18cb4bef"
+      "path": "core.js",
+      "bytes": 2097,
+      "sha256": "83091f0fbcda256c58be1588a3e003b49e420349ea070d65a00c7de3490798f8"
     },
     {
-      "path": "assets/bite.ogg",
-      "bytes": 3841,
-      "git_blob_sha": "5dd6ca5fb452c26f6cec256862e3505adf9794bc"
+      "path": "config.js",
+      "bytes": 3736,
+      "sha256": "93129e41f500b6c3ac5ce98a00ec0fb490d286bbb9bebc8a2345b8107c2630ad"
     },
     {
-      "path": "assets/break.ogg",
-      "bytes": 4219,
-      "git_blob_sha": "940a7c7d4610148347d69e0c8975658eeaed9f4e"
+      "path": "style.css",
+      "bytes": 10843,
+      "sha256": "79b7ac78f7b5082ad45a9144c3488aa638779f3eb2a84b8b5ff217b8b67364df"
     },
     {
-      "path": "assets/dash.ogg",
-      "bytes": 3976,
-      "git_blob_sha": "b4902f12064060d2d739a449be3dbc393de9bc9c"
+      "path": "index.html",
+      "bytes": 4335,
+      "sha256": "33087f7c46005c63a15299d3816b25777d62da3d7932187811a7ce131af85f28"
     },
     {
-      "path": "assets/fossil.ogg",
-      "bytes": 3933,
-      "git_blob_sha": "9c996693a09bf6e61b4fca108141a569c43cd1ec"
+      "path": "models.js",
+      "bytes": 11047,
+      "sha256": "6f8ac7408981844decdbde9fa5d96e75542d4e0a71b008f4db9794843b2f9bdd"
     },
     {
-      "path": "assets/heal.ogg",
-      "bytes": 3894,
-      "git_blob_sha": "ba51c3106ad4e9a37e381d1864fbf4bb44c105e0"
+      "path": "world.js",
+      "bytes": 6886,
+      "sha256": "d3c3ab001b58aa5d9b3bb1488c0d1cdf659c25da6f928f05fbb16857ae979b35"
+    },
+    {
+      "path": "game.js",
+      "bytes": 35779,
+      "sha256": "c280fcf411cd5f9605b18ee68958a2b171f2d812efc58e5a9c475a16211be16f"
     },
     {
       "path": "assets/hurt.ogg",
-      "bytes": 4216,
-      "git_blob_sha": "1a18f351ca92c1720f3fac42031e266702fd8004"
+      "bytes": 5293,
+      "sha256": "3feed228129e1f98b86e167b53fe7d69bc76787672202195730de0a49ff7b68f"
     },
     {
-      "path": "assets/jump.ogg",
-      "bytes": 3861,
-      "git_blob_sha": "0ff1a4ad9b4ee98d1e7b900984883b9216a4ca5c"
+      "path": "assets/break.ogg",
+      "bytes": 6499,
+      "sha256": "96061e3c846487bcb9249b3ef2a5ca5045e54be705ec98d79e6e9a89c2436a1f"
+    },
+    {
+      "path": "assets/dash.ogg",
+      "bytes": 3918,
+      "sha256": "ec3d4d7f06e70ce96681cf33cd6ede86f3056160695fa4c1dd37b88b9093eed3"
     },
     {
       "path": "assets/three.module.js",
       "bytes": 1314681,
-      "git_blob_sha": "6bc781491ae24ffd29ee22c8f019cdb67c2c61b7"
+      "sha256": "ce1fa418de16a19495a9f72495580e3015d7745c296d3ce0485897f902ddedfb"
     },
     {
-      "path": "README.md",
-      "bytes": 2824,
-      "sha256": "c14f5a893685f18410c911fc08cec882ce49473574db9fb73d32c6e79e2dc5ca"
+      "path": "assets/bite.ogg",
+      "bytes": 4661,
+      "sha256": "ed1a0481fa864cb3978ba048d51d2a92938bcb8b8ac59e768b1bfbb00a463871"
     },
     {
-      "path": "THREE-LICENSE.txt",
-      "bytes": 1081,
-      "sha256": "4c40a1ef62450b857c3b2aaf294936304cd552d965fbcd9d32d4c5bcf4ba4454"
+      "path": "assets/roar.ogg",
+      "bytes": 10917,
+      "sha256": "d7ba3fb451ecced5c0598badf67187858019cb1b846466df4fcd992c3b77afcf"
     },
     {
-      "path": "game.js",
-      "bytes": 30102,
-      "sha256": "baa0474a05d5101f81253531e5f4837256eb829935294f937f3ff62870c12ef2"
+      "path": "assets/heal.ogg",
+      "bytes": 4382,
+      "sha256": "ea65ce5e0cd247c4a25a7a14ea0487b879f41834bda7226e4fcc9db9921c4242"
     },
     {
-      "path": "index.html",
-      "bytes": 2659,
-      "sha256": "f9dd38696912c9293ac0935583af23ec5069fa79eb8b413ddee3a6f0e871c461"
+      "path": "assets/jump.ogg",
+      "bytes": 3835,
+      "sha256": "8b7cef814bfa7106745211bbf6fad912832c74b5ca306313f3bc38e463f47f48"
     },
     {
-      "path": "style.css",
-      "bytes": 11158,
-      "sha256": "60c7593a785d663d507b07fac019cf130ac0b5a2a2db90fdfde00a9554c5d8d5"
+      "path": "assets/fossil.ogg",
+      "bytes": 4465,
+      "sha256": "fbb3a4792c2bf3f64945367ed00312ebb2840f54fdcd2c17605497921358232f"
+    },
+    {
+      "path": "assets/textures/mud.webp",
+      "bytes": 105102,
+      "sha256": "049a8b7b8db385724b2c555d2141452a3207e61ddd686cd51b62fab772d7a10d"
+    },
+    {
+      "path": "assets/textures/bone.webp",
+      "bytes": 95354,
+      "sha256": "2db9d537ec4b4f4f6be194ac445a10a73624a585f6351ec729d6c8a392d418a9"
+    },
+    {
+      "path": "assets/textures/coast-bump.webp",
+      "bytes": 59028,
+      "sha256": "72887858f6494352f721ee1bf24751f331a00313d4b124af63edb5c12e771459"
+    },
+    {
+      "path": "assets/textures/steel.webp",
+      "bytes": 87542,
+      "sha256": "f04fd32b8b64be4f574d856d532e366b300b15a160b274255dc160ad6690a966"
+    },
+    {
+      "path": "assets/textures/mud-bump.webp",
+      "bytes": 63908,
+      "sha256": "8e78ad97aafab27d82a8a6b414544abe8354652c70f8bdb6baa433ec4ccca678"
+    },
+    {
+      "path": "assets/textures/steel-bump.webp",
+      "bytes": 37850,
+      "sha256": "9fa6271dd7b0581b9bdb905f90a5cf19956d1f07bb19b33bc68f67207eea9858"
+    },
+    {
+      "path": "assets/textures/skin.webp",
+      "bytes": 97854,
+      "sha256": "d434ef6d2c214f4369eab6d7cc2ecfc14a681db04e47715594ad416597ee3477"
+    },
+    {
+      "path": "assets/textures/forest-bump.webp",
+      "bytes": 68188,
+      "sha256": "da29d78847ba6c8eb4505798ca6acb896218d02a9b299685abb83893db51f2a9"
+    },
+    {
+      "path": "assets/textures/basalt-bump.webp",
+      "bytes": 55800,
+      "sha256": "e1fa2b86c307ff8a7ee2df52fec661543891a94aa091055a268f0265fd3c8f0b"
+    },
+    {
+      "path": "assets/textures/forest.webp",
+      "bytes": 112178,
+      "sha256": "3ce2301169bab641cdb81682597ef4f221ef6503b6c10eddcc970fa67247b0cc"
+    },
+    {
+      "path": "assets/textures/bone-bump.webp",
+      "bytes": 54666,
+      "sha256": "77ab4d8802c45414f7c5a3eef286fb7db2511111b3952ed5239ef0512f75d256"
+    },
+    {
+      "path": "assets/textures/sandstone.webp",
+      "bytes": 87300,
+      "sha256": "39202acd0fbcc3a76ec9149dcd9e4e3bec0770da5fed563f1364bf9fbd139689"
+    },
+    {
+      "path": "assets/textures/bark-bump.webp",
+      "bytes": 70502,
+      "sha256": "077ad6dbbf99f33baf42d6ed19e5abc7f55adbb4e12c77d4fc73e3b70f32ff08"
+    },
+    {
+      "path": "assets/textures/bark.webp",
+      "bytes": 115354,
+      "sha256": "de9417f45671953af6903f52f4c1c75ff0952011176658cd5637603b4b097a1b"
+    },
+    {
+      "path": "assets/textures/coast.webp",
+      "bytes": 98782,
+      "sha256": "9f182cd1bc2be17dea864315276c5eaf9599187a2f65119e6761bc36b2f9fa87"
+    },
+    {
+      "path": "assets/textures/sandstone-bump.webp",
+      "bytes": 49032,
+      "sha256": "a8e0c3d1a52209ac76ff51cf29a3c6dddc2b4cbc06d0363a735cc6643b560498"
+    },
+    {
+      "path": "assets/textures/skin-bump.webp",
+      "bytes": 59086,
+      "sha256": "c1e885a5b4069fb952eff8962116b43018f9d416c91350dadae5d69af31152fa"
+    },
+    {
+      "path": "assets/textures/basalt.webp",
+      "bytes": 88616,
+      "sha256": "64494db3fcb1b2249ed5d658957ca6c61ec7c62584cb17695335ba2421fac3aa"
     }
-  ],
-  "total_bytes": 1390866,
-  "note": "Assets are verified against uploaded Git blob SHA; source files use SHA-256."
+  ]
 }
